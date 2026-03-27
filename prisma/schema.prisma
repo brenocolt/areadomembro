@@ -1,0 +1,253 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RH
+  GESTOR
+  COLABORADOR
+}
+
+enum StatusTransacao {
+  PENDENTE
+  CREDITADO
+  PROCESSANDO
+  APROVADO
+  PAGO
+  REJEITADO
+}
+
+enum TipoTransacao {
+  ENTRADA
+  SAIDA
+}
+
+enum TipoCitacao {
+  ENTRADA
+  RETIRADA
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  senha           String
+  role            Role     @default(COLABORADOR)
+  colaboradorId   String?  @unique
+  colaborador     Colaborador? @relation(fields: [colaboradorId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Colaborador {
+  id                  String   @id @default(cuid())
+  nome                String
+  foto                String?
+  
+  // Dados Pessoais
+  dataNascimento      DateTime?
+  cpf                 String?  @unique
+  endereco            String?
+  telefone            String?
+  emailPessoal        String?
+  emailCorporativo    String   @unique
+  
+  // Preferências
+  hobby               String?
+  chocolateFavorito   String?
+  serieFilmeFavorito  String?
+  
+  // Dados Profissionais
+  safra               String
+  semestreIngresso    String
+  nucleoAtual         String
+  cargoAtual          String
+  matricula           String?
+  
+  // Financeiro (cacheado)
+  saldoPIPJ           Float    @default(0)
+  pontosNegativos     Int      @default(0)
+  
+  // Relações
+  user                User?
+  historicoCargos     HistoricoCargo[]
+  projetosFinalizados ProjetoFinalizado[]
+  ocorrencias         Ocorrencia[]
+  avaliacoesNPS       AvaliacaoNPS[]
+  citacoes            Citacao[]
+  transacoesPIPJ      TransacaoPIPJ[]
+  deslocamentos       Deslocamento[]
+  solicitacoesSaque   SolicitacaoSaque[]
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model HistoricoCargo {
+  id              String   @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador @relation(fields: [colaboradorId], references: [id])
+  cargo           String
+  semestreInicio  String
+  semestreFim     String?
+  createdAt       DateTime @default(now())
+}
+
+model ProjetoFinalizado {
+  id              String   @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador @relation(fields: [colaboradorId], references: [id])
+  empresa         String
+  servico         String
+  duracaoDias     Int
+  semestres       String
+  createdAt       DateTime @default(now())
+}
+
+model Ocorrencia {
+  id              String   @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador @relation(fields: [colaboradorId], references: [id])
+  data            DateTime
+  cargoNaEpoca    String
+  motivo          String
+  pontuacao       Int
+  createdAt       DateTime @default(now())
+}
+
+model AvaliacaoNPS {
+  id              String   @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador @relation(fields: [colaboradorId], references: [id])
+  mes             Int
+  ano             Int
+  
+  comunicacao     Float?
+  dedicacao       Float?
+  confianca       Float?
+  pontualidade    Float?
+  organizacao     Float?
+  proatividade    Float?
+  qualidadeEntregas Float?
+  dominioTecnico  Float?
+  
+  npsGeral        Float?
+  avaliadorId     String
+  createdAt       DateTime @default(now())
+  
+  @@unique([colaboradorId, mes, ano])
+}
+
+model Citacao {
+  id              String      @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador @relation(fields: [colaboradorId], references: [id])
+  avaliadorId     String
+  data            DateTime    @default(now())
+  pontos          Int
+  descricao       String
+  tipo            TipoCitacao
+  createdAt       DateTime    @default(now())
+}
+
+model TransacaoPIPJ {
+  id              String          @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador     @relation(fields: [colaboradorId], references: [id])
+  tipo            TipoTransacao
+  
+  periodo         String?
+  semestre        String?
+  cargoNoPeriodo  String?
+  npsNoPeriodo    Float?
+  descricaoResgate String?
+  
+  valor           Float
+  status          StatusTransacao @default(PENDENTE)
+  data            DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+}
+
+model Projeto {
+  id              String   @id @default(cuid())
+  nome            String   @unique
+  cor             String?
+  deslocamentos   Deslocamento[]
+  createdAt       DateTime @default(now())
+}
+
+model Veiculo {
+  id              String   @id @default(cuid())
+  nome            String
+  autonomiaKmL    Float
+  placa           String?
+  isPadrao        Boolean  @default(false)
+  deslocamentos   Deslocamento[]
+  createdAt       DateTime @default(now())
+}
+
+model ConfiguracaoCombustivel {
+  id              String   @id @default(cuid())
+  precoLitro      Float
+  dataAtualizacao DateTime @default(now())
+  atualizadoPor   String
+}
+
+model Deslocamento {
+  id              String          @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador     @relation(fields: [colaboradorId], references: [id])
+  data            DateTime
+  origem          String
+  destino         String
+  projetoId       String
+  projeto         Projeto         @relation(fields: [projetoId], references: [id])
+  veiculoId       String
+  veiculo         Veiculo         @relation(fields: [veiculoId], references: [id])
+  
+  distanciaKm     Float
+  litrosConsumidos Float
+  valorReembolso  Float
+  
+  status          StatusTransacao @default(PENDENTE)
+  aprovadoPor     String?
+  dataAprovacao   DateTime?
+  processamento   ProcessamentoReembolso?
+  
+  createdAt       DateTime        @default(now())
+}
+
+model SolicitacaoSaque {
+  id              String          @id @default(cuid())
+  colaboradorId   String
+  colaborador     Colaborador     @relation(fields: [colaboradorId], references: [id])
+  valor           Float
+  dataSolicitacao DateTime        @default(now())
+  
+  status          StatusTransacao @default(PENDENTE)
+  aprovadoPor     String?
+  dataAprovacao   DateTime?
+  dataPagamento   DateTime?
+  motivoRejeicao  String?
+  
+  createdAt       DateTime        @default(now())
+}
+
+model ProcessamentoReembolso {
+  id              String          @id @default(cuid())
+  deslocamentoId  String          @unique
+  deslocamento    Deslocamento    @relation(fields: [deslocamentoId], references: [id])
+  
+  status          StatusTransacao @default(PENDENTE)
+  processadoPor   String?
+  dataProcessamento DateTime?
+  
+  createdAt       DateTime        @default(now())
+}
