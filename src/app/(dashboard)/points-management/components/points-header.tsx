@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { AddPointsDialog } from "./add-points-dialog"
+import { AddFlagDialog } from "./add-flag-dialog"
 
 export function PointsHeader() {
     return (
@@ -12,7 +13,10 @@ export function PointsHeader() {
                     Gerencie punições, recursos e analytics comportamental da equipe.
                 </p>
             </div>
-            <AddPointsDialog />
+            <div className="flex items-center gap-3">
+                <AddFlagDialog />
+                <AddPointsDialog />
+            </div>
         </div>
     )
 }

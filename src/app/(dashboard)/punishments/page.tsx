@@ -5,6 +5,7 @@ import { AlertTriangle, Info, FileText } from "lucide-react"
 import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
 import { RequestRemovalDialog } from "./components/request-removal-dialog"
 import { RemovalRequestsHistory } from "./components/removal-requests-history"
+import { FlagsHistory } from "./components/flags-history"
 
 export default function PunishmentsPage() {
     const { colaborador, loading, colaboradorId } = useColaborador()
@@ -97,6 +98,8 @@ export default function PunishmentsPage() {
                     <RemovalRequestsHistory />
                 </div>
             </div>
+
+            <FlagsHistory />
 
         </div>
     )

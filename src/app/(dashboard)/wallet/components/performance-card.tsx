@@ -18,7 +18,7 @@ export function PerformanceCard() {
 
     if (loading) return <Card className="h-64 animate-pulse bg-slate-800 rounded-3xl border-none" />
 
-    const nps = npsData.length > 0 ? Number(npsData[0].nps_geral) / 2 : 0
+    const nps = npsData.length > 0 ? Number(npsData[0].nps_geral) : 0
     const punishments = colaborador?.pontos_negativos || 0
 
     return (

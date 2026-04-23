@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import NPSProjetoForm from "./components/nps-projeto-form"
+import { useRouter } from "next/navigation"
 
 export default function FormulariosPage() {
     const { colaborador } = useColaborador()
@@ -18,13 +18,14 @@ export default function FormulariosPage() {
     const [activeFormId, setActiveFormId] = useState<string | null>(null)
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [respostas, setRespostas] = useState<Record<string, any>>({})
+    const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
-    const [showNPS, setShowNPS] = useState(false)
 
     // Check NPS submission status
-    const [npsSubmitted, setNpsSubmitted] = useState(false)
+    const [npsCount, setNpsCount] = useState(0)
     const [npsLastDate, setNpsLastDate] = useState<Date | null>(null)
+    const [npsAberto, setNpsAberto] = useState(true)
 
     const fetchData = async () => {
         // Auto-close expired forms
@@ -50,19 +51,35 @@ export default function FormulariosPage() {
                 .order('enviado_em', { ascending: false })
             if (rData) setRespostasFeitas(rData)
 
+            // Check if NPS is active globally
+            const { data: configData } = await supabase
+                .from('configuracoes')
+                .select('valor')
+                .eq('chave', 'nps_projeto_ativo')
+                .single();
+            if (configData) {
+                setNpsAberto(configData.valor === true || configData.valor === 'true');
+            }
+
             // Check NPS submission for current month
             const now = new Date()
-            const { data: npsData } = await supabase
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
+
+            const { data: npsData, count } = await supabase
                 .from('nps_projeto_submissoes')
-                .select('created_at')
+                .select('created_at', { count: 'exact' })
                 .eq('avaliador_id', colaborador.id)
-                .eq('mes', now.getMonth() + 1)
-                .eq('ano', now.getFullYear())
+                .gte('created_at', firstDayOfMonth)
+                .lte('created_at', lastDayOfMonth)
                 .order('created_at', { ascending: false })
-                .limit(1)
+            
             if (npsData && npsData.length > 0) {
-                setNpsSubmitted(true)
+                setNpsCount(count || npsData.length)
                 setNpsLastDate(new Date(npsData[0].created_at))
+            } else {
+                setNpsCount(0)
+                setNpsLastDate(null)
             }
         }
 
@@ -157,11 +174,7 @@ export default function FormulariosPage() {
     // All active forms - user can always respond again 
     const pendentes = forms.filter(f => !hasResponded(f.id))
     const jaRespondidos = forms.filter(f => hasResponded(f.id))
-
-    // ---- NPS Projeto Form View ----
-    if (showNPS) {
-        return <NPSProjetoForm onBack={() => { setShowNPS(false); fetchData() }} />
-    }
+    const npsSubmitted = npsCount > 0
 
     // ---- Active Form Filling View ----
     if (activeFormId) {
@@ -345,13 +358,17 @@ export default function FormulariosPage() {
                     <Star className="h-5 w-5 text-violet-500" /> NPS Projeto
                 </h2>
                 <div
-                    onClick={() => setShowNPS(true)}
-                    className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm cursor-pointer hover:border-violet-300 dark:hover:border-violet-600 transition-all group"
+                    onClick={() => { if(npsAberto) router.push('/nps-projeto') }}
+                    className={`bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm transition-all group ${
+                        npsAberto ? 'cursor-pointer hover:border-violet-300 dark:hover:border-violet-600' : 'opacity-70 cursor-not-allowed'
+                    }`}
                 >
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${npsSubmitted ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10'}`}>
-                                {npsSubmitted
+                            <div className={`p-2 rounded-xl ${!npsAberto ? 'bg-slate-50 dark:bg-slate-800' : npsSubmitted ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10'}`}>
+                                {!npsAberto
+                                    ? <Star className="h-5 w-5 text-slate-400" />
+                                    : npsSubmitted
                                     ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                                     : <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                                 }
@@ -362,22 +379,25 @@ export default function FormulariosPage() {
                                 {npsSubmitted && npsLastDate && (
                                     <div className="flex items-center gap-3 mt-0.5">
                                         <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                            ✓ Respondido este mês
+                                            ✓ Respondido {npsCount}x este mês
                                         </p>
                                         <span className="text-xs text-slate-400">
-                                            {npsLastDate.toLocaleDateString('pt-BR')} às {npsLastDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                            Última: {npsLastDate.toLocaleDateString('pt-BR')} às {npsLastDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                     </div>
+                                )}
+                                {!npsAberto && (
+                                    <p className="text-xs text-rose-500 font-medium mt-1">Este formulário está fechado para respostas no momento.</p>
                                 )}
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            {npsSubmitted && (
+                            {npsAberto && npsSubmitted && (
                                 <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none">
                                     Responder novamente
                                 </Badge>
                             )}
-                            <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />
+                            {npsAberto && <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />}
                         </div>
                     </div>
                 </div>

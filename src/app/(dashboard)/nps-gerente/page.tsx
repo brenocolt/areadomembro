@@ -3,10 +3,20 @@
 import { NPSGerenteChart } from "./components/nps-gerente-chart"
 import { NPSGerenteDetails } from "./components/nps-gerente-details"
 import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
-import { MessageSquare, HeartHandshake, LifeBuoy, Crown } from "lucide-react"
+import { MessageSquare, HeartHandshake, LifeBuoy, Crown, ShieldAlert } from "lucide-react"
+import { ImportNpsDialog } from "@/components/import-nps-dialog"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 
 export default function NPSGerentePage() {
-    const { colaboradorId, loading: loadingColab } = useColaborador()
+    const { colaborador, colaboradorId, loading: loadingColab } = useColaborador()
+    const { data: session } = useSession()
+    const router = useRouter()
+    const userRole = (session?.user as any)?.role
+    const isAdmin = userRole === 'ADMIN'
+    const cargoAtual = (colaborador?.cargo_atual || '').toLowerCase()
+    const isGerente = cargoAtual.includes('gerente')
+
     const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
         column: 'colaborador_id',
         value: colaboradorId,
@@ -14,6 +24,26 @@ export default function NPSGerentePage() {
         ascending: false,
         limit: 12,
     })
+
+    if (!loadingColab && !isAdmin && !isGerente) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+                <div className="bg-rose-50 dark:bg-rose-500/10 p-4 rounded-2xl mb-4">
+                    <ShieldAlert className="h-10 w-10 text-rose-500" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Acesso Restrito</h2>
+                <p className="text-sm text-slate-500 max-w-md">
+                    Esta página é exclusiva para gerentes. Caso acredite que deveria ter acesso, entre em contato com a administração.
+                </p>
+                <button
+                    onClick={() => router.push('/')}
+                    className="mt-6 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+                >
+                    Voltar ao Início
+                </button>
+            </div>
+        )
+    }
 
     const avg = (field: string) => {
         if (npsData.length === 0) return '—'
@@ -29,10 +59,13 @@ export default function NPSGerentePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center text-sm text-muted-foreground mb-2">
-                <span>Dashboard</span>
-                <span className="mx-2">›</span>
-                <span className="font-semibold text-primary dark:text-white">NPS Gerente</span>
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center text-sm text-muted-foreground">
+                    <span>Dashboard</span>
+                    <span className="mx-2">›</span>
+                    <span className="font-semibold text-primary dark:text-white">NPS Gerente</span>
+                </div>
+                <ImportNpsDialog />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

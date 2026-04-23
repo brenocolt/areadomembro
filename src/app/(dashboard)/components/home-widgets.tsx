@@ -140,12 +140,13 @@ export function RecentActivity() {
             if (!colaboradorId) return
 
             // Fetch recent transactions and citações combined
-            const [txRes, citRes, trocasRes, saquesRes, remocoesRes] = await Promise.all([
+            const [txRes, citRes, trocasRes, saquesRes, remocoesRes, flagsRes] = await Promise.all([
                 supabase.from('transacoes_pipj').select('*').eq('colaborador_id', colaboradorId).order('data', { ascending: false }).limit(3),
                 supabase.from('citacoes').select('*').eq('colaborador_id', colaboradorId).order('data', { ascending: false }).limit(3),
                 supabase.from('milhas_trocas').select('*').eq('colaborador_id', colaboradorId).order('data_troca', { ascending: false }).limit(3),
                 supabase.from('solicitacoes_saque').select('*').eq('colaborador_id', colaboradorId).order('data_solicitacao', { ascending: false }).limit(3),
                 supabase.from('solicitacoes_remocao').select('*').eq('colaborador_id', colaboradorId).order('created_at', { ascending: false }).limit(3),
+                supabase.from('flags').select('*').eq('colaborador_id', colaboradorId).order('created_at', { ascending: false }).limit(3),
             ])
 
             const items: any[] = []
@@ -221,6 +222,19 @@ export function RecentActivity() {
                 color: r.status === 'APROVADA' ? 'bg-emerald-500' : r.status === 'PENDENTE' ? 'bg-amber-500' : 'bg-rose-500'
             }))
 
+            if (flagsRes.data) flagsRes.data.forEach(f => items.push({
+                type: 'flag',
+                label: `Aviso Disciplinar: Flag ${f.cor.charAt(0).toUpperCase() + f.cor.slice(1)}`,
+                rawDate: new Date(f.created_at),
+                time: new Date(f.created_at).toLocaleDateString('pt-BR'),
+                sub: `Motivo: ${f.motivo}`,
+                badge: `Flag ${f.cor.charAt(0).toUpperCase() + f.cor.slice(1)}`,
+                badgeClass: f.cor === 'vermelha' ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 border' :
+                            f.cor === 'amarela' ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400 border' :
+                            'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 border',
+                color: f.cor === 'vermelha' ? 'bg-red-500' : f.cor === 'amarela' ? 'bg-yellow-500' : 'bg-blue-500'
+            }))
+
             // Sort by time descending and take latest 4
             items.sort((a, b) => b.rawDate.getTime() - a.rawDate.getTime())
             setActivities(items.slice(0, 4))
@@ -233,7 +247,8 @@ export function RecentActivity() {
             'citacoes',
             'milhas_trocas',
             'solicitacoes_saque',
-            'solicitacoes_remocao'
+            'solicitacoes_remocao',
+            'flags'
         ].map(table =>
             supabase.channel(`recent_activity_widget_${table}`)
                 .on('postgres_changes', { event: '*', schema: 'public', table }, fetchActivities)

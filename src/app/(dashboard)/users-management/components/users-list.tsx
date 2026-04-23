@@ -177,11 +177,7 @@ export function UsersList() {
                 <EditUserAccessDialog
                     open={!!userToEdit}
                     onOpenChange={(open) => !open && setUserToEdit(null)}
-                    colaborador={{
-                        id: userToEdit.id,
-                        nome: userToEdit.nome,
-                        paginas_permitidas: userToEdit.paginas_permitidas,
-                    }}
+                    colaborador={userToEdit}
                     userRole={userToEdit.users?.[0]?.role}
                 />
             )}

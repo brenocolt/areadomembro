@@ -197,10 +197,23 @@ export default function NPSProjetoPage() {
 
     const steps = buildSteps()
 
+    const [isFormClosed, setIsFormClosed] = useState(false)
+    const [loadingConfig, setLoadingConfig] = useState(true)
+
     // Fetch data
     useEffect(() => {
         const fetchData = async () => {
             try {
+                const { data: configData } = await supabase
+                    .from('configuracoes')
+                    .select('valor')
+                    .eq('chave', 'nps_projeto_ativo')
+                    .single();
+                
+                if (configData && (configData.valor === false || configData.valor === 'false')) {
+                    setIsFormClosed(true)
+                }
+
                 const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
                 if (p) {
                     // Ordenar alfabeticamente
@@ -208,7 +221,9 @@ export default function NPSProjetoPage() {
                     setProjetos(sorted)
                 }
             } catch (error) {
-                console.error('Error fetching projects:', error)
+                console.error('Error fetching data:', error)
+            } finally {
+                setLoadingConfig(false)
             }
 
             const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual')
@@ -216,6 +231,32 @@ export default function NPSProjetoPage() {
         }
         fetchData()
     }, [])
+
+    if (loadingConfig) {
+        return (
+            <div className="flex items-center justify-center min-h-[400px]">
+                <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+            </div>
+        )
+    }
+
+    if (isFormClosed) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-md mx-auto">
+                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
+                    <Star className="h-8 w-8 text-slate-400" />
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Formulário Fechado</h1>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">
+                    A avaliação de NPS do Projeto está fechada para respostas no momento.
+                    Por favor, aguarde a abertura do próximo ciclo.
+                </p>
+                <Button onClick={() => window.history.back()} variant="outline" className="rounded-xl">
+                    Voltar aos Formulários
+                </Button>
+            </div>
+        )
+    }
 
     // Helpers
     const gerentes = colaboradores.filter(c =>

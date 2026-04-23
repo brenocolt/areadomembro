@@ -5,6 +5,7 @@ import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2,
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { toast } from "sonner"
@@ -23,6 +24,7 @@ export default function FormsManagementPage() {
     const [forms, setForms] = useState<any[]>([])
     const [search, setSearch] = useState("")
     const [expandedId, setExpandedId] = useState<string | null>(null)
+    const [npsAberto, setNpsAberto] = useState(true)
 
     // Copy / Edit dialog state
     const [dialogData, setDialogData] = useState<FormInitialData | null>(null)
@@ -54,6 +56,16 @@ export default function FormsManagementPage() {
             .select('*, formulario_perguntas(count), formulario_respostas(count)')
             .order('created_at', { ascending: false })
         if (data) setForms(data)
+
+        const { data: configData } = await supabase
+             .from('configuracoes')
+             .select('valor')
+             .eq('chave', 'nps_projeto_ativo')
+             .single()
+        
+        if (configData) {
+            setNpsAberto(configData.valor === true || configData.valor === 'true')
+        }
     }
 
     useEffect(() => { fetchForms() }, [])
@@ -123,6 +135,13 @@ export default function FormsManagementPage() {
         fetchForms()
     }
 
+    const handleToggleNps = async () => {
+        const novoValor = !npsAberto
+        await supabase.from('configuracoes').upsert({ chave: 'nps_projeto_ativo', valor: novoValor })
+        setNpsAberto(novoValor)
+        toast.success(`NPS Projetos ${novoValor ? 'Aberto' : 'Fechado'} para respostas.`)
+    }
+
     const handleReenviar = async (form: any) => {
         if (!confirm('Reenviar formulário? As respostas anteriores serão apagadas e os membros poderão responder novamente.')) return
         try {
@@ -189,6 +208,9 @@ export default function FormsManagementPage() {
                         />
                     </div>
                     <CreateFormDialog onSuccess={fetchForms} />
+                    <Button onClick={() => window.location.href = '/forms-responses'} variant="outline" className="rounded-xl h-10 border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 font-bold hover:bg-violet-50">
+                        Ver as Respostas Consolidadas
+                    </Button>
                 </div>
             </div>
 
@@ -238,6 +260,22 @@ export default function FormsManagementPage() {
                             <p className="text-xs text-slate-500">Total de Respostas</p>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* NPS Global Config Card */}
+            <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                         Controle do NPS Projetos
+                    </h2>
+                    <p className="text-sm text-slate-500 mt-1">Habilite ou desabilite os envios do formulário de NPS Projetos.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className={`text-sm font-bold ${npsAberto ? 'text-emerald-500' : 'text-slate-400'}`}>
+                        {npsAberto ? 'Aberto para respostas' : 'Fechado'}
+                    </span>
+                    <Switch checked={npsAberto} onCheckedChange={handleToggleNps} />
                 </div>
             </div>
 

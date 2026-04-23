@@ -72,6 +72,12 @@ export async function approveAccountRequest(id: string) {
         }
     }
 
+    // Default member pages that every new account should have access to
+    const defaultMemberPages = [
+        '/', '/profile', '/performance', '/nps-gerente', '/nps-projeto',
+        '/wallet', '/pdis', '/formularios', '/milhas', '/punishments'
+    ];
+
     // 3. Create Colaborador
     const { data: newColaborador, error: colabError } = await supabase
         .from('colaboradores')
@@ -91,10 +97,11 @@ export async function approveAccountRequest(id: string) {
             hobby: req.hobby,
             chocolate_favorito: req.chocolate_favorito,
             serie_filme_favorito: req.serie_filme_favorito,
-            pontos_acumulados: pontosAcumulados,
+            pontos_negativos: pontosAcumulados,
             nivel_consultor: nivelConsultor,
             projetos: projetos,
             saldo_pipj: saldoPipj,
+            paginas_permitidas: defaultMemberPages,
         })
         .select('id')
         .single();

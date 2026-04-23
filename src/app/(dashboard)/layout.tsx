@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/theme-toggle"
 import { AuthProvider } from "@/components/auth-provider"
+import { LogoutButton } from "@/components/logout-button"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -21,6 +22,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                         <div className="flex items-center gap-4">
                             <ModeToggle />
+                            <LogoutButton />
                         </div>
                     </header>
                     <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
@@ -31,3 +33,4 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </AuthProvider>
     )
 }
+

@@ -3,6 +3,7 @@
 import { NPSChart } from "./components/nps-chart";
 import { DetailedPerformance } from "./components/detailed-performance";
 import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase";
+import { ImportNpsDialog } from "@/components/import-nps-dialog";
 
 export default function PerformancePage() {
     const { colaboradorId, loading: loadingColab, colaborador } = useColaborador()
@@ -23,16 +24,19 @@ export default function PerformancePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center text-sm text-muted-foreground mb-2">
-                <span>Dashboard</span>
-                <span className="mx-2">›</span>
-                <span className="font-semibold text-primary dark:text-white">Performance & NPS</span>
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center text-sm text-muted-foreground">
+                    <span>Dashboard</span>
+                    <span className="mx-2">›</span>
+                    <span className="font-semibold text-primary dark:text-white">Performance & NPS</span>
+                </div>
+                <ImportNpsDialog />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <CardStat title="Média Geral" value={String(avgNps)} trend={`${npsData.length} avaliações`} color="text-green-500" />
                 <CardStat title="Total Avaliações" value={String(npsData.length)} trend="Registradas no sistema" color="text-blue-500" />
-                <CardStat title="Projetos em Andamento" value={String(projetos)} trend="Registrados no pré-cadastro" color="text-violet-500" />
+                <CardStat title="Projetos Alocados" value={String(projetos)} trend={`Impacta no cálculo de PIPJ (+R$${projetos > 0 ? (15 * projetos) : 0}/mês)`} color="text-violet-500" />
             </div>
 
             <NPSChart />

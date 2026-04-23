@@ -13,7 +13,8 @@ import {
     CalendarDays,
     FileQuestion,
     Crown,
-    Star,
+    LogOut,
+    Briefcase,
 } from "lucide-react"
 
 import {
@@ -33,14 +34,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
     { title: "Perfil", url: "/profile", icon: User },
     { title: "Performance", url: "/performance", icon: TrendingUp },
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
-    { title: "NPS Projeto", url: "/nps-projeto", icon: Star },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
     { title: "Meus PDIs", url: "/pdis", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
@@ -56,6 +56,7 @@ const managementItems = [
     { title: "Gestão de PIPJ", url: "/pipj-management", icon: Wallet },
     { title: "Gestão de Usuários", url: "/users-management", icon: User },
     { title: "Gestão de Ausências", url: "/absences-management", icon: CalendarDays },
+    { title: "Gestão de Alocações", url: "/allocations-management", icon: Briefcase },
 ]
 
 function NavGroup({ label, items, pathname }: { label: string; items: typeof memberItems; pathname: string }) {
@@ -102,10 +103,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // If paginas_permitidas is null/undefined, show all pages (backwards compatible)
     const allowedPages: string[] | null = colaborador?.paginas_permitidas || null
     const isAdmin = userRole === 'ADMIN'
+    const cargoAtual = (colaborador?.cargo_atual || '').toLowerCase()
+    const isGerente = cargoAtual.includes('gerente')
 
-    const filteredMemberItems = isAdmin || !allowedPages
+    const filteredMemberItems = (isAdmin || !allowedPages
         ? memberItems
         : memberItems.filter(item => allowedPages.includes(item.url))
+    ).filter(item => {
+        // Hide NPS Gerente for non-gerente, non-admin users
+        if (item.url === '/nps-gerente' && !isAdmin && !isGerente) return false
+        return true
+    })
 
     const filteredManagementItems = isAdmin || !allowedPages
         ? managementItems
@@ -138,15 +146,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
             <SidebarFooter>
                 <div className="p-1">
-                    <div className="flex items-center gap-3 p-2 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50 hover:bg-sidebar-accent transition-colors cursor-pointer group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
+                    <div className="flex items-center gap-3 p-2 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50 hover:bg-sidebar-accent transition-colors group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
                         <Avatar className="h-9 w-9 rounded-lg border border-sidebar-border group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
                             <AvatarImage src="/placeholder-user.jpg" />
                             <AvatarFallback className="bg-primary/10 text-primary font-bold">{user.initials}</AvatarFallback>
                         </Avatar>
-                        <div className="flex flex-col text-sm truncate group-data-[collapsible=icon]:hidden">
+                        <div className="flex flex-col text-sm truncate group-data-[collapsible=icon]:hidden flex-1 min-w-0">
                             <span className="font-semibold text-sidebar-foreground">{user.name}</span>
                             <span className="text-xs text-muted-foreground">{user.role}</span>
                         </div>
+                        <button
+                            onClick={() => signOut({ callbackUrl: '/login' })}
+                            title="Sair da conta"
+                            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors group-data-[collapsible=icon]:hidden"
+                        >
+                            <LogOut className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
             </SidebarFooter>
