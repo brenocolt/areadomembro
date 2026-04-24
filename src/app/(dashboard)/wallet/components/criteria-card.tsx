@@ -70,7 +70,7 @@ export function CriteriaCard() {
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span className="text-2xl font-bold text-cyan-300">{nps.toFixed(1)}</span>
-                            <span className="text-xs text-blue-300">/ 10</span>
+                            <span className="text-xs text-blue-300">/ 5</span>
                         </div>
                     </div>
                 </div>

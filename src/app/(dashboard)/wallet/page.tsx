@@ -2,6 +2,7 @@ import { WalletCard } from "./components/wallet-card";
 import { PerformanceCard } from "./components/performance-card";
 import { TransactionHistory, PunishmentAlert } from "./components/transaction-history";
 import { CriteriaCard } from "./components/criteria-card";
+import { PipjForecastCard } from "./components/pipj-forecast-card";
 import { FadeIn } from "./components/motion-wrapper";
 
 export default function WalletPage() {
@@ -29,7 +30,9 @@ export default function WalletPage() {
                     <FadeIn delay={0.1} direction="left">
                         <PerformanceCard />
                     </FadeIn>
-
+                    <FadeIn delay={0.2} direction="left">
+                        <PipjForecastCard />
+                    </FadeIn>
                 </div>
             </div>
 

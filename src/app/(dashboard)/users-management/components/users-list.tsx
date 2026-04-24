@@ -179,6 +179,16 @@ export function UsersList() {
                     onOpenChange={(open) => !open && setUserToEdit(null)}
                     colaborador={userToEdit}
                     userRole={userToEdit.users?.[0]?.role}
+                    onSave={(updatedData, newRole) => {
+                        setColaboradores(prev => prev.map(c => {
+                            if (c.id !== userToEdit.id) return c
+                            return {
+                                ...c,
+                                ...updatedData,
+                                users: [{ ...c.users?.[0], role: newRole }],
+                            }
+                        }))
+                    }}
                 />
             )}
         </Card>

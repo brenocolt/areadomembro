@@ -37,6 +37,7 @@ interface EditUserAccessDialogProps {
     onOpenChange: (open: boolean) => void
     colaborador: any
     userRole?: string
+    onSave?: (updatedData: Record<string, any>, newRole: string) => void
 }
 
 const EDITABLE_FIELDS = [
@@ -50,7 +51,7 @@ const EDITABLE_FIELDS = [
     { key: 'saldo_pipj', label: 'Saldo PIPJ (R$)', type: 'number' },
 ]
 
-export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole }: EditUserAccessDialogProps) {
+export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole, onSave }: EditUserAccessDialogProps) {
     const { data: session } = useSession()
     const [selectedPages, setSelectedPages] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
@@ -161,6 +162,11 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
             if (!result.success) {
                 alert("Erro ao salvar: " + (result.error || 'Erro desconhecido'))
                 return
+            }
+
+            // Notify parent of updated data so it can refresh locally
+            if (onSave) {
+                onSave(updateObj, role)
             }
 
             onOpenChange(false)
