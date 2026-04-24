@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { supabase } from "@/lib/supabase"
 import { Loader2, Shield, UserCog, History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
@@ -101,7 +100,7 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
         setSaving(true)
         try {
             const editorName = (session?.user as any)?.name || (session?.user as any)?.email || 'Sistema'
-            const auditLogs: { campo: string; valor_antigo: string; valor_novo: string }[] = []
+            const auditLogs: { campo: string; valor_antigo: string; valor_novo: string; editado_por: string }[] = []
 
             // Build update object and detect changes
             const updateObj: Record<string, any> = { paginas_permitidas: selectedPages }
@@ -118,6 +117,7 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                         campo: field.key,
                         valor_antigo: oldStr || '—',
                         valor_novo: newStr || '—',
+                        editado_por: editorName,
                     })
                 }
             })
@@ -130,44 +130,37 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                     campo: 'paginas_permitidas',
                     valor_antigo: colaborador.paginas_permitidas?.length ? `${colaborador.paginas_permitidas.length} páginas` : 'Todas',
                     valor_novo: `${selectedPages.length} páginas`,
+                    editado_por: editorName,
                 })
             }
 
-            // Update colaboradores
-            const { error: colabErr } = await supabase
-                .from('colaboradores')
-                .update(updateObj)
-                .eq('id', colaborador.id)
-
-            if (colabErr) {
-                alert("Erro ao salvar: " + colabErr.message)
-                return
-            }
-
-            // Update user role if changed
+            // Check role change
             if (role !== userRole) {
                 auditLogs.push({
                     campo: 'role',
                     valor_antigo: userRole || '—',
                     valor_novo: role,
+                    editado_por: editorName,
                 })
-                await supabase
-                    .from('users')
-                    .update({ role: role })
-                    .eq('colaborador_id', colaborador.id)
             }
 
-            // Insert audit logs
-            if (auditLogs.length > 0) {
-                await supabase.from('audit_logs').insert(
-                    auditLogs.map(log => ({
-                        colaborador_id: colaborador.id,
-                        campo: log.campo,
-                        valor_antigo: log.valor_antigo,
-                        valor_novo: log.valor_novo,
-                        editado_por: editorName,
-                    }))
-                )
+            // Save via server-side API
+            const res = await fetch('/api/colaboradores/update', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    colaboradorId: colaborador.id,
+                    updateObj,
+                    role,
+                    currentRole: userRole,
+                    auditLogs,
+                }),
+            })
+
+            const result = await res.json()
+            if (!result.success) {
+                alert("Erro ao salvar: " + (result.error || 'Erro desconhecido'))
+                return
             }
 
             onOpenChange(false)
