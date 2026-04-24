@@ -133,7 +133,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
 
                 <div className="space-y-2">
                     <Label htmlFor="valor">Valor (R$)</Label>
-                    <Input id="valor" type="number" min="0.01" max={saldo} step="0.01" placeholder="0,00" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
+                    <Input id="valor" type="number" min="1" max={Math.min(saldo, 300)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
                 </div>
 
                 <div className="space-y-2">

@@ -3,22 +3,37 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Briefcase, Trophy, AlertTriangle, BarChart3, Target } from "lucide-react"
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
+import { useColaborador } from "@/hooks/use-supabase"
+import { supabase } from "@/lib/supabase"
+import { useState, useEffect } from "react"
 
 export function CriteriaCard() {
     const { colaborador, loading, colaboradorId } = useColaborador()
-    const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
-        column: 'colaborador_id',
-        value: colaboradorId,
-        orderBy: 'ano',
-        ascending: false,
-        limit: 1,
-        select: 'nps_geral'
-    })
+    const [nps, setNps] = useState(0)
+    const [npsLoading, setNpsLoading] = useState(true)
 
-    if (loading) return <Card className="h-48 animate-pulse bg-slate-800 rounded-3xl border-none" />
+    useEffect(() => {
+        async function fetchLatestNps() {
+            if (!colaboradorId) { setNpsLoading(false); return }
 
-    const nps = npsData.length > 0 ? Number(npsData[0].nps_geral) : 0
+            const { data } = await supabase
+                .from('avaliacoes_nps')
+                .select('nps_geral')
+                .eq('colaborador_id', colaboradorId)
+                .order('ano', { ascending: false })
+                .order('mes', { ascending: false })
+                .limit(1)
+
+            if (data && data.length > 0) {
+                setNps(Number(data[0].nps_geral))
+            }
+            setNpsLoading(false)
+        }
+        fetchLatestNps()
+    }, [colaboradorId])
+
+    if (loading || npsLoading) return <Card className="h-48 animate-pulse bg-slate-800 rounded-3xl border-none" />
+
     const cargo = colaborador?.cargo_atual || '—'
     const puntos = colaborador?.pontos_negativos || 0
 

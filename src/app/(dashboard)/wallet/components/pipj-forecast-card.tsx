@@ -1,8 +1,8 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Calculator, Briefcase, Star, AlertTriangle, FolderKanban, Calendar, TrendingUp } from "lucide-react"
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
+import { Calculator, Briefcase, Star, AlertTriangle, FolderKanban, Calendar, TrendingUp, BarChart3 } from "lucide-react"
+import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect } from "react"
 
@@ -34,14 +34,17 @@ const LEVEL_BONUS: Record<string, number> = {
 const PUNISHMENT_PER_POINT = 10
 const MAX_PER_PERSON = 300
 const EXCLUSIVE_ROLES = ['Diretor', 'Closer', 'Gerente']
+const NPS_THRESHOLD = 4
+const NPS_BONUS_PERCENT = 0.10
 
 export function PipjForecastCard() {
     const { colaborador, loading, colaboradorId } = useColaborador()
     const [absenceDays, setAbsenceDays] = useState(0)
     const [businessDays, setBusinessDays] = useState(22)
+    const [latestNps, setLatestNps] = useState(0)
 
     useEffect(() => {
-        async function fetchAbsences() {
+        async function fetchData() {
             const now = new Date()
             const mes = now.getMonth() + 1
             const ano = now.getFullYear()
@@ -89,8 +92,21 @@ export function PipjForecastCard() {
                 }
                 setAbsenceDays(totalDays)
             }
+
+            // Fetch latest NPS
+            const { data: npsData } = await supabase
+                .from('avaliacoes_nps')
+                .select('nps_geral')
+                .eq('colaborador_id', colaboradorId)
+                .order('ano', { ascending: false })
+                .order('mes', { ascending: false })
+                .limit(1)
+
+            if (npsData && npsData.length > 0) {
+                setLatestNps(Number(npsData[0].nps_geral))
+            }
         }
-        if (colaboradorId) fetchAbsences()
+        if (colaboradorId) fetchData()
     }, [colaboradorId])
 
     if (loading) return <Card className="h-64 animate-pulse bg-slate-800 rounded-3xl border-none" />
@@ -121,8 +137,14 @@ export function PipjForecastCard() {
         descontoAusencia = Math.round(((absenceDays / businessDays) * subtotal) * 100) / 100
     }
 
+    // Subtotal after absence
+    let subtotalAposAusencia = Math.max(0, subtotal - descontoAusencia)
+
+    // 6. NPS Bonus (+10% if NPS > 4)
+    const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
+
     // Final
-    let previsao = Math.max(0, Math.round((subtotal - descontoAusencia) * 100) / 100)
+    let previsao = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
     previsao = Math.min(previsao, MAX_PER_PERSON)
 
     const items = [
@@ -131,6 +153,7 @@ export function PipjForecastCard() {
         { label: "Bônus Nível", value: bonusNivel > 0 ? `+ R$ ${bonusNivel.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: nivel, icon: Star, color: "text-amber-400" },
         { label: "Desc. Punições", value: descontoPunicao > 0 ? `- R$ ${descontoPunicao.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${pontosNegativos} pt(s) × R$ ${PUNISHMENT_PER_POINT}`, icon: AlertTriangle, color: descontoPunicao > 0 ? "text-red-400" : "text-slate-500" },
         { label: "Desc. Ausências", value: descontoAusencia > 0 ? `- R$ ${descontoAusencia.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${absenceDays} dia(s) de ${businessDays}`, icon: Calendar, color: descontoAusencia > 0 ? "text-red-400" : "text-slate-500" },
+        { label: "Bônus NPS", value: bonusNps > 0 ? `+ R$ ${bonusNps.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `NPS ${latestNps.toFixed(1)} ${latestNps > NPS_THRESHOLD ? '(> 4 → +10%)' : '(≤ 4)'}`, icon: BarChart3, color: bonusNps > 0 ? "text-emerald-400" : "text-slate-500" },
     ]
 
     const now = new Date()
