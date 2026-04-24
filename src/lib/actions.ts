@@ -2,6 +2,7 @@
 
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
+import { redirect } from 'next/navigation';
 
 // Define schema for input validation if needed, but we do it in client too.
 
@@ -10,7 +11,11 @@ export async function authenticate(
     formData: FormData,
 ) {
     try {
-        await signIn('credentials', formData);
+        await signIn('credentials', {
+            email: formData.get('email'),
+            password: formData.get('password'),
+            redirect: false,
+        });
     } catch (error) {
         if (error instanceof AuthError) {
             switch (error.type) {
@@ -22,4 +27,6 @@ export async function authenticate(
         }
         throw error;
     }
+    redirect('/');
 }
+

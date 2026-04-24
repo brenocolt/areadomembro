@@ -49,7 +49,6 @@ const EDITABLE_FIELDS = [
     { key: 'telefone', label: 'Telefone', type: 'text' },
     { key: 'pontos_negativos', label: 'Pontos Negativos', type: 'number' },
     { key: 'saldo_pipj', label: 'Saldo PIPJ (R$)', type: 'number' },
-    { key: 'milhas', label: 'Milhas', type: 'number' },
 ]
 
 export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole }: EditUserAccessDialogProps) {
