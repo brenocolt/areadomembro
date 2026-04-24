@@ -18,6 +18,8 @@ const FIXED_VALUES: Record<string, number> = {
 
 const VARIABLE_PER_PROJECT: Record<string, number> = {
     'Consultor': 15,
+    'Assessor': 15,
+    'SDR': 15,
     'Gerente': 5,
 }
 

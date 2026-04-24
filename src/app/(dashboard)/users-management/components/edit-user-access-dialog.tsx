@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Shield, UserCog, History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
@@ -44,6 +45,7 @@ const EDITABLE_FIELDS = [
     { key: 'nome', label: 'Nome', type: 'text' },
     { key: 'cargo_atual', label: 'Cargo', type: 'text' },
     { key: 'nucleo_atual', label: 'Núcleo', type: 'text' },
+    { key: 'nivel_consultor', label: 'Nível do Consultor', type: 'select', options: ['Júnior', 'Pleno', 'Sênior'] },
     { key: 'matricula', label: 'Matrícula', type: 'text' },
     { key: 'email_corporativo', label: 'Email Corporativo', type: 'email' },
     { key: 'telefone', label: 'Telefone', type: 'text' },
@@ -207,12 +209,24 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                             {EDITABLE_FIELDS.map(field => (
                                 <div key={field.key} className="space-y-1.5">
                                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">{field.label}</Label>
-                                    <Input
-                                        type={field.type}
-                                        value={formData[field.key] ?? ''}
-                                        onChange={e => updateField(field.key, e.target.value)}
-                                        className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 h-9 text-sm rounded-xl"
-                                    />
+                                    {field.type === 'select' && field.options ? (
+                                        <select
+                                            value={formData[field.key] ?? ''}
+                                            onChange={e => updateField(field.key, e.target.value)}
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none h-9"
+                                        >
+                                            {field.options.map(opt => (
+                                                <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <Input
+                                            type={field.type}
+                                            value={formData[field.key] ?? ''}
+                                            onChange={e => updateField(field.key, e.target.value)}
+                                            className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 h-9 text-sm rounded-xl"
+                                        />
+                                    )}
                                 </div>
                             ))}
                         </div>

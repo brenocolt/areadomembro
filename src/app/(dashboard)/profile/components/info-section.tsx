@@ -12,9 +12,17 @@ export function InfoSection() {
 
     if (loading) return <Card className="h-48 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-2xl border-none" />
 
-    const birthday = colaborador?.data_nascimento
-        ? new Date(colaborador.data_nascimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-        : '---'
+    const birthday = (() => {
+        if (!colaborador?.data_nascimento) return '---'
+        // Parse date parts manually to avoid UTC timezone offset shifting the day
+        const parts = colaborador.data_nascimento.split('-')
+        if (parts.length >= 3) {
+            const day = parts[2].substring(0, 2).padStart(2, '0')
+            const month = parts[1].padStart(2, '0')
+            return `${day}/${month}`
+        }
+        return '---'
+    })()
 
     return (
         <Card className="p-2 border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl">
