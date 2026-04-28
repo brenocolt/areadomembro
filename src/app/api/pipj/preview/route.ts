@@ -161,7 +161,7 @@ export async function GET(req: NextRequest) {
         pontos_negativos: pontosNegativos,
         ausencia_dias: absenceDays,
         valor_calculado: pipj,
-        detalhes_calculo,
+        detalhes_calculo: detalhesCalculo,
       })
 
       totalLancado += pipj
