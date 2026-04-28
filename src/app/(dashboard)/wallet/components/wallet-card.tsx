@@ -69,12 +69,13 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
         agencia: '',
         conta: '',
         comprovante_url: '',
+        tipo_gasto: '',
     })
 
     function handleSubmit() {
         const valor = Number(form.valor)
-        if (!form.descricao || !form.valor || !form.forma_pagamento) {
-            setMsg({ text: 'Preencha descrição, valor e forma de pagamento.', type: 'error' })
+        if (!form.descricao || !form.valor || !form.forma_pagamento || !form.tipo_gasto) {
+            setMsg({ text: 'Preencha descrição, valor, tipo de gasto e forma de pagamento.', type: 'error' })
             return
         }
         if (valor <= 0 || valor > saldo) {
@@ -92,8 +93,8 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
         setMsg(null)
         startTransition(async () => {
             const dadosBancarios = form.forma_pagamento === 'pix'
-                ? { forma: 'pix', chave_pix: form.chave_pix }
-                : { forma: 'transferencia', banco: form.banco, agencia: form.agencia, conta: form.conta }
+                ? { forma: 'pix', chave_pix: form.chave_pix, tipo_gasto: form.tipo_gasto }
+                : { forma: 'transferencia', banco: form.banco, agencia: form.agencia, conta: form.conta, tipo_gasto: form.tipo_gasto }
 
             const { error } = await supabase.from('solicitacoes_saque').insert({
                 colaborador_id: colaboradorId,
@@ -134,6 +135,20 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
                 <div className="space-y-2">
                     <Label htmlFor="valor">Valor (R$)</Label>
                     <Input id="valor" type="number" min="1" max={Math.min(saldo, 300)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Tipo de Gasto</Label>
+                    <Select value={form.tipo_gasto} onValueChange={(v) => setForm(f => ({ ...f, tipo_gasto: v }))}>
+                        <SelectTrigger><SelectValue placeholder="Selecione o tipo..." /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Capacitação">Capacitação</SelectItem>
+                            <SelectItem value="Papelaria">Papelaria</SelectItem>
+                            <SelectItem value="MEJ">MEJ</SelectItem>
+                            <SelectItem value="Evento Sêniores">Evento Sêniores</SelectItem>
+                            <SelectItem value="Tecnologia">Tecnologia</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 <div className="space-y-2">

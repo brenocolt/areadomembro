@@ -182,6 +182,11 @@ export function SaqueHistoryList() {
                                                 {dados.forma === 'pix' ? '🔑 PIX' : '🏦 Transferência'}
                                             </span>
                                         )}
+                                        {dados?.tipo_gasto && (
+                                            <span className="bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-1 rounded-lg font-medium">
+                                                🏷️ {dados.tipo_gasto}
+                                            </span>
+                                        )}
                                         {dados?.chave_pix && (
                                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
                                                 Chave: {dados.chave_pix}
@@ -300,6 +305,11 @@ export function SaquePendingRequestsList() {
                                             {dados?.forma && (
                                                 <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg font-medium">
                                                     {dados.forma === 'pix' ? '🔑 PIX' : '🏦 Transferência'}
+                                                </span>
+                                            )}
+                                            {dados?.tipo_gasto && (
+                                                <span className="bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 px-2 py-1 rounded-lg font-medium">
+                                                    🏷️ {dados.tipo_gasto}
                                                 </span>
                                             )}
                                             {dados?.chave_pix && (

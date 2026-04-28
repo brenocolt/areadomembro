@@ -223,7 +223,7 @@ export function PipjLaunchDialog() {
                                                     {isExpanded && d.detalhes_calculo && (
                                                         <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800">
                                                             <td colSpan={5} className="p-4 text-xs text-slate-600 dark:text-slate-400">
-                                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                                                                <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                                                                     <div>
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Base Cargo</span>
                                                                         <span>R$ {Number(d.detalhes_calculo.base_cargo || 0).toFixed(2).replace('.', ',')}</span>
@@ -235,6 +235,10 @@ export function PipjLaunchDialog() {
                                                                     <div>
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Projetos ({d.detalhes_calculo.qtd_projetos || 0})</span>
                                                                         <span className="text-emerald-600 dark:text-emerald-400">+ R$ {Number(d.detalhes_calculo.bonus_projetos || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">NPS ({Number(d.detalhes_calculo.nps_score || 0).toFixed(1)})</span>
+                                                                        <span className="text-emerald-600 dark:text-emerald-400">+ R$ {Number(d.detalhes_calculo.bonus_nps || 0).toFixed(2).replace('.', ',')}</span>
                                                                     </div>
                                                                     <div>
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Punição (-{d.detalhes_calculo.pontos_negativos || 0} pts)</span>

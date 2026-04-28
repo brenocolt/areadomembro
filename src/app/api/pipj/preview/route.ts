@@ -101,6 +101,24 @@ export async function GET(req: NextRequest) {
     }
 
     const businessDays = getBusinessDaysInMonth(ano, mes)
+
+    // Fetch latest NPS per user
+    const { data: avaliacoesNps } = await supabaseAdmin
+      .from('avaliacoes_nps')
+      .select('colaborador_id, nps_geral')
+      .order('ano', { ascending: false })
+      .order('mes', { ascending: false })
+
+    const npsMap = new Map<string, number>()
+    if (avaliacoesNps) {
+        // Keep only the first one (most recent) for each colab
+        for (const nps of avaliacoesNps) {
+            if (!npsMap.has(nps.colaborador_id)) {
+                npsMap.set(nps.colaborador_id, Number(nps.nps_geral))
+            }
+        }
+    }
+
     const detalhes: any[] = []
     let totalLancado = 0
 
@@ -112,30 +130,34 @@ export async function GET(req: NextRequest) {
 
       // 1. Fixed base value
       const baseCargo = FIXED_VALUES[cargo] || 100
-      let pipj = baseCargo
+      let subtotal = baseCargo
 
       // 2. Variable per project (only Consultor/Gerente)
       const bonusProjetos = VARIABLE_PER_PROJECT[cargo] ? VARIABLE_PER_PROJECT[cargo] * projetos : 0
-      pipj += bonusProjetos
+      subtotal += bonusProjetos
 
       // 3. Level bonus (only for non-exclusive roles)
       const bonusNivel = !EXCLUSIVE_ROLES.includes(cargo) ? (LEVEL_BONUS[nivel] || 0) : 0
-      pipj += bonusNivel
+      subtotal += bonusNivel
 
       // 4. Punishment deduction
       const descontoPunicao = PUNISHMENT_PER_POINT * pontosNegativos
-      pipj -= descontoPunicao
+      subtotal -= descontoPunicao
 
-      // 6. Absence deduction (proportional)
+      // 5. Absence deduction (proportional)
       const absenceDays = absenceMap.get(colab.id) || 0
       let descontoAusencia = 0
       if (absenceDays > 0 && businessDays > 0) {
-        descontoAusencia = Math.round(((absenceDays / businessDays) * pipj) * 100) / 100
-        pipj -= descontoAusencia
+        descontoAusencia = Math.round(((absenceDays / businessDays) * subtotal) * 100) / 100
       }
+      
+      let subtotalAposAusencia = Math.max(0, subtotal - descontoAusencia)
 
-      // Floor and cap
-      pipj = Math.max(0, Math.round(pipj * 100) / 100)
+      // 6. NPS Bonus (+10% if NPS > 4)
+      const latestNps = npsMap.get(colab.id) || 0
+      const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
+      
+      let pipj = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
       pipj = Math.min(pipj, MAX_PER_PERSON)
 
       // Build calculation breakdown
@@ -150,6 +172,8 @@ export async function GET(req: NextRequest) {
         desconto_ausencia: descontoAusencia,
         dias_ausencia: absenceDays,
         dias_uteis_mes: businessDays,
+        nps_score: latestNps,
+        bonus_nps: bonusNps,
       }
 
       detalhes.push({

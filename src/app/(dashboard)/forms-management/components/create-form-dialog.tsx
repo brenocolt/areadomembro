@@ -55,7 +55,7 @@ interface CreateFormDialogProps {
     hideTrigger?: boolean
 }
 
-function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao }: any) {
+function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao, insertFormatQuestion }: any) {
     const {
         attributes,
         listeners,
@@ -79,12 +79,23 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                     {i + 1}
                 </span>
                 <div className="flex-1 space-y-3">
-                    <Input
-                        value={p.titulo}
-                        onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
-                        className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500"
-                        placeholder="Texto da pergunta"
-                    />
+                    <div className="relative">
+                        <Input
+                            id={`pergunta-titulo-${p.id}`}
+                            value={p.titulo}
+                            onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
+                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500 pr-16"
+                            placeholder="Texto da pergunta"
+                        />
+                        <div className="absolute right-1.5 top-1.5 flex items-center">
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => insertFormatQuestion(p.id, 'bold')} title="Negrito">
+                                <Bold className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => insertFormatQuestion(p.id, 'italic')} title="Itálico">
+                                <Italic className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                         <Select value={p.tipo} onValueChange={(v) => updatePergunta(p.id, 'tipo', v)}>
                             <SelectTrigger className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-9 text-xs">
@@ -234,6 +245,28 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setTimeout(() => {
             textarea.focus();
             textarea.setSelectionRange(start + 3, end + 3); // approximate
+        }, 0);
+    }
+
+    const insertFormatQuestion = (id: string, format: 'bold' | 'italic') => {
+        const input = document.getElementById(`pergunta-titulo-${id}`) as HTMLInputElement;
+        if (!input) return;
+        const start = input.selectionStart || 0;
+        const end = input.selectionEnd || 0;
+        const p = perguntas.find(x => x.id === id);
+        if (!p) return;
+        const text = p.titulo;
+        const selectedText = text.substring(start, end);
+        let newText = '';
+        if (format === 'bold') {
+            newText = `${text.substring(0, start)}<b>${selectedText}</b>${text.substring(end)}`;
+        } else if (format === 'italic') {
+            newText = `${text.substring(0, start)}<i>${selectedText}</i>${text.substring(end)}`;
+        }
+        updatePergunta(id, 'titulo', newText);
+        setTimeout(() => {
+            input.focus();
+            input.setSelectionRange(start + 3, end + 3);
         }, 0);
     }
 
@@ -517,6 +550,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         updateOpcao={updateOpcao}
                                         addOpcao={addOpcao}
                                         removeOpcao={removeOpcao}
+                                        insertFormatQuestion={insertFormatQuestion}
                                     />
                                 ))}
                             </SortableContext>
