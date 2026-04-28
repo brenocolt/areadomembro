@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef, Fragment } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Zap, Loader2, CheckCircle, AlertTriangle, Calculator } from "lucide-react"
+import { Zap, Loader2, CheckCircle, AlertTriangle, Calculator, ChevronDown, ChevronRight } from "lucide-react"
 
 export function PipjLaunchDialog() {
     const [open, setOpen] = useState(false)
@@ -17,9 +17,14 @@ export function PipjLaunchDialog() {
     const [fetchingPreview, setFetchingPreview] = useState(false)
     const [previewData, setPreviewData] = useState<any>(null)
     const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valor_final?: number, motivo: string }>>({})
+    const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+    const toggleRow = (colabId: string) => {
+        setExpandedRows(prev => ({ ...prev, [colabId]: !prev[colabId] }))
+    }
 
     const resetState = useCallback(() => {
         setCountdown(5)
@@ -164,44 +169,86 @@ export function PipjLaunchDialog() {
                                             const override = overrides[d.colaborador_id]
                                             const deducao = override?.deducao ?? ''
                                             const final = override?.valor_final ?? Math.max(0, d.valor_calculado)
-                                            const isChanged = final !== Math.max(0, d.valor_calculado);
+                                            const isChanged = final !== Math.max(0, d.valor_calculado)
+                                            const isExpanded = !!expandedRows[d.colaborador_id]
+                                            
                                             return (
-                                                <tr key={d.colaborador_id} className="border-t border-slate-100 dark:border-slate-800">
-                                                    <td className="p-3">
-                                                        <p className="font-medium">{d.nome}</p>
-                                                        <p className="text-slate-500 text-[10px]">{d.cargo}</p>
-                                                    </td>
-                                                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-400">
-                                                        R$ {Number(d.valor_calculado).toFixed(2).replace('.', ',')}
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <Input 
-                                                            type="number" 
-                                                            className="h-8 text-right text-xs" 
-                                                            placeholder="0,00"
-                                                            value={deducao}
-                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, d.valor_calculado)}
-                                                        />
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <Input 
-                                                            type="text" 
-                                                            className="h-8 text-xs" 
-                                                            placeholder="Motivo da alteração..."
-                                                            disabled={!isChanged}
-                                                            value={override?.motivo || ''}
-                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'motivo', e.target.value)}
-                                                        />
-                                                    </td>
-                                                    <td className="p-2">
-                                                        <Input 
-                                                            type="number" 
-                                                            className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400" 
-                                                            value={final}
-                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, d.valor_calculado)}
-                                                        />
-                                                    </td>
-                                                </tr>
+                                                <Fragment key={d.colaborador_id}>
+                                                    <tr className="border-t border-slate-100 dark:border-slate-800">
+                                                        <td className="p-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <button 
+                                                                    onClick={() => toggleRow(d.colaborador_id)}
+                                                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"
+                                                                >
+                                                                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                                                </button>
+                                                                <div>
+                                                                    <p className="font-medium">{d.nome}</p>
+                                                                    <p className="text-slate-500 text-[10px]">{d.cargo}</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-400">
+                                                            R$ {Number(d.valor_calculado).toFixed(2).replace('.', ',')}
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <Input 
+                                                                type="number" 
+                                                                className="h-8 text-right text-xs" 
+                                                                placeholder="0,00"
+                                                                value={deducao}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, d.valor_calculado)}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <Input 
+                                                                type="text" 
+                                                                className="h-8 text-xs" 
+                                                                placeholder="Motivo da alteração..."
+                                                                disabled={!isChanged}
+                                                                value={override?.motivo || ''}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'motivo', e.target.value)}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <Input 
+                                                                type="number" 
+                                                                className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400" 
+                                                                value={final}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, d.valor_calculado)}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                    {isExpanded && d.detalhes_calculo && (
+                                                        <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800">
+                                                            <td colSpan={5} className="p-4 text-xs text-slate-600 dark:text-slate-400">
+                                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Base Cargo</span>
+                                                                        <span>R$ {Number(d.detalhes_calculo.base_cargo || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Nível ({d.detalhes_calculo.nivel || 1})</span>
+                                                                        <span className="text-emerald-600 dark:text-emerald-400">+ R$ {Number(d.detalhes_calculo.bonus_nivel || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Projetos ({d.detalhes_calculo.qtd_projetos || 0})</span>
+                                                                        <span className="text-emerald-600 dark:text-emerald-400">+ R$ {Number(d.detalhes_calculo.bonus_projetos || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Punição (-{d.detalhes_calculo.pontos_negativos || 0} pts)</span>
+                                                                        <span className="text-red-500">- R$ {Number(d.detalhes_calculo.desconto_punicao || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="block text-[10px] font-bold text-slate-400 uppercase">Ausência ({d.detalhes_calculo.dias_ausencia || 0}d)</span>
+                                                                        <span className="text-red-500">- R$ {Number(d.detalhes_calculo.desconto_ausencia || 0).toFixed(2).replace('.', ',')}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </Fragment>
                                             )
                                         })}
                                     </tbody>

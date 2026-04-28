@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
-import { ArrowUpRight, ArrowDownLeft, Clock, Banknote } from "lucide-react"
+import { ArrowUpRight, ArrowDownLeft, Clock, Banknote, Check, X, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 export function PipjHistory() {
     const [transactions, setTransactions] = useState<any[]>([])
@@ -91,7 +92,6 @@ export function PipjHistory() {
                 </CardContent>
             </Card>
 
-            <SaqueRequestsList />
         </div>
     )
 }
@@ -112,7 +112,7 @@ function parseBankingInfo(descricao: string) {
     return { motivo, dados }
 }
 
-function SaqueRequestsList() {
+export function SaqueHistoryList() {
     const [saques, setSaques] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
 
@@ -122,6 +122,8 @@ function SaqueRequestsList() {
             const { data } = await supabase
                 .from('solicitacoes_saque')
                 .select('*, colaboradores(nome)')
+                .eq('tipo', 'saque_pipj')
+                .neq('status', 'PENDENTE')
                 .order('data_solicitacao', { ascending: false })
                 .limit(30)
             if (data) setSaques(data)
@@ -129,7 +131,7 @@ function SaqueRequestsList() {
         }
         fetchData()
 
-        const sub = supabase.channel('solicitacoes_saque_management')
+        const sub = supabase.channel('solicitacoes_saque_history_list')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_saque' }, fetchData)
             .subscribe()
         return () => { supabase.removeChannel(sub) }
@@ -141,16 +143,16 @@ function SaqueRequestsList() {
         <Card className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-none shadow-lg rounded-3xl overflow-hidden">
             <CardHeader className="border-b border-slate-100 dark:border-white/5">
                 <div className="flex items-center gap-2">
-                    <Banknote className="h-5 w-5 text-primary" />
+                    <Clock className="h-5 w-5 text-slate-500" />
                     <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
-                        Solicitações de Saque
+                        Histórico de Saques
                     </CardTitle>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
                 {saques.length === 0 ? (
                     <div className="flex items-center justify-center h-32 text-slate-400 dark:text-slate-500 text-sm">
-                        Nenhuma solicitação de saque registrada.
+                        Nenhum histórico de saque registrado.
                     </div>
                 ) : (
                     <div className="divide-y divide-slate-100 dark:divide-white/5">
@@ -166,11 +168,11 @@ function SaqueRequestsList() {
                                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{motivo}</p>
                                         </div>
                                         <div className="text-right flex flex-col items-end gap-1">
-                                            <span className="text-lg font-bold text-primary dark:text-white">
+                                            <span className="text-lg font-bold text-slate-900 dark:text-white">
                                                 R$ {Number(s.valor).toFixed(2).replace('.', ',')}
                                             </span>
                                             <Badge className={STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-600'}>
-                                                {s.status || 'PENDENTE'}
+                                                {s.status || 'DESCONHECIDO'}
                                             </Badge>
                                         </div>
                                     </div>
@@ -198,6 +200,149 @@ function SaqueRequestsList() {
                                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
                                             📅 {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
                                         </span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
+
+export function SaquePendingRequestsList() {
+    const [saques, setSaques] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const [processingId, setProcessingId] = useState<string | null>(null)
+
+    useEffect(() => {
+        async function fetchData() {
+            setLoading(true)
+            const { data } = await supabase
+                .from('solicitacoes_saque')
+                .select('*, colaboradores(nome)')
+                .eq('tipo', 'saque_pipj')
+                .eq('status', 'PENDENTE')
+                .order('data_solicitacao', { ascending: true })
+            if (data) setSaques(data)
+            setLoading(false)
+        }
+        fetchData()
+
+        const sub = supabase.channel('solicitacoes_saque_pending_list')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_saque' }, fetchData)
+            .subscribe()
+        return () => { supabase.removeChannel(sub) }
+    }, [])
+
+    const handleAction = async (id: string, action: 'APROVAR' | 'REJEITAR') => {
+        setProcessingId(id)
+        try {
+            const res = await fetch('/api/pipj/saque', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, action })
+            })
+            const data = await res.json()
+            if (!res.ok) {
+                alert(data.error || 'Erro ao processar solicitação')
+            } else {
+                setSaques(prev => prev.filter(s => s.id !== id))
+            }
+        } catch (e) {
+            alert('Erro de conexão.')
+        } finally {
+            setProcessingId(null)
+        }
+    }
+
+    if (loading) return <Card className="h-48 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-3xl border-none" />
+
+    return (
+        <Card className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-none shadow-lg rounded-3xl overflow-hidden">
+            <CardHeader className="border-b border-slate-100 dark:border-white/5">
+                <div className="flex items-center gap-2">
+                    <Banknote className="h-5 w-5 text-amber-500" />
+                    <CardTitle className="text-base font-bold text-slate-900 dark:text-white">
+                        Solicitações de Saque Pendentes
+                    </CardTitle>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                {saques.length === 0 ? (
+                    <div className="flex items-center justify-center h-32 text-slate-400 dark:text-slate-500 text-sm">
+                        Nenhuma solicitação de saque pendente.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-slate-100 dark:divide-white/5">
+                        {saques.map((s) => {
+                            const { motivo, dados } = parseBankingInfo(s.descricao || '')
+                            const isProcessing = processingId === s.id
+                            return (
+                                <div key={s.id} className="px-6 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                                {s.colaboradores?.nome || 'Desconhecido'}
+                                            </p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{motivo}</p>
+                                        </div>
+                                        <div className="text-right flex flex-col items-end gap-1">
+                                            <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                                                R$ {Number(s.valor).toFixed(2).replace('.', ',')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-4">
+                                        <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                                            {dados?.forma && (
+                                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg font-medium">
+                                                    {dados.forma === 'pix' ? '🔑 PIX' : '🏦 Transferência'}
+                                                </span>
+                                            )}
+                                            {dados?.chave_pix && (
+                                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                                    Chave: {dados.chave_pix}
+                                                </span>
+                                            )}
+                                            {dados?.banco && (
+                                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                                    {dados.banco} | Ag: {dados.agencia} | Cc: {dados.conta}
+                                                </span>
+                                            )}
+                                            {s.comprovante_url && (
+                                                <a href={s.comprovante_url} target="_blank" rel="noopener noreferrer" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:underline">
+                                                    📎 Comprovante
+                                                </a>
+                                            )}
+                                            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
+                                                📅 {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-900/20"
+                                                disabled={isProcessing || processingId !== null}
+                                                onClick={() => handleAction(s.id, 'REJEITAR')}
+                                            >
+                                                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4 mr-1" />}
+                                                Rejeitar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                                disabled={isProcessing || processingId !== null}
+                                                onClick={() => handleAction(s.id, 'APROVAR')}
+                                            >
+                                                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
+                                                Aprovar
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )
