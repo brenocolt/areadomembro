@@ -11,6 +11,7 @@ const COLORS = {
     suporte: "#06B6D4",
     relacionamento: "#F59E0B",
     lideranca: "#10B981",
+    resolutividade: "#EC4899",
 }
 
 export function NPSGerenteChart() {
@@ -21,7 +22,7 @@ export function NPSGerenteChart() {
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca')
+                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: true })
                 .order('mes', { ascending: true })
@@ -34,6 +35,7 @@ export function NPSGerenteChart() {
                     Suporte: Number(n.suporte),
                     Relacionamento: Number(n.relacionamento),
                     Liderança: Number(n.lideranca),
+                    Resolutividade: Number(n.resolutividade),
                 })))
             }
         }
@@ -62,6 +64,7 @@ export function NPSGerenteChart() {
                             <Line type="monotone" dataKey="Suporte" stroke={COLORS.suporte} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.suporte }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Relacionamento" stroke={COLORS.relacionamento} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.relacionamento }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Liderança" stroke={COLORS.lideranca} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.lideranca }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="Resolutividade" stroke={COLORS.resolutividade} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.resolutividade }} activeDot={{ r: 6 }} />
                         </LineChart>
                     </ResponsiveContainer>
                 </div>

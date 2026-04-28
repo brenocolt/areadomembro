@@ -15,7 +15,7 @@ export function NPSGerenteDetails() {
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, nps_geral')
+                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, nps_geral')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
@@ -49,12 +49,13 @@ export function NPSGerenteDetails() {
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Suporte</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Relacionamento</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Liderança</TableHead>
+                            <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Resolutividade</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Média</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {data.map((row, i) => {
-                            const avg = ((Number(row.comunicacao) + Number(row.suporte) + Number(row.relacionamento) + Number(row.lideranca)) / 4)
+                            const avg = ((Number(row.comunicacao) + Number(row.suporte) + Number(row.relacionamento) + Number(row.lideranca) + Number(row.resolutividade)) / 5)
                             return (
                                 <TableRow key={i} className="border-b-slate-100 dark:border-b-slate-800 hover:bg-slate-50/50">
                                     <TableCell className="font-bold pl-6 text-sm">{row.mesNome}</TableCell>
@@ -62,6 +63,7 @@ export function NPSGerenteDetails() {
                                     <TableCell className="text-center">{Number(row.suporte).toFixed(1)}</TableCell>
                                     <TableCell className="text-center">{Number(row.relacionamento).toFixed(1)}</TableCell>
                                     <TableCell className="text-center">{Number(row.lideranca).toFixed(1)}</TableCell>
+                                    <TableCell className="text-center">{Number(row.resolutividade).toFixed(1)}</TableCell>
                                     <TableCell className="text-center">
                                         <Badge className={getColor(avg)}>{avg.toFixed(1)}</Badge>
                                     </TableCell>

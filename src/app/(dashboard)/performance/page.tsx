@@ -14,7 +14,7 @@ export default function PerformancePage() {
         orderBy: 'ano',
         ascending: false,
         limit: 12,
-        select: 'nps_geral, comunicacao, organizacao, proatividade, qualidade_entregas'
+        select: 'nps_geral, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico'
     })
 
     const avg = (field: string) => {
@@ -26,9 +26,13 @@ export default function PerformancePage() {
 
     const metrics = [
         { title: "Comunicação", value: avg('comunicacao'), icon: MessageSquare, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-500/10" },
+        { title: "Dedicação", value: avg('dedicacao'), icon: Zap, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-500/10" },
+        { title: "Confiança", value: avg('confianca'), icon: Award, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10" },
+        { title: "Pontualidade", value: avg('pontualidade'), icon: MessageSquare, color: "text-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-500/10" },
         { title: "Organização", value: avg('organizacao'), icon: FolderKanban, color: "text-cyan-500", bg: "bg-cyan-50 dark:bg-cyan-500/10" },
         { title: "Proatividade", value: avg('proatividade'), icon: Zap, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10" },
         { title: "Qualidade", value: avg('qualidade_entregas'), icon: Award, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+        { title: "Domínio Téc.", value: avg('dominio_tecnico'), icon: FolderKanban, color: "text-fuchsia-500", bg: "bg-fuchsia-50 dark:bg-fuchsia-500/10" },
     ]
 
     return (
@@ -42,7 +46,7 @@ export default function PerformancePage() {
                 <ImportNpsDialog />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
                 {metrics.map((m) => (
                     <div key={m.title} className="bg-white dark:bg-[#0F172A] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-none">
                         <div className="flex items-center gap-3 mb-3">

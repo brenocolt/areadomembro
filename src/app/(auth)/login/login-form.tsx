@@ -79,7 +79,6 @@ export function LoginForm() {
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel className="text-slate-300 uppercase text-xs font-bold tracking-wider">Senha</FormLabel>
                                 <FormControl>
                                     <Input
                                         type="password"
@@ -88,6 +87,11 @@ export function LoginForm() {
                                         className="bg-slate-900/50 border-slate-700 text-white placeholder:text-slate-600 h-12 rounded-xl focus-visible:ring-accent"
                                     />
                                 </FormControl>
+                                <div className="flex justify-end pt-1">
+                                    <Link href="/recuperar-senha" className="text-xs text-slate-400 hover:text-accent transition-colors">
+                                        Esqueci minha senha?
+                                    </Link>
+                                </div>
                                 <FormMessage />
                             </FormItem>
                         )}

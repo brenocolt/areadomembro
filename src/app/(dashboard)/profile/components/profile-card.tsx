@@ -7,14 +7,20 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Edit, Image as ImageIcon, Save, Loader2 } from "lucide-react"
+import { Edit, Image as ImageIcon, Save, Loader2, KeyRound } from "lucide-react"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
+import { changePasswordLocal } from "@/lib/actions"
+import { toast } from "sonner"
 
 export function ProfileCard() {
     const { colaborador, loading: loadingColab, colaboradorId } = useColaborador()
     const [isOpen, setIsOpen] = useState(false)
+    const [isPasswordOpen, setIsPasswordOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
+    const [isChangingPassword, setIsChangingPassword] = useState(false)
+    const [newPassword, setNewPassword] = useState("")
+    const [confirmPassword, setConfirmPassword] = useState("")
     const [formData, setFormData] = useState({
         nome: "", telefone: "", emailPessoal: "", endereco: "",
         hobby: "", chocolate: "", serieFilme: ""
@@ -50,6 +56,30 @@ export function ProfileCard() {
             .eq('id', colaboradorId)
         setIsLoading(false)
         setIsOpen(false)
+        toast.success("Perfil atualizado com sucesso!")
+    }
+
+    const handleChangePassword = async () => {
+        if (newPassword.length < 6) {
+            toast.error("A senha deve ter pelo menos 6 caracteres.")
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            toast.error("As senhas não coincidem.")
+            return;
+        }
+        
+        setIsChangingPassword(true)
+        const result = await changePasswordLocal(colaboradorId, newPassword)
+        if (result.success) {
+            toast.success("Senha alterada com sucesso!")
+            setIsPasswordOpen(false)
+            setNewPassword("")
+            setConfirmPassword("")
+        } else {
+            toast.error(result.message || "Erro ao alterar a senha.")
+        }
+        setIsChangingPassword(false)
     }
 
     if (loadingColab) return <Card className="h-64 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-2xl border-none" />
@@ -123,6 +153,39 @@ export function ProfileCard() {
                                 <Button variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
                                 <Button onClick={handleSave} disabled={isLoading} className="gap-2">
                                     {isLoading ? (<><Loader2 className="h-4 w-4 animate-spin" />Salvando...</>) : (<><Save className="h-4 w-4" />Salvar Alterações</>)}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={isPasswordOpen} onOpenChange={setIsPasswordOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" className="w-full mt-3 border-[#001a41]/20 text-[#001a41] dark:border-white/10 dark:text-white rounded-xl h-10 font-semibold gap-2 shadow-sm transition-transform active:scale-95">
+                                <KeyRound className="h-4 w-4" />
+                                Trocar Senha
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[400px]">
+                            <DialogHeader>
+                                <DialogTitle className="font-display text-xl">Trocar Senha</DialogTitle>
+                                <DialogDescription>
+                                    Defina uma nova senha para o seu acesso à Plataforma.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="novaSenha">Nova Senha</Label>
+                                    <Input id="novaSenha" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="confirmarSenha">Confirmar Nova Senha</Label>
+                                    <Input id="confirmarSenha" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setIsPasswordOpen(false)}>Cancelar</Button>
+                                <Button onClick={handleChangePassword} disabled={isChangingPassword} className="gap-2 bg-[#001a41] hover:bg-[#001a41]/90">
+                                    {isChangingPassword ? (<><Loader2 className="h-4 w-4 animate-spin" />Alterando...</>) : (<><Save className="h-4 w-4" />Salvar Senha</>)}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>

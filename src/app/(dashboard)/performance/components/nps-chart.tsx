@@ -8,9 +8,13 @@ import { useState, useEffect } from "react"
 
 const COLORS = {
     comunicacao: "#8B5CF6",
+    dedicacao: "#F43F5E",
+    confianca: "#3B82F6",
+    pontualidade: "#6366F1",
     organizacao: "#06B6D4",
     proatividade: "#F59E0B",
     qualidade_entregas: "#10B981",
+    dominio_tecnico: "#D946EF",
     nps_geral: "#EC4899",
 }
 
@@ -22,7 +26,7 @@ export function NPSChart() {
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, organizacao, proatividade, qualidade_entregas, nps_geral')
+                .select('mes, ano, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico, nps_geral')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: true })
                 .order('mes', { ascending: true })
@@ -32,9 +36,13 @@ export function NPSChart() {
                 setData(nps.map(n => ({
                     name: `${months[n.mes - 1]}/${n.ano}`,
                     Comunicação: Number(n.comunicacao),
+                    Dedicação: Number(n.dedicacao),
+                    Confiança: Number(n.confianca),
+                    Pontualidade: Number(n.pontualidade),
                     Organização: Number(n.organizacao),
                     Proatividade: Number(n.proatividade),
                     Qualidade: Number(n.qualidade_entregas),
+                    'Domínio Técnico': Number(n.dominio_tecnico),
                     'Média Geral': Number(n.nps_geral),
                 })))
             }
@@ -61,9 +69,13 @@ export function NPSChart() {
                             />
                             <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 600, paddingTop: '12px' }} />
                             <Line type="monotone" dataKey="Comunicação" stroke={COLORS.comunicacao} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.comunicacao }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="Dedicação" stroke={COLORS.dedicacao} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.dedicacao }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="Confiança" stroke={COLORS.confianca} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.confianca }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="Pontualidade" stroke={COLORS.pontualidade} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.pontualidade }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Organização" stroke={COLORS.organizacao} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.organizacao }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Proatividade" stroke={COLORS.proatividade} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.proatividade }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Qualidade" stroke={COLORS.qualidade_entregas} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.qualidade_entregas }} activeDot={{ r: 6 }} />
+                            <Line type="monotone" dataKey="Domínio Técnico" stroke={COLORS.dominio_tecnico} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.dominio_tecnico }} activeDot={{ r: 6 }} />
                             <Line type="monotone" dataKey="Média Geral" stroke={COLORS.nps_geral} strokeWidth={3} strokeDasharray="6 3" dot={{ r: 5, fill: COLORS.nps_geral }} activeDot={{ r: 7 }} />
                         </LineChart>
                     </ResponsiveContainer>

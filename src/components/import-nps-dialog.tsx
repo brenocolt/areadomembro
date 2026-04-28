@@ -104,7 +104,12 @@ export function ImportNpsDialog() {
                     const quaIdx = row.findIndex(c => String(c).trim().toUpperCase() === 'QUALIDADE NAS ENTREGAS')
                     const domIdx = row.findIndex(c => String(c).trim().toUpperCase() === 'DOMÍNIO TÉCNICO')
 
-                    if (mesIdx !== -1 && comIdx !== -1 && dedIdx !== -1) {
+                    const supIdx = row.findIndex(c => String(c).trim().toUpperCase().includes('SUPORTE'))
+                    const lidIdx = row.findIndex(c => String(c).trim().toUpperCase() === 'LIDERANÇA')
+                    const relIdx = row.findIndex(c => String(c).trim().toUpperCase().includes('RELACIONAMENTO'))
+                    const resIdx = row.findIndex(c => String(c).trim().toUpperCase() === 'RESOLUTIVIDADE')
+
+                    if (mesIdx !== -1 && (dedIdx !== -1 || supIdx !== -1)) {
                         for (let i = r + 1; i <= r + 15; i++) {
                             if (!rows[i]) continue
                             const mesName = String(rows[i][mesIdx]).trim().toLowerCase()
@@ -122,7 +127,11 @@ export function ImportNpsDialog() {
                                     organizacao: getVal(orgIdx),
                                     proatividade: getVal(proIdx),
                                     qualidade_entregas: getVal(quaIdx),
-                                    dominio_tecnico: getVal(domIdx)
+                                    dominio_tecnico: getVal(domIdx),
+                                    suporte: getVal(supIdx),
+                                    lideranca: getVal(lidIdx),
+                                    relacionamento: getVal(relIdx),
+                                    resolutividade: getVal(resIdx)
                                 }
 
                                 Object.entries(mapped).forEach(([k, v]) => {

@@ -7,16 +7,21 @@ import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
 
 export function PerformanceCard() {
     const { colaborador, loading, colaboradorId } = useColaborador()
-    const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
+    const { data: rawNpsData } = useSupabaseQuery<any>('avaliacoes_nps', {
         column: 'colaborador_id',
         value: colaboradorId,
         orderBy: 'ano',
         ascending: false,
-        limit: 1,
+        limit: 12,
         select: 'nps_geral, mes, ano'
     })
 
     if (loading) return <Card className="h-64 animate-pulse bg-slate-800 rounded-3xl border-none" />
+
+    const npsData = [...(rawNpsData || [])].sort((a, b) => {
+        if (a.ano !== b.ano) return b.ano - a.ano;
+        return b.mes - a.mes;
+    });
 
     const nps = npsData.length > 0 ? Number(npsData[0].nps_geral) : 0
     const punishments = colaborador?.pontos_negativos || 0

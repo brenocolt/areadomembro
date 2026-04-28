@@ -23,6 +23,7 @@ export default function NPSGerentePage() {
         orderBy: 'ano',
         ascending: false,
         limit: 12,
+        select: 'nps_geral, comunicacao, suporte, lideranca, relacionamento, resolutividade'
     })
 
     if (!loadingColab && !isAdmin && !isGerente) {
@@ -55,6 +56,7 @@ export default function NPSGerentePage() {
         { title: "Suporte", value: avg('suporte'), icon: LifeBuoy, color: "text-cyan-500", bg: "bg-cyan-50 dark:bg-cyan-500/10" },
         { title: "Relacionamento", value: avg('relacionamento'), icon: HeartHandshake, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10" },
         { title: "Liderança", value: avg('lideranca'), icon: Crown, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10" },
+        { title: "Resolutividade", value: avg('resolutividade'), icon: ShieldAlert, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-500/10" },
     ]
 
     return (
@@ -68,7 +70,7 @@ export default function NPSGerentePage() {
                 <ImportNpsDialog />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {metrics.map((m) => (
                     <div key={m.title} className="bg-white dark:bg-[#0F172A] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-none">
                         <div className="flex items-center gap-3 mb-3">

@@ -15,7 +15,7 @@ export function DetailedPerformance() {
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, organizacao, proatividade, qualidade_entregas, nps_geral')
+                .select('mes, ano, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico, nps_geral')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
@@ -40,9 +40,13 @@ export function DetailedPerformance() {
                         <TableRow className="hover:bg-transparent border-b-slate-100 dark:border-b-slate-800">
                             <TableHead className="text-[10px] uppercase font-bold h-9 pl-6">Mês</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Comunicação</TableHead>
+                            <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Dedicação</TableHead>
+                            <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Confiança</TableHead>
+                            <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Pontualidade</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Organização</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Proatividade</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Qualidade</TableHead>
+                            <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Domínio Téc.</TableHead>
                             <TableHead className="text-[10px] uppercase font-bold h-9 text-center">Média Final</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -51,9 +55,13 @@ export function DetailedPerformance() {
                             <TableRow key={i} className="border-b-slate-100 dark:border-b-slate-800 hover:bg-slate-50/50">
                                 <TableCell className="font-bold pl-6">{row.mesNome}</TableCell>
                                 <TableCell className="text-center">{Number(row.comunicacao).toFixed(1)}</TableCell>
+                                <TableCell className="text-center">{Number(row.dedicacao).toFixed(1)}</TableCell>
+                                <TableCell className="text-center">{Number(row.confianca).toFixed(1)}</TableCell>
+                                <TableCell className="text-center">{Number(row.pontualidade).toFixed(1)}</TableCell>
                                 <TableCell className="text-center">{Number(row.organizacao).toFixed(1)}</TableCell>
                                 <TableCell className="text-center">{Number(row.proatividade).toFixed(1)}</TableCell>
                                 <TableCell className="text-center">{Number(row.qualidade_entregas).toFixed(1)}</TableCell>
+                                <TableCell className="text-center">{Number(row.dominio_tecnico).toFixed(1)}</TableCell>
                                 <TableCell className="text-center">
                                     <Badge className="bg-green-100 text-green-700 hover:bg-green-100">{Number(row.nps_geral).toFixed(1)}</Badge>
                                 </TableCell>
