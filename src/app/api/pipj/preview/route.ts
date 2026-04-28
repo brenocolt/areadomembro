@@ -28,7 +28,7 @@ const LEVEL_BONUS: Record<string, number> = {
 
 const PUNISHMENT_PER_POINT = 10
 const NPS_THRESHOLD = 4
-const NPS_BONUS_PERCENT = 0.05
+const NPS_BONUS_PERCENT = 0.10
 const MAX_PER_PERSON = 300
 
 // Roles that get exclusive role bonus (no level bonus)
