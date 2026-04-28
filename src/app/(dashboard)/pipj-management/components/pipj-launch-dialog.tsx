@@ -16,7 +16,7 @@ export function PipjLaunchDialog() {
     const [launching, setLaunching] = useState(false)
     const [fetchingPreview, setFetchingPreview] = useState(false)
     const [previewData, setPreviewData] = useState<any>(null)
-    const [overrides, setOverrides] = useState<Record<string, { valor_ajuste: number, motivo: string }>>({})
+    const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valor_final?: number, motivo: string }>>({})
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -71,11 +71,17 @@ export function PipjLaunchDialog() {
         return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
     }, [open, resetState, fetchPreview])
 
-    const handleOverrideChange = (colabId: string, field: 'valor_ajuste' | 'motivo', value: string) => {
+    const handleOverrideChange = (colabId: string, field: 'deducao' | 'motivo' | 'valor_final', value: string, calculatedVal?: number) => {
         setOverrides(prev => {
-            const current = prev[colabId] || { valor_ajuste: 0, motivo: '' }
-            if (field === 'valor_ajuste') {
-                return { ...prev, [colabId]: { ...current, valor_ajuste: Number(value) || 0 } }
+            const current = prev[colabId] || { motivo: '' }
+            if (field === 'deducao') {
+                const deducao = value === '' ? undefined : Number(value);
+                const final = deducao === undefined ? undefined : Math.max(0, (calculatedVal || 0) - deducao);
+                return { ...prev, [colabId]: { ...current, deducao, valor_final: final } }
+            } else if (field === 'valor_final') {
+                const final = value === '' ? undefined : Number(value);
+                const deducao = final === undefined ? undefined : (calculatedVal || 0) - final;
+                return { ...prev, [colabId]: { ...current, valor_final: final, deducao } }
             }
             return { ...prev, [colabId]: { ...current, motivo: value } }
         })
@@ -148,16 +154,17 @@ export function PipjLaunchDialog() {
                                         <tr>
                                             <th className="text-left p-3 font-bold">Colaborador</th>
                                             <th className="text-right p-3 font-bold">Calculado</th>
-                                            <th className="text-right p-3 font-bold">Ajuste / Dedução (R$)</th>
-                                            <th className="text-left p-3 font-bold w-40">Descrição do Ajuste</th>
-                                            <th className="text-right p-3 font-bold">Final</th>
+                                            <th className="text-right p-3 font-bold">Dedução (R$)</th>
+                                            <th className="text-left p-3 font-bold w-40">Descrição / Motivo</th>
+                                            <th className="text-right p-3 font-bold">Valor Final (R$)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {previewData.detalhes?.map((d: any) => {
                                             const override = overrides[d.colaborador_id]
-                                            const ajuste = override ? override.valor_ajuste : 0
-                                            const final = Math.max(0, d.valor_calculado + ajuste)
+                                            const deducao = override?.deducao ?? ''
+                                            const final = override?.valor_final ?? Math.max(0, d.valor_calculado)
+                                            const isChanged = final !== Math.max(0, d.valor_calculado);
                                             return (
                                                 <tr key={d.colaborador_id} className="border-t border-slate-100 dark:border-slate-800">
                                                     <td className="p-3">
@@ -172,20 +179,27 @@ export function PipjLaunchDialog() {
                                                             type="number" 
                                                             className="h-8 text-right text-xs" 
                                                             placeholder="0,00"
-                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_ajuste', e.target.value)}
+                                                            value={deducao}
+                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, d.valor_calculado)}
                                                         />
                                                     </td>
                                                     <td className="p-2">
                                                         <Input 
                                                             type="text" 
                                                             className="h-8 text-xs" 
-                                                            placeholder="Descrição da dedução/acréscimo..."
-                                                            disabled={!override?.valor_ajuste}
+                                                            placeholder="Motivo da alteração..."
+                                                            disabled={!isChanged}
+                                                            value={override?.motivo || ''}
                                                             onChange={(e) => handleOverrideChange(d.colaborador_id, 'motivo', e.target.value)}
                                                         />
                                                     </td>
-                                                    <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                                        R$ {Number(final).toFixed(2).replace('.', ',')}
+                                                    <td className="p-2">
+                                                        <Input 
+                                                            type="number" 
+                                                            className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400" 
+                                                            value={final}
+                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, d.valor_calculado)}
+                                                        />
                                                     </td>
                                                 </tr>
                                             )

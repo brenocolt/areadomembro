@@ -68,7 +68,7 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const overrides: Record<string, { valor_ajuste: number, motivo: string }> = body.overrides || {};
+    const overrides: Record<string, { valor_final?: number, motivo: string }> = body.overrides || {};
 
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
@@ -142,15 +142,22 @@ export async function POST(req: NextRequest) {
         pipj -= descontoAusencia
       }
 
-      // 7. Manual adjustment from preview table
-      const override = overrides[colab.id];
-      const ajusteManual = override ? Number(override.valor_ajuste) || 0 : 0;
-      const motivoAjuste = override ? override.motivo : '';
-      pipj += ajusteManual;
-
-      // Floor and cap
+      // Floor and cap for base calculation
       pipj = Math.max(0, Math.round(pipj * 100) / 100)
       pipj = Math.min(pipj, MAX_PER_PERSON)
+
+      let pipjCalculado = pipj;
+
+      // 7. Manual adjustment from preview table
+      const override = overrides[colab.id];
+      const hasOverride = override && override.valor_final !== undefined;
+      
+      if (hasOverride) {
+        pipj = Math.max(0, Number(override.valor_final));
+      }
+      
+      const ajusteManual = pipj - pipjCalculado;
+      const motivoAjuste = override ? override.motivo : '';
 
       // Build calculation breakdown
       const detalhesCalculo = {
