@@ -6,13 +6,17 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog"
-import { Zap, Loader2, CheckCircle, AlertTriangle } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Zap, Loader2, CheckCircle, AlertTriangle, Calculator } from "lucide-react"
 
 export function PipjLaunchDialog() {
     const [open, setOpen] = useState(false)
     const [countdown, setCountdown] = useState(5)
     const [canConfirm, setCanConfirm] = useState(false)
     const [launching, setLaunching] = useState(false)
+    const [fetchingPreview, setFetchingPreview] = useState(false)
+    const [previewData, setPreviewData] = useState<any>(null)
+    const [overrides, setOverrides] = useState<Record<string, { valor_ajuste: number, motivo: string }>>({})
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -23,33 +27,69 @@ export function PipjLaunchDialog() {
         setLaunching(false)
         setResult(null)
         setError(null)
+        setPreviewData(null)
+        setOverrides({})
         if (intervalRef.current) clearInterval(intervalRef.current)
+    }, [])
+
+    const fetchPreview = useCallback(async () => {
+        setFetchingPreview(true)
+        setError(null)
+        try {
+            const res = await fetch('/api/pipj/preview')
+            const data = await res.json()
+            if (!res.ok) {
+                setError(data.error || 'Erro ao carregar prévia.')
+            } else {
+                setPreviewData(data)
+                // Start countdown only after preview is loaded
+                intervalRef.current = setInterval(() => {
+                    setCountdown(prev => {
+                        if (prev <= 1) {
+                            setCanConfirm(true)
+                            if (intervalRef.current) clearInterval(intervalRef.current)
+                            return 0
+                        }
+                        return prev - 1
+                    })
+                }, 1000)
+            }
+        } catch (e) {
+            setError('Erro de conexão ao buscar prévia.')
+        } finally {
+            setFetchingPreview(false)
+        }
     }, [])
 
     useEffect(() => {
         if (open) {
             resetState()
-            intervalRef.current = setInterval(() => {
-                setCountdown(prev => {
-                    if (prev <= 1) {
-                        setCanConfirm(true)
-                        if (intervalRef.current) clearInterval(intervalRef.current)
-                        return 0
-                    }
-                    return prev - 1
-                })
-            }, 1000)
+            fetchPreview()
         } else {
             resetState()
         }
         return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-    }, [open, resetState])
+    }, [open, resetState, fetchPreview])
+
+    const handleOverrideChange = (colabId: string, field: 'valor_ajuste' | 'motivo', value: string) => {
+        setOverrides(prev => {
+            const current = prev[colabId] || { valor_ajuste: 0, motivo: '' }
+            if (field === 'valor_ajuste') {
+                return { ...prev, [colabId]: { ...current, valor_ajuste: Number(value) || 0 } }
+            }
+            return { ...prev, [colabId]: { ...current, motivo: value } }
+        })
+    }
 
     async function handleLaunch() {
         setLaunching(true)
         setError(null)
         try {
-            const res = await fetch('/api/pipj/lancar', { method: 'POST' })
+            const res = await fetch('/api/pipj/lancar', { 
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ overrides })
+            })
             const data = await res.json()
             if (!res.ok) {
                 setError(data.error || 'Erro ao lançar PIPJ.')
@@ -58,7 +98,6 @@ export function PipjLaunchDialog() {
             }
             setResult(data)
             setLaunching(false)
-            // Dispatch event to refresh stats
             window.dispatchEvent(new Event('refreshPipjData'))
         } catch {
             setError('Erro de conexão. Tente novamente.')
@@ -74,80 +113,116 @@ export function PipjLaunchDialog() {
                     Lançar PIPJ
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px]">
-                <DialogHeader>
+            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
+                <DialogHeader className="shrink-0">
                     <DialogTitle className="font-display text-xl flex items-center gap-2">
                         <Zap className="h-5 w-5 text-emerald-500" />
                         Lançar PIPJ Mensal
                     </DialogTitle>
                     <DialogDescription>
-                        Esta ação calculará e creditará o PIPJ para <strong>todos os colaboradores ativos</strong> com base nas regras de cálculo.
+                        Revise os cálculos abaixo. Você pode aplicar ajustes manuais (+/-) e informar o motivo antes de confirmar o lançamento.
                     </DialogDescription>
                 </DialogHeader>
 
-                {!result && !error && (
-                    <div className="py-6 space-y-4">
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
-                            <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
-                            <div className="text-sm text-amber-800 dark:text-amber-200">
-                                <p className="font-bold mb-1">Atenção!</p>
-                                <p>Esta ação é <strong>irreversível</strong> e pode ser executada apenas <strong>uma vez por mês</strong>. Verifique se todos os dados de projetos, níveis e ausências estão corretos.</p>
-                            </div>
+                <div className="flex-1 overflow-y-auto py-4">
+                    {fetchingPreview && (
+                        <div className="flex items-center justify-center p-8 text-slate-500">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                            <span className="ml-3">Calculando prévia do PIPJ...</span>
                         </div>
+                    )}
 
-                        {!canConfirm && (
-                            <div className="text-center">
-                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 dark:bg-white/5 border-2 border-slate-200 dark:border-white/10 mb-2">
-                                    <span className="text-2xl font-display font-bold text-slate-900 dark:text-white">{countdown}</span>
+                    {!result && !error && previewData && (
+                        <div className="space-y-4">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
+                                <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+                                <div className="text-sm text-amber-800 dark:text-amber-200">
+                                    <p className="font-bold mb-1">Atenção!</p>
+                                    <p>Esta ação é <strong>irreversível</strong>. Verifique os valores abaixo e insira ajustes se necessário.</p>
                                 </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                    Aguarde para confirmar...
-                                </p>
                             </div>
-                        )}
-                    </div>
-                )}
 
-                {result && (
-                    <div className="py-6 space-y-4">
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-start gap-3">
-                            <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
-                            <div className="text-sm text-emerald-800 dark:text-emerald-200">
-                                <p className="font-bold mb-1">PIPJ lançado com sucesso!</p>
-                                <p>
-                                    <strong>{result.total_colaboradores}</strong> colaboradores receberam um total de{' '}
-                                    <strong>R$ {Number(result.total_lancado).toFixed(2).replace('.', ',')}</strong>
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="max-h-48 overflow-y-auto rounded-xl border border-slate-200 dark:border-white/10">
-                            <table className="w-full text-xs">
-                                <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800">
-                                    <tr>
-                                        <th className="text-left p-2 font-bold">Nome</th>
-                                        <th className="text-left p-2 font-bold">Cargo</th>
-                                        <th className="text-right p-2 font-bold">Valor</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {result.detalhes?.map((d: any, i: number) => (
-                                        <tr key={i} className="border-t border-slate-100 dark:border-white/5">
-                                            <td className="p-2 font-medium">{d.nome}</td>
-                                            <td className="p-2 text-slate-500">{d.cargo}</td>
-                                            <td className="p-2 text-right font-bold text-emerald-600 dark:text-emerald-400">
-                                                R$ {Number(d.valor_calculado).toFixed(2).replace('.', ',')}
-                                            </td>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-slate-50 dark:bg-slate-800/50">
+                                        <tr>
+                                            <th className="text-left p-3 font-bold">Colaborador</th>
+                                            <th className="text-right p-3 font-bold">Calculado</th>
+                                            <th className="text-right p-3 font-bold">Ajuste / Dedução (R$)</th>
+                                            <th className="text-left p-3 font-bold w-40">Descrição do Ajuste</th>
+                                            <th className="text-right p-3 font-bold">Final</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
+                                    </thead>
+                                    <tbody>
+                                        {previewData.detalhes?.map((d: any) => {
+                                            const override = overrides[d.colaborador_id]
+                                            const ajuste = override ? override.valor_ajuste : 0
+                                            const final = Math.max(0, d.valor_calculado + ajuste)
+                                            return (
+                                                <tr key={d.colaborador_id} className="border-t border-slate-100 dark:border-slate-800">
+                                                    <td className="p-3">
+                                                        <p className="font-medium">{d.nome}</p>
+                                                        <p className="text-slate-500 text-[10px]">{d.cargo}</p>
+                                                    </td>
+                                                    <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-400">
+                                                        R$ {Number(d.valor_calculado).toFixed(2).replace('.', ',')}
+                                                    </td>
+                                                    <td className="p-2">
+                                                        <Input 
+                                                            type="number" 
+                                                            className="h-8 text-right text-xs" 
+                                                            placeholder="0,00"
+                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_ajuste', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="p-2">
+                                                        <Input 
+                                                            type="text" 
+                                                            className="h-8 text-xs" 
+                                                            placeholder="Descrição da dedução/acréscimo..."
+                                                            disabled={!override?.valor_ajuste}
+                                                            onChange={(e) => handleOverrideChange(d.colaborador_id, 'motivo', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="p-3 text-right font-bold text-emerald-600 dark:text-emerald-400">
+                                                        R$ {Number(final).toFixed(2).replace('.', ',')}
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
 
-                {error && (
-                    <div className="py-6">
+                            {!canConfirm && (
+                                <div className="text-center py-4">
+                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 mb-2">
+                                        <span className="text-xl font-display font-bold text-slate-900 dark:text-white">{countdown}</span>
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                        Aguarde para confirmar...
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {result && (
+                        <div className="space-y-4">
+                            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-start gap-3">
+                                <CheckCircle className="h-5 w-5 text-emerald-500 mt-0.5 shrink-0" />
+                                <div className="text-sm text-emerald-800 dark:text-emerald-200">
+                                    <p className="font-bold mb-1">PIPJ lançado com sucesso!</p>
+                                    <p>
+                                        <strong>{result.total_colaboradores}</strong> colaboradores receberam um total de{' '}
+                                        <strong>R$ {Number(result.total_lancado).toFixed(2).replace('.', ',')}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {error && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
                             <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
                             <div className="text-sm text-red-800 dark:text-red-200">
@@ -155,14 +230,14 @@ export function PipjLaunchDialog() {
                                 <p>{error}</p>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
 
-                <DialogFooter>
+                <DialogFooter className="shrink-0 mt-4">
                     {!result ? (
                         <Button
                             onClick={handleLaunch}
-                            disabled={!canConfirm || launching}
+                            disabled={!canConfirm || launching || fetchingPreview}
                             className={`w-full ${canConfirm && !launching
                                 ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/25'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed'
@@ -170,7 +245,7 @@ export function PipjLaunchDialog() {
                         >
                             {launching ? (
                                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</>
-                            ) : !canConfirm ? (
+                            ) : !canConfirm && previewData ? (
                                 `Aguarde ${countdown}s para confirmar`
                             ) : (
                                 <><Zap className="mr-2 h-4 w-4" /> Confirmar Lançamento</>

@@ -14,7 +14,7 @@ export function ExchangeRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('milhas_trocas')
-                .select('*, colaboradores!inner(nome, cargo_atual, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, cargo_atual, telefone, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(10)
@@ -27,6 +27,7 @@ export function ExchangeRequests() {
                     colaborador_id: r.colaborador_id,
                     name: r.colaboradores?.nome || 'Desconhecido',
                     role: r.colaboradores?.cargo_atual || '',
+                    phone: r.colaboradores?.telefone || '',
                     item: r.item_nome,
                     miles: r.milhas_gastas,
                     currentBalance: saldo || 0,
@@ -38,8 +39,31 @@ export function ExchangeRequests() {
         fetch()
     }, [])
 
+    const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
+        try {
+            await fetch('https://n8n.produtivajunior.com.br/webhook/troca', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nome: req.name,
+                    motivo: req.item,
+                    quantidade: req.miles,
+                    status: status,
+                    telefone: req.phone
+                })
+            });
+        } catch (e) {
+            console.error("Failed to send webhook", e);
+        }
+    }
+
     const handleAccept = async (req: any) => {
-        if (req.currentBalance < req.miles) {
+        const { data: saldoData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', req.colaborador_id).single();
+        const currentBalance = saldoData?.saldo_disponivel || 0;
+
+        if (currentBalance < req.miles) {
             alert('O usuário tem menos milhas que o necessário para realizar o resgate');
             return;
         }
@@ -47,7 +71,7 @@ export function ExchangeRequests() {
         const { error } = await supabase.from('milhas_trocas').update({ status: 'APROVADA' }).eq('id', req.id);
         if (!error) {
             await supabase.from('milhas_saldo').update({
-                saldo_disponivel: req.currentBalance - req.miles
+                saldo_disponivel: currentBalance - req.miles
             }).eq('colaborador_id', req.colaborador_id);
 
             // Special side-effect for "-1 Ponto" item
@@ -68,6 +92,7 @@ export function ExchangeRequests() {
 
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshMilesData'))
+            await sendWebhook(req, 'Aceito');
         } else {
             alert('Erro ao aprovar solicitação');
         }
@@ -78,6 +103,7 @@ export function ExchangeRequests() {
         if (!error) {
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshMilesData'))
+            await sendWebhook(req, 'Reprovado');
         } else {
             alert('Erro ao reprovar solicitação');
         }

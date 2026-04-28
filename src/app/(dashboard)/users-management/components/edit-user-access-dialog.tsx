@@ -51,6 +51,7 @@ const EDITABLE_FIELDS = [
     { key: 'telefone', label: 'Telefone', type: 'text' },
     { key: 'pontos_negativos', label: 'Pontos Negativos', type: 'number' },
     { key: 'saldo_pipj', label: 'Saldo PIPJ (R$)', type: 'number' },
+    { key: 'saldo_milhas', label: 'Saldo de Milhas', type: 'number' },
 ]
 
 export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole, onSave }: EditUserAccessDialogProps) {
@@ -65,7 +66,12 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
             // Initialize form data from colaborador
             const data: Record<string, any> = {}
             EDITABLE_FIELDS.forEach(field => {
-                data[field.key] = colaborador[field.key] ?? ''
+                if (field.key === 'saldo_milhas') {
+                    const milhasSaldo = colaborador.milhas_saldo
+                    data[field.key] = Array.isArray(milhasSaldo) ? (milhasSaldo[0]?.saldo_disponivel ?? 0) : (milhasSaldo?.saldo_disponivel ?? 0)
+                } else {
+                    data[field.key] = colaborador[field.key] ?? ''
+                }
             })
             setFormData(data)
 
@@ -109,7 +115,12 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
             const updateObj: Record<string, any> = { paginas_permitidas: selectedPages }
 
             EDITABLE_FIELDS.forEach(field => {
-                const oldVal = colaborador[field.key]
+                let oldVal = colaborador[field.key]
+                if (field.key === 'saldo_milhas') {
+                    const milhasSaldo = colaborador.milhas_saldo
+                    oldVal = Array.isArray(milhasSaldo) ? (milhasSaldo[0]?.saldo_disponivel ?? 0) : (milhasSaldo?.saldo_disponivel ?? 0)
+                }
+                
                 const newVal = field.type === 'number' ? Number(formData[field.key]) || 0 : formData[field.key]
                 updateObj[field.key] = newVal
 

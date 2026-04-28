@@ -24,7 +24,7 @@ export function UsersList() {
         async function fetch() {
             const { data } = await supabase
                 .from('colaboradores')
-                .select('*, users!inner(role)')
+                .select('*, users!inner(role), milhas_saldo(saldo_disponivel)')
                 .order('nome', { ascending: true })
 
             if (data) {
@@ -90,6 +90,7 @@ export function UsersList() {
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Nome</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Cargo & Núcleo</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Contatos</TableHead>
+                                <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Milhas</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Permissão</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500 text-right">Ações</TableHead>
                             </TableRow>
@@ -97,11 +98,11 @@ export function UsersList() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-slate-400">Carregando colaboradores...</TableCell>
+                                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">Carregando colaboradores...</TableCell>
                                 </TableRow>
                             ) : filtered.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-8 text-slate-400">Nenhum colaborador encontrado</TableCell>
+                                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">Nenhum colaborador encontrado</TableCell>
                                 </TableRow>
                             ) : (
                                 filtered.map((c) => (
@@ -125,6 +126,11 @@ export function UsersList() {
                                             <div className="flex flex-col gap-1 items-start text-xs text-slate-600 dark:text-slate-400">
                                                 <span className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> {c.email_corporativo}</span>
                                                 <span className="text-[10px] pl-4">{c.telefone}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-3 px-6">
+                                            <div className="inline-flex px-2 py-1 rounded bg-indigo-50 dark:bg-indigo-900/30 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                                                {Array.isArray(c.milhas_saldo) ? c.milhas_saldo[0]?.saldo_disponivel || 0 : c.milhas_saldo?.saldo_disponivel || 0} pts
                                             </div>
                                         </TableCell>
                                         <TableCell className="py-3 px-6">
@@ -182,9 +188,19 @@ export function UsersList() {
                     onSave={(updatedData, newRole) => {
                         setColaboradores(prev => prev.map(c => {
                             if (c.id !== userToEdit.id) return c
+                            
+                            // Handle milhas_saldo update specifically
+                            const updatedMilhasSaldo = updatedData.saldo_milhas !== undefined 
+                                ? [{ saldo_disponivel: updatedData.saldo_milhas }] 
+                                : c.milhas_saldo;
+                            
+                            // Remove saldo_milhas from updatedData to not pollute c
+                            const { saldo_milhas, ...restUpdatedData } = updatedData;
+
                             return {
                                 ...c,
-                                ...updatedData,
+                                ...restUpdatedData,
+                                milhas_saldo: updatedMilhasSaldo,
                                 users: [{ ...c.users?.[0], role: newRole }],
                             }
                         }))

@@ -17,7 +17,7 @@ export function RemovalRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('solicitacoes_remocao')
-                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual, users!inner(id))')
+                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual, telefone, users!inner(id))')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(30)
@@ -30,6 +30,7 @@ export function RemovalRequests() {
                 name: r.colaboradores?.nome || 'Desconhecido',
                 role: r.colaboradores?.cargo_atual || '',
                 nucleo: r.colaboradores?.nucleo_atual || '',
+                phone: r.colaboradores?.telefone || '',
                 reason: r.motivo,
                 date: new Date(r.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }),
                 initials: (r.colaboradores?.nome || '??').split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase(),
@@ -37,6 +38,26 @@ export function RemovalRequests() {
         }
         fetch()
     }, [])
+
+    const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
+        try {
+            await fetch('https://n8n.produtivajunior.com.br/webhook/puni', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nome: req.name,
+                    motivo: req.reason,
+                    quantidade: req.pontos_solicitados || 0,
+                    status: status,
+                    telefone: req.phone
+                })
+            });
+        } catch (e) {
+            console.error("Failed to send webhook", e);
+        }
+    }
 
     const handleAccept = async (req: any) => {
         const { error } = await supabase.from('solicitacoes_remocao').update({ status: 'APROVADA' }).eq('id', req.id);
@@ -59,6 +80,7 @@ export function RemovalRequests() {
             }
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshPointsData'));
+            await sendWebhook(req, 'Aceito');
         } else {
             alert('Erro ao aprovar a solicitação');
         }
@@ -69,6 +91,7 @@ export function RemovalRequests() {
         if (!error) {
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshPointsData'));
+            await sendWebhook(req, 'Reprovado');
         } else {
             alert('Erro ao rejeitar a solicitação');
         }

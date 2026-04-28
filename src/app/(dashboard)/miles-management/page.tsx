@@ -2,9 +2,9 @@ import { MilesHeader } from "./components/miles-header"
 import { MilesStats } from "./components/miles-stats"
 import { TopRedeemers } from "./components/top-redeemers"
 import { ExchangeRequests } from "./components/exchange-requests"
-import { RecentExchanges } from "./components/recent-exchanges"
 import { AdditionRequests } from "./components/addition-requests"
 import { MilesDashboard } from "./components/miles-dashboard"
+import { MilesHistory } from "./components/miles-history"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function MilesManagementPage() {
@@ -16,6 +16,9 @@ export default function MilesManagementPage() {
                 <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl">
                     <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Visão Geral
+                    </TabsTrigger>
+                    <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
+                        Histórico
                     </TabsTrigger>
                     <TabsTrigger value="dashboard" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Dashboard
@@ -44,8 +47,10 @@ export default function MilesManagementPage() {
                             </Tabs>
                         </div>
                     </div>
+                </TabsContent>
 
-                    <RecentExchanges />
+                <TabsContent value="history" className="space-y-6 border-none p-0 outline-none">
+                    <MilesHistory />
                 </TabsContent>
 
                 <TabsContent value="dashboard" className="space-y-6 border-none p-0 outline-none">

@@ -312,13 +312,13 @@ export default function FormsManagementPage() {
                                             <h3 className="font-bold text-slate-900 dark:text-white truncate">{form.titulo}</h3>
                                             {statusBadge(form.status)}
                                             {form.pagina_destino && (
-                                                <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider border-none">
+                                                <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
                                                     → {form.pagina_destino === 'performance' ? 'Performance' : 'NPS Gerente'}
                                                 </Badge>
                                             )}
                                         </div>
                                         {form.descricao && (
-                                            <p className="text-sm text-slate-500 truncate mt-0.5">{form.descricao}</p>
+                                            <p className="text-sm text-slate-500 line-clamp-2 mt-0.5 whitespace-normal break-words" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>
                                         )}
                                         <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400">
                                             <span className="flex items-center gap-1">

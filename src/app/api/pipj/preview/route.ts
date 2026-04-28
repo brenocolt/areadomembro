@@ -65,17 +65,12 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
   return count
 }
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const overrides: Record<string, { valor_ajuste: number, motivo: string }> = body.overrides || {};
-
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
     const mes = now.getMonth() + 1
     const ano = now.getFullYear()
-
-    // Monthly limit check removed for testing purposes
 
     // Fetch active colaboradores
     const { data: colaboradores, error: colabError } = await supabaseAdmin
@@ -131,9 +126,6 @@ export async function POST(req: NextRequest) {
       const descontoPunicao = PUNISHMENT_PER_POINT * pontosNegativos
       pipj -= descontoPunicao
 
-      // 5. NPS bonus (+5% if NPS > 4) — placeholder, no NPS table yet
-      // Will be enabled when NPS data is available
-
       // 6. Absence deduction (proportional)
       const absenceDays = absenceMap.get(colab.id) || 0
       let descontoAusencia = 0
@@ -141,12 +133,6 @@ export async function POST(req: NextRequest) {
         descontoAusencia = Math.round(((absenceDays / businessDays) * pipj) * 100) / 100
         pipj -= descontoAusencia
       }
-
-      // 7. Manual adjustment from preview table
-      const override = overrides[colab.id];
-      const ajusteManual = override ? Number(override.valor_ajuste) || 0 : 0;
-      const motivoAjuste = override ? override.motivo : '';
-      pipj += ajusteManual;
 
       // Floor and cap
       pipj = Math.max(0, Math.round(pipj * 100) / 100)
@@ -164,8 +150,6 @@ export async function POST(req: NextRequest) {
         desconto_ausencia: descontoAusencia,
         dias_ausencia: absenceDays,
         dias_uteis_mes: businessDays,
-        ajuste_manual: ajusteManual,
-        motivo_ajuste: motivoAjuste
       }
 
       detalhes.push({
@@ -177,44 +161,11 @@ export async function POST(req: NextRequest) {
         pontos_negativos: pontosNegativos,
         ausencia_dias: absenceDays,
         valor_calculado: pipj,
+        detalhes_calculo,
       })
 
       totalLancado += pipj
-
-      // Build periodo label
-      const periodo = `${String(mes).padStart(2, '0')}/${ano}`
-
-      // Determine semestre
-      const semestre = mes <= 6 ? `${ano}.1` : `${ano}.2`
-
-      // Update saldo_pipj
-      const novoSaldo = Number(colab.saldo_pipj || 0) + pipj
-      await supabaseAdmin
-        .from('colaboradores')
-        .update({ saldo_pipj: novoSaldo })
-        .eq('id', colab.id)
-
-      // Insert transaction record with full breakdown
-      await supabaseAdmin.from('transacoes_pipj').insert({
-        colaborador_id: colab.id,
-        tipo: 'ENTRADA',
-        valor: pipj,
-        periodo,
-        semestre,
-        cargo_no_periodo: cargo,
-        detalhes_calculo: detalhesCalculo,
-        status: 'CREDITADO',
-      })
     }
-
-    // Log the launch
-    await supabaseAdmin.from('lancamentos_pipj').insert({
-      mes,
-      ano,
-      total_lancado: totalLancado,
-      total_colaboradores: colaboradores.length,
-      detalhes,
-    })
 
     return NextResponse.json({
       success: true,
@@ -223,7 +174,7 @@ export async function POST(req: NextRequest) {
       detalhes,
     })
   } catch (error: any) {
-    console.error('PIPJ launch error:', error)
+    console.error('PIPJ preview error:', error)
     return NextResponse.json({ error: error.message || 'Erro interno.' }, { status: 500 })
   }
 }

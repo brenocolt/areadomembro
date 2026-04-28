@@ -190,7 +190,7 @@ export default function FormulariosPage() {
                         <h1 className="text-xl font-bold text-slate-900 dark:text-white">{form?.titulo}</h1>
                     </div>
                     {form?.descricao && (
-                        <p className="text-sm text-slate-500 ml-12 mb-2">{form.descricao}</p>
+                        <p className="text-sm text-slate-500 ml-12 mb-2 whitespace-normal break-words" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>
                     )}
                     {prevCount > 0 && (
                         <div className="ml-12 mb-4">
@@ -423,7 +423,7 @@ export default function FormulariosPage() {
                                         </div>
                                         <div>
                                             <h3 className="font-bold text-slate-900 dark:text-white">{form.titulo}</h3>
-                                            {form.descricao && <p className="text-sm text-slate-500 mt-0.5">{form.descricao}</p>}
+                                            {form.descricao && <p className="text-sm text-slate-500 mt-0.5 whitespace-normal break-words line-clamp-2" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>}
                                             {form.data_prazo && (
                                                 <p className="text-xs text-slate-400 mt-1">
                                                     Prazo: {new Date(form.data_prazo).toLocaleDateString('pt-BR')}

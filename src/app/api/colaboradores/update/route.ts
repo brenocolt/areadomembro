@@ -11,14 +11,42 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'ID do colaborador é obrigatório' }, { status: 400 })
     }
 
+    // Extract saldo_milhas before updating colaboradores
+    const { saldo_milhas, ...colaboradorUpdate } = updateObj
+
     // Update colaboradores
     const { error: colabErr } = await supabase
         .from('colaboradores')
-        .update(updateObj)
+        .update(colaboradorUpdate)
         .eq('id', colaboradorId)
 
     if (colabErr) {
         return NextResponse.json({ error: colabErr.message }, { status: 500 })
+    }
+
+    // Update milhas_saldo if present
+    if (saldo_milhas !== undefined) {
+        // Find existing record
+        const { data: milhasData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', colaboradorId).single()
+        
+        if (milhasData) {
+            const { error: milhasErr } = await supabase
+                .from('milhas_saldo')
+                .update({ saldo_disponivel: saldo_milhas, saldo_total: saldo_milhas }) // updating both to keep consistency for direct edits
+                .eq('colaborador_id', colaboradorId)
+                
+            if (milhasErr) {
+                console.error('Erro ao atualizar milhas_saldo:', milhasErr)
+            }
+        } else {
+            // insert new
+            await supabase.from('milhas_saldo').insert({
+                colaborador_id: colaboradorId,
+                saldo_disponivel: saldo_milhas,
+                saldo_total: saldo_milhas,
+                updated_at: new Date().toISOString()
+            })
+        }
     }
 
     // Update user role if changed

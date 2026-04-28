@@ -14,40 +14,85 @@ const STATUS_COLOR_MAP: Record<string, string> = {
     'REPROVADA': 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20',
 }
 
-export function RecentExchanges() {
+export function MilesHistory() {
     const [history, setHistory] = useState<any[]>([])
 
     useEffect(() => {
         async function fetch() {
-            const { data } = await supabase
+            // 1. Fetch exchanges
+            const { data: exchanges } = await supabase
                 .from('milhas_trocas')
                 .select('*, colaboradores!inner(nome, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .neq('status', 'PENDENTE')
                 .order('data_troca', { ascending: false })
-                .limit(8)
-            if (data) setHistory(data.map(o => {
-                const milhasSaldo = o.colaboradores?.milhas_saldo
-                const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
-                return {
-                    id: o.id,
-                    name: o.colaboradores?.nome || 'Desconhecido',
-                    action: `${o.milhas_gastas} pts`,
-                    status: o.status,
-                    currentBalance: saldo || 0,
-                    time: new Date(o.data_troca).toLocaleDateString('pt-BR'),
-                    item: o.item_nome,
-                }
-            }))
+                .limit(20)
+                
+            // 2. Fetch additions
+            const { data: additions } = await supabase
+                .from('solicitacoes_saque')
+                .select('*, colaboradores!inner(nome, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .eq('tipo', 'adicao_milhas')
+                .neq('status', 'PENDENTE')
+                .order('created_at', { ascending: false })
+                .limit(20)
+
+            const combined = []
+
+            if (exchanges) {
+                combined.push(...exchanges.map(o => {
+                    const milhasSaldo = o.colaboradores?.milhas_saldo
+                    const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
+                    return {
+                        id: `exchange-${o.id}`,
+                        type: 'Troca',
+                        name: o.colaboradores?.nome || 'Desconhecido',
+                        action: `-${o.milhas_gastas} pts`,
+                        status: o.status,
+                        currentBalance: saldo || 0,
+                        timeObj: new Date(o.data_troca),
+                        time: new Date(o.data_troca).toLocaleDateString('pt-BR'),
+                        item: o.item_nome,
+                    }
+                }))
+            }
+
+            if (additions) {
+                combined.push(...additions.map(o => {
+                    const milhasSaldo = o.colaboradores?.milhas_saldo
+                    const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
+                    return {
+                        id: `addition-${o.id}`,
+                        type: 'Adição',
+                        name: o.colaboradores?.nome || 'Desconhecido',
+                        action: `+${o.quantidade} pts`,
+                        status: o.status === 'APROVADO' ? 'APROVADA' : 'REPROVADA',
+                        currentBalance: saldo || 0,
+                        timeObj: new Date(o.created_at),
+                        time: new Date(o.created_at).toLocaleDateString('pt-BR'),
+                        item: o.atividade,
+                    }
+                }))
+            }
+
+            combined.sort((a, b) => b.timeObj.getTime() - a.timeObj.getTime())
+
+            setHistory(combined.slice(0, 20))
         }
         fetch()
 
-        const sub = supabase.channel('recent_exchanges_changes')
+        const subExchanges = supabase.channel('history_exchanges_changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'milhas_trocas' }, fetch)
+            .subscribe()
+            
+        const subAdditions = supabase.channel('history_additions_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitacoes_saque' }, fetch)
             .subscribe()
 
         window.addEventListener('refreshMilesData', fetch)
 
         return () => {
-            supabase.removeChannel(sub)
+            supabase.removeChannel(subExchanges)
+            supabase.removeChannel(subAdditions)
             window.removeEventListener('refreshMilesData', fetch)
         }
     }, [])
@@ -60,7 +105,7 @@ export function RecentExchanges() {
                         <div className="bg-slate-50 dark:bg-white/5 p-2 rounded-xl border border-slate-100 dark:border-white/10">
                             <Calendar className="h-5 w-5 text-slate-500 dark:text-slate-400" />
                         </div>
-                        <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white">Estatística de Resgates de Milhas</h3>
+                        <h3 className="text-lg font-bold font-display text-slate-900 dark:text-white">Histórico de Adições e Resgates de Milhas</h3>
                     </div>
 
                     <div className="flex gap-2 w-full md:w-auto">

@@ -34,6 +34,7 @@ function BreakdownRow({ detalhes }: { detalhes: any }) {
         { icon: Award, label: `Bônus por nível (${detalhes.nivel || '—'})`, value: detalhes.bonus_nivel, color: 'text-indigo-600 dark:text-indigo-400', positive: true, hide: !detalhes.bonus_nivel },
         { icon: MinusCircle, label: `Desconto punições (${detalhes.pontos_negativos || 0} pontos)`, value: detalhes.desconto_punicao, color: 'text-red-500', positive: false, hide: !detalhes.desconto_punicao },
         { icon: CalendarOff, label: `Desconto ausências (${detalhes.dias_ausencia || 0} dias de ${detalhes.dias_uteis_mes || '—'} úteis)`, value: detalhes.desconto_ausencia, color: 'text-amber-600 dark:text-amber-400', positive: false, hide: !detalhes.desconto_ausencia },
+        { icon: Briefcase, label: `Ajuste / Dedução (${detalhes.motivo_ajuste || 'Sem descrição'})`, value: Math.abs(detalhes.ajuste_manual || 0), color: (detalhes.ajuste_manual || 0) < 0 ? 'text-red-500' : 'text-green-500', positive: (detalhes.ajuste_manual || 0) >= 0, hide: !detalhes.ajuste_manual },
     ]
 
     return (
@@ -55,7 +56,7 @@ function BreakdownRow({ detalhes }: { detalhes: any }) {
                     <div className="border-t border-dashed border-slate-200 dark:border-slate-700 mt-2 pt-2 flex items-center justify-between max-w-md">
                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Total creditado</span>
                         <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                            R$ {Number((detalhes.base_cargo || 0) + (detalhes.bonus_projetos || 0) + (detalhes.bonus_nivel || 0) - (detalhes.desconto_punicao || 0) - (detalhes.desconto_ausencia || 0)).toFixed(2).replace('.', ',')}
+                            R$ {Number((detalhes.base_cargo || 0) + (detalhes.bonus_projetos || 0) + (detalhes.bonus_nivel || 0) - (detalhes.desconto_punicao || 0) - (detalhes.desconto_ausencia || 0) + (detalhes.ajuste_manual || 0)).toFixed(2).replace('.', ',')}
                         </span>
                     </div>
                 </div>

@@ -14,7 +14,7 @@ export function AdditionRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores!inner(nome, cargo_atual, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, cargo_atual, telefone, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('tipo', 'adicao_milhas')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
@@ -27,6 +27,7 @@ export function AdditionRequests() {
                     colaborador_id: r.colaborador_id,
                     name: r.colaboradores?.nome || 'Desconhecido',
                     role: r.colaboradores?.cargo_atual || '',
+                    phone: r.colaboradores?.telefone || '',
                     reason: r.descricao,
                     atividade: r.atividade,
                     miles: r.quantidade,
@@ -40,13 +41,33 @@ export function AdditionRequests() {
         fetch()
     }, [])
 
+    const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
+        try {
+            await fetch('https://n8n.produtivajunior.com.br/webhook/30f97f7d-b1f3-43c7-8bbe-6c570ae977c3', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    nome: req.name,
+                    motivo: req.atividade,
+                    quantidade: req.miles,
+                    status: status,
+                    telefone: req.phone
+                })
+            });
+        } catch (e) {
+            console.error("Failed to send webhook", e);
+        }
+    }
+
     const handleAccept = async (req: any) => {
         const { error } = await supabase.from('solicitacoes_saque').update({ status: 'APROVADO' }).eq('id', req.id);
         if (!error) {
             const { data: saldoData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', req.colaborador_id).single();
             if (saldoData) {
                 await supabase.from('milhas_saldo').update({
-                    saldo_disponivel: req.currentBalance + req.miles,
+                    saldo_disponivel: (saldoData.saldo_disponivel || 0) + req.miles,
                     saldo_total: (saldoData.saldo_total || 0) + req.miles
                 }).eq('colaborador_id', req.colaborador_id);
             } else {
@@ -58,6 +79,7 @@ export function AdditionRequests() {
             }
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshMilesData'))
+            await sendWebhook(req, 'Aceito');
         } else {
             alert('Erro ao aprovar solicitação');
         }
@@ -68,6 +90,7 @@ export function AdditionRequests() {
         if (!error) {
             setRequests(prev => prev.filter(r => r.id !== req.id));
             window.dispatchEvent(new Event('refreshMilesData'))
+            await sendWebhook(req, 'Reprovado');
         } else {
             alert('Erro ao reprovar solicitação');
         }

@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { PlusCircle, Trash2, GripVertical, Plus, Loader2 } from "lucide-react"
+import { PlusCircle, Trash2, GripVertical, Plus, Loader2, Copy, Bold, Italic } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Pergunta {
     id: string
@@ -52,6 +55,109 @@ interface CreateFormDialogProps {
     hideTrigger?: boolean
 }
 
+function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao }: any) {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id: p.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <div ref={setNodeRef} style={style} className="bg-violet-50/50 dark:bg-white/5 border border-violet-100 dark:border-white/10 rounded-2xl p-4 space-y-3">
+            <div className="flex items-start gap-3">
+                <div {...attributes} {...listeners} className="cursor-grab hover:text-violet-500 text-slate-400 mt-1">
+                    <GripVertical className="h-5 w-5" />
+                </div>
+                <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-1">
+                    {i + 1}
+                </span>
+                <div className="flex-1 space-y-3">
+                    <Input
+                        value={p.titulo}
+                        onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
+                        className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500"
+                        placeholder="Texto da pergunta"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <Select value={p.tipo} onValueChange={(v) => updatePergunta(p.id, 'tipo', v)}>
+                            <SelectTrigger className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-9 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                                {TIPOS.map(t => (
+                                    <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                checked={p.obrigatoria}
+                                onCheckedChange={(v) => updatePergunta(p.id, 'obrigatoria', v)}
+                            />
+                            <span className="text-xs text-slate-500">Obrigatória</span>
+                        </div>
+                    </div>
+
+                    {/* Options for selecao_unica / selecao_multipla */}
+                    {(p.tipo === 'selecao_unica' || p.tipo === 'selecao_multipla') && Array.isArray(p.opcoes) && (
+                        <div className="space-y-2 pl-2">
+                            {p.opcoes.map((opt: string, oi: number) => (
+                                <div key={oi} className="flex items-center gap-2">
+                                    <div className={`w-3.5 h-3.5 border-2 border-slate-300 ${p.tipo === 'selecao_unica' ? 'rounded-full' : 'rounded'}`} />
+                                    <Input
+                                        value={opt}
+                                        onChange={(e) => updateOpcao(p.id, oi, e.target.value)}
+                                        className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                    />
+                                    <button type="button" onClick={() => removeOpcao(p.id, oi)} className="text-slate-400 hover:text-rose-500">
+                                        <Trash2 className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={() => addOpcao(p.id)} className="text-xs text-violet-600 dark:text-violet-400 font-bold hover:underline flex items-center gap-1">
+                                <Plus className="w-3 h-3" /> Adicionar opção
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Scale labels */}
+                    {p.tipo === 'escala' && p.opcoes && (
+                        <div className="grid grid-cols-2 gap-2">
+                            <Input
+                                value={p.opcoes.labelMin || ''}
+                                onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMin: e.target.value })}
+                                className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                placeholder="Label 1 (ex: Muito Insatisfeito)"
+                            />
+                            <Input
+                                value={p.opcoes.labelMax || ''}
+                                onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMax: e.target.value })}
+                                className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                placeholder="Label 5 (ex: Muito Satisfeito)"
+                            />
+                        </div>
+                    )}
+                </div>
+                <div className="flex flex-col gap-2 mt-1">
+                    <button type="button" onClick={() => duplicatePergunta(p.id)} className="text-slate-400 hover:text-violet-500 p-1" title="Duplicar">
+                        <Copy className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => removePergunta(p.id)} className="text-slate-400 hover:text-rose-500 p-1" title="Excluir">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export function CreateFormDialog({ onSuccess, initialData, editMode, open: controlledOpen, onOpenChange, hideTrigger }: CreateFormDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false)
     const open = controlledOpen ?? internalOpen
@@ -69,6 +175,13 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const [perguntas, setPerguntas] = useState<Pergunta[]>([
         { id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }
     ])
+
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
 
     // Populate from initialData when it changes
     useEffect(() => {
@@ -105,6 +218,36 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setPerguntas([{ id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }])
     }
 
+    const insertFormat = (format: 'bold' | 'italic') => {
+        const textarea = document.getElementById('descricao-textarea') as HTMLTextAreaElement;
+        if (!textarea) return;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = descricao.substring(start, end);
+        let newText = '';
+        if (format === 'bold') {
+            newText = `${descricao.substring(0, start)}<b>${selectedText}</b>${descricao.substring(end)}`;
+        } else if (format === 'italic') {
+            newText = `${descricao.substring(0, start)}<i>${selectedText}</i>${descricao.substring(end)}`;
+        }
+        setDescricao(newText);
+        setTimeout(() => {
+            textarea.focus();
+            textarea.setSelectionRange(start + 3, end + 3); // approximate
+        }, 0);
+    }
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setPerguntas((items) => {
+                const oldIndex = items.findIndex((i) => i.id === active.id);
+                const newIndex = items.findIndex((i) => i.id === over.id);
+                return arrayMove(items, oldIndex, newIndex);
+            });
+        }
+    };
+
     const addPergunta = () => {
         setPerguntas([...perguntas, {
             id: Math.random().toString(),
@@ -114,6 +257,16 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             opcoes: null,
             obrigatoria: true,
         }])
+    }
+
+    const duplicatePergunta = (id: string) => {
+        const p = perguntas.find(x => x.id === id)
+        if (!p) return
+        const idx = perguntas.findIndex(x => x.id === id)
+        const nova = { ...p, id: Math.random().toString() }
+        const novasPerguntas = [...perguntas]
+        novasPerguntas.splice(idx + 1, 0, nova)
+        setPerguntas(novasPerguntas)
     }
 
     const removePergunta = (id: string) => {
@@ -280,8 +433,19 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Descrição</label>
+                            <div className="flex items-center justify-between mb-1">
+                                <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Descrição</label>
+                                <div className="flex items-center gap-1">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => insertFormat('bold')} title="Negrito">
+                                        <Bold className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => insertFormat('italic')} title="Itálico">
+                                        <Italic className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
                             <Textarea
+                                id="descricao-textarea"
                                 placeholder="Descreva o objetivo do formulário..."
                                 className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl min-h-[80px] resize-none focus-visible:ring-violet-500"
                                 value={descricao}
@@ -340,86 +504,23 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     {/* Questions builder */}
                     <div className="space-y-3">
                         <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Perguntas</label>
-
-                        {perguntas.map((p, i) => (
-                            <div key={p.id} className="bg-violet-50/50 dark:bg-white/5 border border-violet-100 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                                <div className="flex items-start gap-3">
-                                    <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-1">
-                                        {i + 1}
-                                    </span>
-                                    <div className="flex-1 space-y-3">
-                                        <Input
-                                            value={p.titulo}
-                                            onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
-                                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500"
-                                            placeholder="Texto da pergunta"
-                                        />
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <Select value={p.tipo} onValueChange={(v) => updatePergunta(p.id, 'tipo', v)}>
-                                                <SelectTrigger className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-9 text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
-                                                    {TIPOS.map(t => (
-                                                        <SelectItem key={t.value} value={t.value} className="text-xs">{t.label}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <div className="flex items-center gap-2">
-                                                <Switch
-                                                    checked={p.obrigatoria}
-                                                    onCheckedChange={(v) => updatePergunta(p.id, 'obrigatoria', v)}
-                                                />
-                                                <span className="text-xs text-slate-500">Obrigatória</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Options for selecao_unica / selecao_multipla */}
-                                        {(p.tipo === 'selecao_unica' || p.tipo === 'selecao_multipla') && Array.isArray(p.opcoes) && (
-                                            <div className="space-y-2 pl-2">
-                                                {p.opcoes.map((opt: string, oi: number) => (
-                                                    <div key={oi} className="flex items-center gap-2">
-                                                        <div className={`w-3.5 h-3.5 border-2 border-slate-300 ${p.tipo === 'selecao_unica' ? 'rounded-full' : 'rounded'}`} />
-                                                        <Input
-                                                            value={opt}
-                                                            onChange={(e) => updateOpcao(p.id, oi, e.target.value)}
-                                                            className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                                        />
-                                                        <button onClick={() => removeOpcao(p.id, oi)} className="text-slate-400 hover:text-rose-500">
-                                                            <Trash2 className="w-3 h-3" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <button onClick={() => addOpcao(p.id)} className="text-xs text-violet-600 dark:text-violet-400 font-bold hover:underline flex items-center gap-1">
-                                                    <Plus className="w-3 h-3" /> Adicionar opção
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Scale labels */}
-                                        {p.tipo === 'escala' && p.opcoes && (
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <Input
-                                                    value={p.opcoes.labelMin || ''}
-                                                    onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMin: e.target.value })}
-                                                    className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                                    placeholder="Label 1 (ex: Muito Insatisfeito)"
-                                                />
-                                                <Input
-                                                    value={p.opcoes.labelMax || ''}
-                                                    onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMax: e.target.value })}
-                                                    className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                                    placeholder="Label 5 (ex: Muito Satisfeito)"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <button onClick={() => removePergunta(p.id)} className="text-slate-400 hover:text-rose-500 p-1 mt-1">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                            <SortableContext items={perguntas.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                                {perguntas.map((p, i) => (
+                                    <SortableQuestion
+                                        key={p.id}
+                                        p={p}
+                                        i={i}
+                                        updatePergunta={updatePergunta}
+                                        removePergunta={removePergunta}
+                                        duplicatePergunta={duplicatePergunta}
+                                        updateOpcao={updateOpcao}
+                                        addOpcao={addOpcao}
+                                        removeOpcao={removeOpcao}
+                                    />
+                                ))}
+                            </SortableContext>
+                        </DndContext>
 
                         <Button
                             variant="outline"
