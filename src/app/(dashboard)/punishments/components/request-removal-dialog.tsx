@@ -15,7 +15,8 @@ const ACTIVITY_GROUPS = [
             { id: "curso_certificado", title: "Curso com certificado", dbValue: "Fazer um curso que agregue a sua formação e a Produtiva, com certificado", icon: Star },
             { id: "treinamento_interno", title: "Treinamento interno", dbValue: "Dar treinamento interno para Produtiva (Turbinar, Calcificar, PTPJ, Take Off, entre outros)", icon: Users },
             { id: "participar_bench", title: "Participar de um bench", dbValue: "Participar de um bench", icon: Handshake },
-            { id: "indicar_lead_quente", title: "Indicar lead quente", dbValue: "Indicar um lead quente que seja convertido em reunião de proposta", icon: Flame }
+            { id: "indicar_lead_quente", title: "Indicar lead quente", dbValue: "Indicar um lead quente que seja convertido em reunião de proposta", icon: Flame },
+            { id: "participacao_gt", title: "Participação de GT", dbValue: "Participação de GT (Grupo de Trabalho)", icon: Users }
         ]
     },
     {
