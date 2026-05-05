@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download } from "lucide-react"
+import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter } from "lucide-react"
 import { FormResponsesDashboard } from "../forms-management/components/form-responses-dashboard"
 import { Button } from "@/components/ui/button"
 
@@ -15,6 +15,7 @@ export default function FormsResponsesPage() {
     const [npsRespostas, setNpsRespostas] = useState<any[]>([])
     const [usuariosMap, setUsuariosMap] = useState<Record<string, string>>({})
     const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
+    const [npsFilterTipo, setNpsFilterTipo] = useState<'todos' | 'consultor' | 'gerente'>('todos')
 
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -82,9 +83,14 @@ export default function FormsResponsesPage() {
         setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }))
     }
 
+    // Filter NPS by type
+    const filteredNpsRespostas = npsFilterTipo === 'todos'
+        ? npsRespostas
+        : npsRespostas.filter(r => r.tipo_avaliacao === npsFilterTipo)
+
     // Grouping NPS exactly like we group Form Responses
     const groupedNps: Record<string, any[]> = {}
-    npsRespostas.forEach(r => {
+    filteredNpsRespostas.forEach(r => {
         const date = new Date(r.created_at)
         const key = `${date.getFullYear()}-${date.getMonth()}`
         if (!groupedNps[key]) groupedNps[key] = []
@@ -297,9 +303,18 @@ export default function FormsResponsesPage() {
                                 </div>
                             ) : (
                                 <>
-                                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300 mb-6">
-                                        <Users className="h-4 w-4" />
-                                        {npsRespostas.length} avaliação{npsRespostas.length !== 1 ? 'ões' : ''} no total
+                                    <div className="flex flex-wrap items-center gap-3 mb-6">
+                                        <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                                            <Users className="h-4 w-4" />
+                                            {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} no total
+                                        </div>
+                                        <div className="ml-auto flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+                                            {([{v:'todos',l:'Todos'},{v:'consultor',l:'Consultores'},{v:'gerente',l:'Gerentes'}] as const).map(opt => (
+                                                <button key={opt.v} onClick={() => setNpsFilterTipo(opt.v)}
+                                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsFilterTipo === opt.v ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                                                >{opt.l}</button>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     {sortedNpsKeys.map(key => {
@@ -348,6 +363,7 @@ export default function FormsResponsesPage() {
                                                             const timeStr = sendDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                                                             const authorName = resposta.colaboradores?.nome || 'Anônimo'
                                                             const respondidoPor = usuariosMap[resposta.avaliador_id] || 'Desconhecido'
+                                                            const tipoLabel = resposta.tipo_avaliacao === 'gerente' ? 'Gerente' : 'Consultor'
                                                             const isPromotor = resposta.nps_geral >= 4.5
                                                             const isDetrator = resposta.nps_geral <= 3.5
 
@@ -359,7 +375,10 @@ export default function FormsResponsesPage() {
                                                                                 {authorName.charAt(0).toUpperCase()}
                                                                             </div>
                                                                             <div>
-                                                                                <p className="font-bold text-sm text-slate-900 dark:text-white">{authorName}</p>
+                                                                                <p className="font-bold text-sm text-slate-900 dark:text-white">
+                                                                                    {authorName}
+                                                                                    <span className={`ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${resposta.tipo_avaliacao === 'gerente' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400'}`}>{tipoLabel}</span>
+                                                                                </p>
                                                                                 <p className="text-[11px] text-slate-400">Avaliado por <span className="font-semibold text-slate-500">{respondidoPor}</span> · {dateStr} às {timeStr}</p>
                                                                             </div>
                                                                         </div>

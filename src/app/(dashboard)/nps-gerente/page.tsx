@@ -16,6 +16,7 @@ export default function NPSGerentePage() {
     const isAdmin = userRole === 'ADMIN'
     const cargoAtual = (colaborador?.cargo_atual || '').toLowerCase()
     const isGerente = cargoAtual.includes('gerente')
+    const isAdministrador = cargoAtual.includes('administrador') || cargoAtual.includes('diretor')
 
     const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
         column: 'colaborador_id',
@@ -23,10 +24,10 @@ export default function NPSGerentePage() {
         orderBy: 'ano',
         ascending: false,
         limit: 12,
-        select: 'nps_geral, comunicacao, suporte, lideranca, relacionamento, resolutividade'
+        select: 'nps_geral, comunicacao, suporte, lideranca, relacionamento, resolutividade, tipo_avaliacao'
     })
 
-    if (!loadingColab && !isAdmin && !isGerente) {
+    if (!loadingColab && !isAdmin && !isGerente && !isAdministrador) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
                 <div className="bg-rose-50 dark:bg-rose-500/10 p-4 rounded-2xl mb-4">
@@ -46,9 +47,12 @@ export default function NPSGerentePage() {
         )
     }
 
+    // Only show gerente-type evaluations on this page
+    const gerenteNpsData = npsData.filter((n: any) => n.tipo_avaliacao === 'gerente')
+
     const avg = (field: string) => {
-        if (npsData.length === 0) return '—'
-        return (npsData.reduce((sum: number, n: any) => sum + Number(n[field] || 0), 0) / npsData.length).toFixed(1)
+        if (gerenteNpsData.length === 0) return '—'
+        return (gerenteNpsData.reduce((sum: number, n: any) => sum + Number(n[field] || 0), 0) / gerenteNpsData.length).toFixed(1)
     }
 
     const metrics = [
@@ -80,7 +84,7 @@ export default function NPSGerentePage() {
                             <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">{m.title}</p>
                         </div>
                         <div className={`text-3xl font-display font-bold ${m.color}`}>{m.value}</div>
-                        <p className="text-xs text-slate-500 mt-1.5 font-medium">{npsData.length} avaliações</p>
+                        <p className="text-xs text-slate-500 mt-1.5 font-medium">{gerenteNpsData.length} avaliações</p>
                     </div>
                 ))}
             </div>

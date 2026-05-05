@@ -176,6 +176,7 @@ export default function NPSProjetoPage() {
     // NPS Consultor data (array for dynamic blocks, max 3)
     const [consultoresData, setConsultoresData] = useState<ConsultorData[]>([emptyConsultorData()])
     const [activeConsultorIdx, setActiveConsultorIdx] = useState(0)
+    const [apenasGerente, setApenasGerente] = useState(false)
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
@@ -188,12 +189,14 @@ export default function NPSProjetoPage() {
         if (isConsultor) {
             steps.push("Gerente")
         }
-        for (let i = 0; i < consultoresData.length; i++) {
-            steps.push(`Consultor ${consultoresData.length > 1 ? i + 1 : ''}`.trim())
+        if (!apenasGerente) {
+            for (let i = 0; i < consultoresData.length; i++) {
+                steps.push(`Consultor ${consultoresData.length > 1 ? i + 1 : ''}`.trim())
+            }
         }
         steps.push("Enviar")
         return steps
-    }, [isConsultor, consultoresData.length])
+    }, [isConsultor, consultoresData.length, apenasGerente])
 
     const steps = buildSteps()
 
@@ -214,9 +217,20 @@ export default function NPSProjetoPage() {
                     setIsFormClosed(true)
                 }
 
+                // Sync projects from Monday (once a day per user, non-blocking)
+                const lastSync = localStorage.getItem('last_monday_sync')
+                const now = new Date().getTime()
+                const oneDay = 24 * 60 * 60 * 1000
+                if (!lastSync || now - parseInt(lastSync) > oneDay) {
+                    localStorage.setItem('last_monday_sync', now.toString())
+                    fetch('/api/monday/projects')
+                        .then(res => res.json())
+                        .then(data => console.log('Monday background sync result:', data))
+                        .catch(err => console.warn('Monday background sync failed:', err))
+                }
+
                 const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
                 if (p) {
-                    // Ordenar alfabeticamente
                     const sorted = p.sort((a, b) => a.nome.localeCompare(b.nome))
                     setProjetos(sorted)
                 }
@@ -259,8 +273,10 @@ export default function NPSProjetoPage() {
     }
 
     // Helpers
+    const EXTRA_GERENTE_IDS = ['89251a1b-a1e7-491c-80ed-d64895370fad']
     const gerentes = colaboradores.filter(c =>
-        c.cargo_atual?.toLowerCase().includes("gerente") && !c.cargo_atual?.toLowerCase().includes("assessor")
+        (c.cargo_atual?.toLowerCase().includes("gerente") && !c.cargo_atual?.toLowerCase().includes("assessor"))
+        || EXTRA_GERENTE_IDS.includes(c.id)
     )
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id
@@ -364,33 +380,35 @@ export default function NPSProjetoPage() {
                 })
             }
 
-            // 2. Save NPS Consultor evaluations
-            for (const c of consultoresData) {
-                if (!c.consultor_id) continue
-                const npsGeral = (
-                    [c.comunicacao, c.dedicacao, c.confianca, c.pontualidade, c.organizacao, c.proatividade, c.qualidade_entregas, c.dominio_tecnico]
-                        .reduce((sum, v) => sum + parseFloat(v), 0) / 8
-                )
+            // 2. Save NPS Consultor evaluations (skip if apenasGerente)
+            if (!apenasGerente) {
+                for (const c of consultoresData) {
+                    if (!c.consultor_id) continue
+                    const npsGeral = (
+                        [c.comunicacao, c.dedicacao, c.confianca, c.pontualidade, c.organizacao, c.proatividade, c.qualidade_entregas, c.dominio_tecnico]
+                            .reduce((sum, v) => sum + parseFloat(v), 0) / 8
+                    )
 
-                await supabase.from('avaliacoes_nps').insert({
-                    colaborador_id: c.consultor_id,
-                    avaliador_id: colaborador.id,
-                    mes, ano,
-                    comunicacao: parseFloat(c.comunicacao),
-                    dedicacao: parseFloat(c.dedicacao),
-                    confianca: parseFloat(c.confianca),
-                    pontualidade: parseFloat(c.pontualidade),
-                    organizacao: parseFloat(c.organizacao),
-                    proatividade: parseFloat(c.proatividade),
-                    qualidade_entregas: parseFloat(c.qualidade_entregas),
-                    dominio_tecnico: parseFloat(c.dominio_tecnico),
-                    nps_geral: npsGeral,
-                    projeto_id: projetoId || null,
-                    cargo_avaliador: cargoAtual,
-                    feedback_texto: c.feedback_texto,
-                    precisa_feedback: c.precisa_feedback === "Sim",
-                    tipo_avaliacao: 'consultor',
-                })
+                    await supabase.from('avaliacoes_nps').insert({
+                        colaborador_id: c.consultor_id,
+                        avaliador_id: colaborador.id,
+                        mes, ano,
+                        comunicacao: parseFloat(c.comunicacao),
+                        dedicacao: parseFloat(c.dedicacao),
+                        confianca: parseFloat(c.confianca),
+                        pontualidade: parseFloat(c.pontualidade),
+                        organizacao: parseFloat(c.organizacao),
+                        proatividade: parseFloat(c.proatividade),
+                        qualidade_entregas: parseFloat(c.qualidade_entregas),
+                        dominio_tecnico: parseFloat(c.dominio_tecnico),
+                        nps_geral: npsGeral,
+                        projeto_id: projetoId || null,
+                        cargo_avaliador: cargoAtual,
+                        feedback_texto: c.feedback_texto,
+                        precisa_feedback: c.precisa_feedback === "Sim",
+                        tipo_avaliacao: 'consultor',
+                    })
+                }
             }
 
             // 3. Record submission
@@ -576,6 +594,25 @@ export default function NPSProjetoPage() {
 
                         <RadioYesNo label="Você acha que o gerente precisa de um momento de feedback?"
                             value={gerenteData.precisa_feedback} onChange={v => updateGerente("precisa_feedback", v)} required />
+
+                        <div className="space-y-2 mt-4 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-slate-800/40">
+                            <label className="text-sm font-bold text-slate-900 dark:text-slate-200 block">
+                                Deseja avaliar apenas o gerente neste NPS? <span className="text-xs text-slate-400 font-normal">(pular avaliação de consultores)</span>
+                            </label>
+                            <div className="flex gap-3">
+                                {[{v: false, l: 'Não, avaliar consultores também'}, {v: true, l: 'Sim, avaliar apenas o gerente'}].map(opt => (
+                                    <label key={String(opt.v)} className={`flex items-center gap-3 px-5 py-3 rounded-xl border cursor-pointer transition-all ${
+                                        apenasGerente === opt.v
+                                            ? 'border-violet-500 bg-violet-50/50 dark:bg-violet-500/10'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-violet-300'
+                                    }`}>
+                                        <input type="radio" checked={apenasGerente === opt.v}
+                                            onChange={() => setApenasGerente(opt.v)} className="accent-violet-600" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{opt.l}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 )}
 

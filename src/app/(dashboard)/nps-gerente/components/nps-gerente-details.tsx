@@ -15,8 +15,9 @@ export function NPSGerenteDetails() {
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, nps_geral')
+                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, nps_geral, tipo_avaliacao')
                 .eq('colaborador_id', colaboradorId)
+                .eq('tipo_avaliacao', 'gerente')
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
                 .limit(6)

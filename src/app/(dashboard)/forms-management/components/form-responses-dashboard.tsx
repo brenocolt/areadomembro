@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Users, Star, MessageSquare, Calendar, User, ChevronDown, ChevronUp } from "lucide-react"
+import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter } from "lucide-react"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -10,7 +10,9 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const [respostas, setRespostas] = useState<any[]>([])
     const [colaboradores, setColaboradores] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+    const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
+    const [groupMode, setGroupMode] = useState<'pessoa' | 'mes'>('pessoa')
 
     useEffect(() => {
         async function fetch() {
@@ -24,11 +26,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             setRespostas(rData || [])
             setColaboradores(cData || [])
 
-            // Auto-expand the most recent month
+            // Auto-expand first group
             if (rData && rData.length > 0) {
-                const firstDate = new Date(rData[0].enviado_em)
-                const key = `${firstDate.getFullYear()}-${firstDate.getMonth()}`
-                setExpandedMonths({ [key]: true })
+                if (groupMode === 'pessoa') {
+                    const firstPerson = rData[0].colaborador_id || rData[0].colaboradores?.nome || 'anon'
+                    setExpandedGroups({ [firstPerson]: true })
+                } else {
+                    const firstDate = new Date(rData[0].enviado_em)
+                    setExpandedGroups({ [`${firstDate.getFullYear()}-${firstDate.getMonth()}`]: true })
+                }
             }
 
             setLoading(false)
@@ -36,8 +42,8 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         fetch()
     }, [formularioId])
 
-    const toggleMonth = (key: string) => {
-        setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }))
+    const toggleGroup = (key: string) => {
+        setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }))
     }
 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
@@ -55,49 +61,103 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         )
     }
 
-    // Group responses by month
-    const grouped: Record<string, any[]> = {}
-    respostas.forEach(r => {
-        const date = new Date(r.enviado_em)
-        const key = `${date.getFullYear()}-${date.getMonth()}`
-        if (!grouped[key]) grouped[key] = []
-        grouped[key].push(r)
-    })
+    // Filter questions to display
+    const filteredPerguntas = filterPerguntaId
+        ? perguntas.filter(p => p.id === filterPerguntaId)
+        : perguntas
 
-    // Sort month keys by most recent first
-    const sortedKeys = Object.keys(grouped).sort((a, b) => {
-        const [ya, ma] = a.split('-').map(Number)
-        const [yb, mb] = b.split('-').map(Number)
-        return yb * 12 + mb - (ya * 12 + ma)
+    // Group responses
+    let groups: Record<string, { label: string; respostas: any[] }> = {}
+
+    if (groupMode === 'pessoa') {
+        respostas.forEach(r => {
+            const personId = r.colaborador_id || 'anon'
+            const personName = r.colaboradores?.nome || 'Anônimo'
+            if (!groups[personId]) groups[personId] = { label: personName, respostas: [] }
+            groups[personId].respostas.push(r)
+        })
+    } else {
+        respostas.forEach(r => {
+            const date = new Date(r.enviado_em)
+            const key = `${date.getFullYear()}-${date.getMonth()}`
+            if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
+            groups[key].respostas.push(r)
+        })
+    }
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+        if (groupMode === 'mes') {
+            const [ya, ma] = a.split('-').map(Number)
+            const [yb, mb] = b.split('-').map(Number)
+            return yb * 12 + mb - (ya * 12 + ma)
+        }
+        return groups[a].label.localeCompare(groups[b].label)
     })
 
     return (
         <div className="p-6 space-y-4">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
-                <Users className="h-4 w-4" />
-                {respostas.length} resposta{respostas.length !== 1 ? 's' : ''} no total
+            {/* Controls bar */}
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+                <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                    <Users className="h-4 w-4" />
+                    {respostas.length} resposta{respostas.length !== 1 ? 's' : ''} no total
+                </div>
+
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {/* Group mode toggle */}
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+                        <button
+                            onClick={() => setGroupMode('pessoa')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${groupMode === 'pessoa' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <User className="h-3 w-3 inline mr-1" />Por Pessoa
+                        </button>
+                        <button
+                            onClick={() => setGroupMode('mes')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${groupMode === 'mes' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <Calendar className="h-3 w-3 inline mr-1" />Por Mês
+                        </button>
+                    </div>
+
+                    {/* Question filter */}
+                    <div className="relative">
+                        <select
+                            value={filterPerguntaId}
+                            onChange={e => setFilterPerguntaId(e.target.value)}
+                            className="appearance-none pl-8 pr-4 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-w-[140px]"
+                        >
+                            <option value="">Todas as perguntas</option>
+                            {perguntas.map((p, i) => (
+                                <option key={p.id} value={p.id}>{i + 1}. {p.titulo.substring(0, 40)}{p.titulo.length > 40 ? '...' : ''}</option>
+                            ))}
+                        </select>
+                        <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+                    </div>
+                </div>
             </div>
 
+            {/* Groups */}
             {sortedKeys.map(key => {
-                const [year, monthIdx] = key.split('-').map(Number)
-                const monthRespostas = grouped[key]
-                const isExpanded = expandedMonths[key] ?? false
-                const monthLabel = `${MESES[monthIdx]} ${year}`
+                const group = groups[key]
+                const isExpanded = expandedGroups[key] ?? false
 
                 return (
                     <div key={key} className="border border-slate-100 dark:border-slate-800/50 rounded-2xl overflow-hidden">
-                        {/* Month header */}
                         <button
-                            onClick={() => toggleMonth(key)}
+                            onClick={() => toggleGroup(key)}
                             className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
                         >
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-violet-50 dark:bg-violet-500/10 rounded-xl">
-                                    <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                    {groupMode === 'pessoa'
+                                        ? <User className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                        : <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                                    }
                                 </div>
                                 <div className="text-left">
-                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">{monthLabel}</h3>
-                                    <p className="text-xs text-slate-400">{monthRespostas.length} resposta{monthRespostas.length !== 1 ? 's' : ''}</p>
+                                    <h3 className="font-bold text-slate-900 dark:text-white text-sm">{group.label}</h3>
+                                    <p className="text-xs text-slate-400">{group.respostas.length} resposta{group.respostas.length !== 1 ? 's' : ''}</p>
                                 </div>
                             </div>
                             {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
@@ -105,7 +165,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                         {isExpanded && (
                             <div className="border-t border-slate-100 dark:border-slate-800/50 divide-y divide-slate-100 dark:divide-slate-800/50">
-                                {monthRespostas.map((resposta, ri) => {
+                                {group.respostas.map((resposta) => {
                                     const sendDate = new Date(resposta.enviado_em)
                                     const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
                                     const timeStr = sendDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -114,7 +174,6 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                                     return (
                                         <div key={resposta.id} className="p-4">
-                                            {/* Response header */}
                                             <div className="flex items-center gap-3 mb-3">
                                                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold text-xs shrink-0">
                                                     {authorName.charAt(0).toUpperCase()}
@@ -125,9 +184,8 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 </div>
                                             </div>
 
-                                            {/* Individual answers */}
                                             <div className="space-y-2 ml-11">
-                                                {perguntas.map((p, pi) => {
+                                                {filteredPerguntas.map((p, pi) => {
                                                     const item = items.find((it: any) => it.pergunta_id === p.id)
                                                     if (!item) return null
 
@@ -147,10 +205,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                         displayValue = item.valores ? (item.valores as string[]).map(getColabName).join(', ') : (item.valor ? getColabName(item.valor) : '—')
                                                     }
 
+                                                    const questionIdx = perguntas.findIndex(q => q.id === p.id)
+
                                                     return (
                                                         <div key={p.id} className="text-xs">
                                                             <span className="font-bold text-slate-500 dark:text-slate-400">
-                                                                {pi + 1}. {p.titulo}:
+                                                                {questionIdx + 1}. {p.titulo}:
                                                             </span>{' '}
                                                             {p.tipo === 'escala' && item.valor ? (
                                                                 <span className="inline-flex items-center gap-1">
