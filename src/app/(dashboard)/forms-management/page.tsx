@@ -272,6 +272,15 @@ export default function FormsManagementPage() {
                     <p className="text-sm text-slate-500 mt-1">Habilite ou desabilite os envios do formulário de NPS Projetos.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.location.href = '/nps-projeto'}
+                        className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
+                    >
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                        Editar / Visualizar NPS Projetos
+                    </Button>
                     <span className={`text-sm font-bold ${npsAberto ? 'text-emerald-500' : 'text-slate-400'}`}>
                         {npsAberto ? 'Aberto para respostas' : 'Fechado'}
                     </span>

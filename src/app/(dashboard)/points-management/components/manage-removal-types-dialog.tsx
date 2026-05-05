@@ -104,6 +104,12 @@ export function ManageRemovalTypesDialog() {
         setEditPoints("")
     }
 
+    const getGroupForPoints = (pts: number): string => {
+        if (pts <= 1) return 'DESENVOLVIMENTO'
+        if (pts <= 2) return 'CRESCIMENTO'
+        return 'FORTALECIMENTO'
+    }
+
     const saveEdit = async () => {
         if (!editTitle || !editPoints) return
         const pointsNum = parseInt(editPoints)
@@ -112,11 +118,12 @@ export function ManageRemovalTypesDialog() {
             return
         }
 
-        setTypes(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, points: pointsNum } : t))
+        const newGroup = getGroupForPoints(pointsNum)
+        setTypes(prev => prev.map(t => t.id === editingId ? { ...t, title: editTitle, points: pointsNum, groupLabel: newGroup } : t))
 
         await supabase
             .from('pontos_tipos_remocao')
-            .update({ titulo: editTitle, pontos: pointsNum })
+            .update({ titulo: editTitle, pontos: pointsNum, grupo: newGroup })
             .eq('id', editingId)
 
         setEditingId(null)
@@ -134,9 +141,11 @@ export function ManageRemovalTypesDialog() {
             return
         }
 
+        const autoGroup = getGroupForPoints(pointsNum)
+
         const newType: RemovalType = {
             id: Math.random().toString(36).slice(2),
-            groupLabel: newGroup,
+            groupLabel: autoGroup,
             title: newTitle,
             dbValue: newDbValue,
             points: pointsNum,
@@ -145,7 +154,7 @@ export function ManageRemovalTypesDialog() {
 
         const { data } = await supabase
             .from('pontos_tipos_remocao')
-            .insert({ grupo: newGroup, titulo: newTitle, db_value: newDbValue, pontos: pointsNum, disponivel: true })
+            .insert({ grupo: autoGroup, titulo: newTitle, db_value: newDbValue, pontos: pointsNum, disponivel: true })
             .select()
             .single()
 
@@ -209,10 +218,11 @@ export function ManageRemovalTypesDialog() {
                     ) : (
                         <div className="space-y-6">
                             {groups.map(group => {
-                                const groupTypes = types.filter(t => t.groupLabel === group)
+                                const groupPoints = group === 'DESENVOLVIMENTO' ? 1 : group === 'CRESCIMENTO' ? 2 : 3
+                                const groupTypes = types.filter(t => t.points === groupPoints)
                                 if (groupTypes.length === 0) return null
 
-                                const pointsLabel = group === 'DESENVOLVIMENTO' ? '1 PONTO' : group === 'CRESCIMENTO' ? '2 PONTOS' : '3 PONTOS'
+                                const pointsLabel = groupPoints === 1 ? '1 PONTO' : `${groupPoints} PONTOS`
 
                                 return (
                                     <div key={group} className="space-y-2">

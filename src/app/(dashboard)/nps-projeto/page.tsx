@@ -179,8 +179,8 @@ export default function NPSProjetoPage() {
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
-    const isConsultor = cargoAtual.toLowerCase().includes("consultor")
-    const isGerente = cargoAtual.toLowerCase().includes("gerente") || cargoAtual.toLowerCase().includes("assessor")
+    const isConsultor = cargoAtual.toLowerCase().includes("consultor") || cargoAtual.toLowerCase().includes("assessor")
+    const isGerente = cargoAtual.toLowerCase().includes("gerente") && !cargoAtual.toLowerCase().includes("assessor")
 
     // Build step names based on role
     const buildSteps = useCallback(() => {
@@ -260,7 +260,7 @@ export default function NPSProjetoPage() {
 
     // Helpers
     const gerentes = colaboradores.filter(c =>
-        c.cargo_atual?.toLowerCase().includes("gerente") || c.cargo_atual?.toLowerCase().includes("assessor")
+        c.cargo_atual?.toLowerCase().includes("gerente") && !c.cargo_atual?.toLowerCase().includes("assessor")
     )
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id
@@ -515,8 +515,8 @@ export default function NPSProjetoPage() {
                             </p>
                             <p className="text-xs text-slate-500 mt-1">
                                 {isConsultor
-                                    ? "Como Consultor, você avaliará o Gerente e depois os Consultores do projeto."
-                                    : "Como Gerente/Assessor, você avaliará os Consultores do projeto."}
+                                    ? "Como Consultor/Assessor, você avaliará o Gerente e depois os Consultores do projeto."
+                                    : "Como Gerente, você avaliará os Consultores do projeto."}
                             </p>
                         </div>
                     </div>

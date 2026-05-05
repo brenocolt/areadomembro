@@ -125,12 +125,25 @@ export default function FormsResponsesPage() {
                     const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
                     const authorName = r.colaboradores?.nome || 'Anônimo'
                     const respondidoPor = usuariosMap[r.avaliador_id] || 'Desconhecido'
+                    const isGer = r.tipo_avaliacao === 'gerente'
+                    const scoreFields = isGer
+                        ? ['comunicacao','suporte','relacionamento','resolutividade','lideranca']
+                        : ['comunicacao','dedicacao','confianca','pontualidade','organizacao','proatividade','qualidade_entregas','dominio_tecnico']
+                    const scoreLabels = isGer
+                        ? ['Com.','Sup.','Rel.','Res.','Lid.']
+                        : ['Com.','Ded.','Conf.','Pont.','Org.','Pro.','Qual.','Dom.']
+                    const scoresHtml = scoreFields.map((f, i) => {
+                        const v = Number(r[f] || 0)
+                        const color = v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444'
+                        return `<span style="display:inline-block;margin-right:6px;"><strong style="color:${color}">${v}</strong> <small style="color:#94a3b8">${scoreLabels[i]}</small></span>`
+                    }).join('')
                     return `<tr>
-                        <td>${authorName}</td>
-                        <td>${respondidoPor}</td>
+                        <td style="white-space:nowrap;">${authorName}</td>
+                        <td style="white-space:nowrap;">${respondidoPor}</td>
                         <td style="text-align:center;font-weight:bold;color:${r.nps_geral >= 4.5 ? '#10b981' : r.nps_geral <= 3.5 ? '#ef4444' : '#f59e0b'}">${Number(r.nps_geral).toFixed(1)}/5</td>
-                        <td>${dateStr}</td>
-                        <td>${r.feedback_texto || '—'}</td>
+                        <td style="font-size:10px;line-height:1.6;">${scoresHtml}</td>
+                        <td style="white-space:nowrap;">${dateStr}</td>
+                        <td style="max-width:250px;word-wrap:break-word;">${r.feedback_texto || '—'}</td>
                     </tr>`
                 }).join('')
 
@@ -138,7 +151,7 @@ export default function FormsResponsesPage() {
                     <div class="month-section">
                         <h2>${monthLabel} — NPS: ${npsScore} (P: ${promotores}, N: ${neutros}, D: ${detratores})</h2>
                         <table>
-                            <thead><tr><th>Avaliado</th><th>Respondido por</th><th>Nota</th><th>Data</th><th>Feedback</th></tr></thead>
+                            <thead><tr><th>Avaliado</th><th>Respondido por</th><th>Nota</th><th>Detalhamento</th><th>Data</th><th>Feedback</th></tr></thead>
                             <tbody>${rows}</tbody>
                         </table>
                     </div>
@@ -161,18 +174,18 @@ export default function FormsResponsesPage() {
     <title>Relatório — ${selectedFormTitle}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 30px; color: #1e293b; font-size: 12px; }
-        h1 { font-size: 20px; margin-bottom: 4px; color: #0f172a; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 30px; color: #1e293b; font-size: 12px; line-height: 1.5; }
+        h1 { font-size: 22px; margin-bottom: 4px; color: #0f172a; }
         .subtitle { color: #64748b; font-size: 11px; margin-bottom: 24px; }
-        h2 { font-size: 14px; margin: 20px 0 10px; color: #334155; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        th { background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 700; }
-        td { border: 1px solid #e2e8f0; padding: 8px 10px; font-size: 11px; vertical-align: top; }
+        h2 { font-size: 15px; margin: 24px 0 12px; color: #334155; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 11px; }
+        th { background: #f1f5f9; border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; font-weight: 700; }
+        td { border: 1px solid #e2e8f0; padding: 10px 12px; vertical-align: top; line-height: 1.6; }
         tr:nth-child(even) { background: #f8fafc; }
-        .month-section { page-break-inside: avoid; margin-bottom: 24px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 3px solid #6366f1; padding-bottom: 12px; }
-        .logo { font-size: 18px; font-weight: 800; color: #6366f1; }
-        @media print { body { padding: 15px; } }
+        .month-section { page-break-inside: avoid; margin-bottom: 32px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 3px solid #6366f1; padding-bottom: 14px; }
+        .logo { font-size: 20px; font-weight: 800; color: #6366f1; letter-spacing: -0.5px; }
+        @media print { body { padding: 15px; } table { font-size: 10px; } }
     </style>
 </head>
 <body>
@@ -339,51 +352,63 @@ export default function FormsResponsesPage() {
                                                             const isDetrator = resposta.nps_geral <= 3.5
 
                                                             return (
-                                                                <div key={resposta.id} className="p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                                                                    {/* Left pane: Author and Score */}
-                                                                    <div className="md:col-span-1 flex flex-col gap-2">
+                                                                <div key={resposta.id} className="p-5 space-y-4">
+                                                                    <div className="flex items-start justify-between flex-wrap gap-3">
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-xs shrink-0">
+                                                                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold text-sm shrink-0">
                                                                                 {authorName.charAt(0).toUpperCase()}
                                                                             </div>
                                                                             <div>
-                                                                                <p className="font-bold text-xs text-slate-500 mb-0.5 uppercase tracking-wide">Avaliado</p>
-                                                                                <p className="font-bold text-sm text-slate-900 dark:text-white line-clamp-1">{authorName}</p>
-                                                                                <p className="text-[11px] text-slate-400">{dateStr} às {timeStr}</p>
+                                                                                <p className="font-bold text-sm text-slate-900 dark:text-white">{authorName}</p>
+                                                                                <p className="text-[11px] text-slate-400">Avaliado por <span className="font-semibold text-slate-500">{respondidoPor}</span> · {dateStr} às {timeStr}</p>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="mt-2 pl-11">
-                                                                            <p className="font-bold text-xs text-slate-500 mb-0.5 uppercase tracking-wide">Respondido por</p>
-                                                                            <p className="font-bold text-sm text-slate-700 dark:text-slate-300 line-clamp-1">{respondidoPor}</p>
-                                                                        </div>
-                                                                        <div className="mt-3 pl-11">
-                                                                            <div className={`text-2xl font-black ${isPromotor ? 'text-emerald-500' : isDetrator ? 'text-rose-500' : 'text-amber-500'}`}>
-                                                                                {Number(resposta.nps_geral).toFixed(1)}<span className="text-sm font-bold text-slate-400 dark:text-slate-600">/5</span>
-                                                                            </div>
+                                                                        <div className={`text-2xl font-black px-3 py-1 rounded-xl ${isPromotor ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' : isDetrator ? 'text-rose-600 bg-rose-50 dark:bg-rose-500/10' : 'text-amber-600 bg-amber-50 dark:bg-amber-500/10'}`}>
+                                                                            {Number(resposta.nps_geral).toFixed(1)}<span className="text-xs font-bold opacity-50">/5</span>
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Right pane: Feedback */}
-                                                                    <div className="md:col-span-3 space-y-3">
-                                                                        {resposta.feedback_texto && (
-                                                                            <div className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
-                                                                                <h4 className="text-[10px] uppercase font-bold text-slate-400 mb-1">Feedback / Percepções:</h4>
-                                                                                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{resposta.feedback_texto}</p>
+                                                                    {(() => {
+                                                                        const isGerenteEval = resposta.tipo_avaliacao === 'gerente'
+                                                                        const fields = isGerenteEval
+                                                                            ? [{k:'comunicacao',l:'Comunicação'},{k:'suporte',l:'Suporte'},{k:'relacionamento',l:'Relacionamento'},{k:'resolutividade',l:'Resolutividade'},{k:'lideranca',l:'Liderança'}]
+                                                                            : [{k:'comunicacao',l:'Comunicação'},{k:'dedicacao',l:'Dedicação'},{k:'confianca',l:'Confiança'},{k:'pontualidade',l:'Pontualidade'},{k:'organizacao',l:'Organização'},{k:'proatividade',l:'Proatividade'},{k:'qualidade_entregas',l:'Qualidade'},{k:'dominio_tecnico',l:'Dom. Téc.'}]
+                                                                        return (
+                                                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                                                {fields.map(f => {
+                                                                                    const val = Number(resposta[f.k] || 0)
+                                                                                    const pct = (val / 5) * 100
+                                                                                    const clr = val >= 4 ? 'bg-emerald-500' : val >= 3 ? 'bg-amber-500' : 'bg-rose-500'
+                                                                                    return (
+                                                                                        <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] rounded-lg p-2.5 border border-slate-100 dark:border-slate-800/40">
+                                                                                            <div className="flex items-center justify-between mb-1">
+                                                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
+                                                                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300">{val.toFixed(0)}</span>
+                                                                                            </div>
+                                                                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                                <div className={`h-full rounded-full ${clr} transition-all`} style={{width: `${pct}%`}} />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )
+                                                                                })}
                                                                             </div>
-                                                                        )}
-                                                                        {resposta.precisa_feedback && (
-                                                                            <div className="bg-violet-50/50 dark:bg-violet-500/5 p-3 rounded-xl border border-violet-100 dark:border-violet-500/10 mt-2">
-                                                                                <h4 className="text-[10px] uppercase font-bold text-violet-400 dark:text-violet-500 mb-1 flex items-center gap-1">
-                                                                                    <MessageSquare className="h-3 w-3" />
-                                                                                    Precisa de Feedback
-                                                                                </h4>
-                                                                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">O avaliador indicou que este colaborador precisa de um feedback direto sobre os pontos avaliados.</p>
-                                                                            </div>
-                                                                        )}
-                                                                        {!resposta.feedback_texto && !resposta.precisa_feedback && (
-                                                                            <p className="text-xs text-slate-400 italic">Sem comentários adicionais.</p>
-                                                                        )}
-                                                                    </div>
+                                                                        )
+                                                                    })()}
+
+                                                                    {resposta.feedback_texto && (
+                                                                        <div className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
+                                                                            <h4 className="text-[10px] uppercase font-bold text-slate-400 mb-1">Feedback / Percepções</h4>
+                                                                            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{resposta.feedback_texto}</p>
+                                                                        </div>
+                                                                    )}
+                                                                    {resposta.precisa_feedback && (
+                                                                        <div className="bg-violet-50/50 dark:bg-violet-500/5 p-3 rounded-xl border border-violet-100 dark:border-violet-500/10">
+                                                                            <h4 className="text-[10px] uppercase font-bold text-violet-400 mb-1 flex items-center gap-1">
+                                                                                <MessageSquare className="h-3 w-3" /> Precisa de Feedback
+                                                                            </h4>
+                                                                            <p className="text-xs text-slate-600 dark:text-slate-400">O avaliador indicou que este colaborador precisa de feedback direto.</p>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )
                                                         })}

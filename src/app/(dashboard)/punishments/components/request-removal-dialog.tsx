@@ -1,13 +1,30 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ShieldCheck, Upload, Loader2, Star, Users, Handshake, Flame, Building2, Briefcase, ThumbsUp, HeartHandshake, FileText, CalendarCheck, HandshakeIcon, PenTool, LineChart, Award } from "lucide-react"
+import { ShieldCheck, Upload, Loader2, Star, Users, Handshake, Flame, Building2, Briefcase, ThumbsUp, HeartHandshake, FileText, CalendarCheck, HandshakeIcon, PenTool, LineChart, Award, Sparkles } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 
-const ACTIVITY_GROUPS = [
+const ICON_MAP: Record<string, any> = {
+    'Curso com certificado': Star,
+    'Treinamento interno': Users,
+    'Participar de um bench': Handshake,
+    'Indicar lead quente': Flame,
+    'Participação de GT': Users,
+    'Treinamento outra EJ': Building2,
+    'Consultoria externa': Briefcase,
+    'CSAT 5 ou NPS 10': ThumbsUp,
+    'Fidelizar projeto': HeartHandshake,
+    'Finalizar edital': FileText,
+    'Finalizar PDI no prazo': CalendarCheck,
+    'Concretização parcerias': HandshakeIcon,
+    'Escrever um case': PenTool,
+    'Projeto de melhoria': LineChart,
+}
+
+const DEFAULT_ACTIVITY_GROUPS = [
     {
         label: "DESENVOLVIMENTO - RETIRADA DE 1 PONTO",
         points: 1,
@@ -49,8 +66,51 @@ export function RequestRemovalDialog() {
     const [selectedActivity, setSelectedActivity] = useState<string | null>(null)
     const [descricao, setDescricao] = useState("")
     const [file, setFile] = useState<File | null>(null)
+    const [activityGroups, setActivityGroups] = useState(DEFAULT_ACTIVITY_GROUPS)
 
-    const selectedPoints = ACTIVITY_GROUPS.find(g => g.items.some(i => i.dbValue === selectedActivity))?.points || 0;
+    useEffect(() => {
+        async function loadTypes() {
+            const { data } = await supabase
+                .from('pontos_tipos_remocao')
+                .select('*')
+                .eq('disponivel', true)
+                .order('pontos', { ascending: true })
+
+            if (data && data.length > 0) {
+                // Group by points
+                const grouped: Record<number, any[]> = {}
+                data.forEach((t: any) => {
+                    const pts = t.pontos
+                    if (!grouped[pts]) grouped[pts] = []
+                    grouped[pts].push({
+                        id: t.id,
+                        title: t.titulo,
+                        dbValue: t.db_value,
+                        icon: ICON_MAP[t.titulo] || Sparkles,
+                    })
+                })
+
+                const LABELS: Record<number, string> = {
+                    1: 'DESENVOLVIMENTO - RETIRADA DE 1 PONTO',
+                    2: 'CRESCIMENTO - RETIRADA DE 2 PONTOS',
+                    3: 'FORTALECIMENTO - RETIRADA DE 3 PONTOS',
+                }
+
+                const groups = Object.entries(grouped)
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([pts, items]) => ({
+                        label: LABELS[Number(pts)] || `RETIRADA DE ${pts} PONTOS`,
+                        points: Number(pts),
+                        items,
+                    }))
+
+                setActivityGroups(groups)
+            }
+        }
+        loadTypes()
+    }, [])
+
+    const selectedPoints = activityGroups.find(g => g.items.some(i => i.dbValue === selectedActivity))?.points || 0;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -128,7 +188,7 @@ export function RequestRemovalDialog() {
                 </DialogHeader>
 
                 <div className="p-6 max-h-[65vh] overflow-y-auto space-y-8 bg-slate-50/50 dark:bg-transparent">
-                    {ACTIVITY_GROUPS.map((group) => (
+                    {activityGroups.map((group) => (
                         <div key={group.label} className="space-y-4">
                             <h4 className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{group.label}</h4>
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
