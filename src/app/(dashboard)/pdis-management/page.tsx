@@ -3,9 +3,8 @@ import { useState, useEffect } from "react"
 import { PdiMetrics } from "./components/pdi-metrics"
 import { PdiList } from "./components/pdi-list"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Search, Target } from "lucide-react"
+import { Target } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { Input } from "@/components/ui/input"
 import { CreatePdiDialog } from "./components/create-pdi-dialog"
 
 export default function PdisManagementPage() {
@@ -53,13 +52,6 @@ export default function PdisManagementPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                        <Input
-                            placeholder="Buscar colaborador..."
-                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800 pl-9 rounded-xl h-10"
-                        />
-                    </div>
                     <CreatePdiDialog />
                 </div>
             </div>

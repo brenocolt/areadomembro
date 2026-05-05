@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { AddPointsDialog } from "./add-points-dialog"
 import { AddFlagDialog } from "./add-flag-dialog"
+import { ManageRemovalTypesDialog } from "./manage-removal-types-dialog"
 
 export function PointsHeader() {
     return (
@@ -14,6 +15,7 @@ export function PointsHeader() {
                 </p>
             </div>
             <div className="flex items-center gap-3">
+                <ManageRemovalTypesDialog />
                 <AddFlagDialog />
                 <AddPointsDialog />
             </div>

@@ -19,9 +19,9 @@ export function DeletePdiDialog({ pdi, onSuccess, children }: DeletePdiDialogPro
     const handleDelete = async () => {
         setLoading(true)
         try {
-            // Delete objectives first
+            // Delete tasks first
             const { error: tasksError } = await supabase
-                .from('pdi_objetivos')
+                .from('pdi_tarefas')
                 .delete()
                 .eq('plano_id', pdi.id)
 

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, CalendarIcon, BookOpen, PlayCircle, CheckSquare, Plus, Paperclip, Loader2 } from "lucide-react"
+import { PlusCircle, Trash2, CalendarIcon, BookOpen, PlayCircle, CheckSquare, Plus, Paperclip, Loader2, CalendarClock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { normalizeUrl } from "@/lib/utils/normalize-url"
 import { format } from "date-fns"
@@ -24,9 +24,9 @@ export function CreatePdiDialog() {
     const [dataPrazo, setDataPrazo] = useState("")
 
     // Atividades state
-    const [atividades, setAtividades] = useState<{ id: string, titulo: string, descricao: string, tipo: string, links: string[], arquivos: { url: string, nome: string }[] }[]>([
-        { id: '1', titulo: 'Treinamento de Gestão Ágil', descricao: 'Curso Online', tipo: 'video', links: [''], arquivos: [] },
-        { id: '2', titulo: 'Leitura: "Extreme Programming Explained"', descricao: 'Material de Estudo', tipo: 'leitura', links: [''], arquivos: [] }
+    const [atividades, setAtividades] = useState<{ id: string, titulo: string, descricao: string, tipo: string, links: string[], arquivos: { url: string, nome: string }[], prazo: string, showPrazo: boolean }[]>([
+        { id: '1', titulo: 'Treinamento de Gestão Ágil', descricao: 'Curso Online', tipo: 'video', links: [''], arquivos: [], prazo: '', showPrazo: false },
+        { id: '2', titulo: 'Leitura: "Extreme Programming Explained"', descricao: 'Material de Estudo', tipo: 'leitura', links: [''], arquivos: [], prazo: '', showPrazo: false }
     ])
     const [uploadingId, setUploadingId] = useState<string | null>(null)
 
@@ -53,7 +53,9 @@ export function CreatePdiDialog() {
             descricao: desc,
             tipo,
             links: [''],
-            arquivos: []
+            arquivos: [],
+            prazo: '',
+            showPrazo: false
         }])
     }
 
@@ -126,6 +128,7 @@ export function CreatePdiDialog() {
                     descricao: a.descricao,
                     tipo: a.tipo,
                     status: 'Não Iniciada',
+                    prazo: a.prazo ? new Date(a.prazo + 'T12:00:00').toISOString() : null,
                     anexos
                 }
             })
@@ -143,7 +146,7 @@ export function CreatePdiDialog() {
         setObservacaoInterna("")
         setDataInicio("")
         setDataPrazo("")
-        setAtividades([{ id: '1', titulo: 'Treinamento de Gestão Ágil', descricao: 'Curso Online', tipo: 'video', links: [''], arquivos: [] }])
+        setAtividades([{ id: '1', titulo: 'Treinamento de Gestão Ágil', descricao: 'Curso Online', tipo: 'video', links: [''], arquivos: [], prazo: '', showPrazo: false }])
 
         window.location.reload()
     }
@@ -258,6 +261,33 @@ export function CreatePdiDialog() {
                                             placeholder="Título da Atividade"
                                         />
                                         <p className="text-xs text-slate-500">{a.descricao}</p>
+                                        
+                                        {/* Activity Deadline */}
+                                        {!a.showPrazo ? (
+                                            <button
+                                                onClick={() => updateAtividade(a.id, 'showPrazo', true)}
+                                                className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:underline mt-1"
+                                            >
+                                                <CalendarClock className="w-3.5 h-3.5" />
+                                                Adicionar prazo?
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <CalendarClock className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                                                <Input
+                                                    type="date"
+                                                    value={a.prazo || ''}
+                                                    onChange={(e) => updateAtividade(a.id, 'prazo', e.target.value)}
+                                                    className="h-7 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg w-40"
+                                                />
+                                                <button
+                                                    onClick={() => { updateAtividade(a.id, 'showPrazo', false); updateAtividade(a.id, 'prazo', '') }}
+                                                    className="text-slate-400 hover:text-rose-500 p-0.5"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
                                         
                                         {/* Multiple links */}
                                         <div className="space-y-1">

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, BookOpen, PlayCircle, CheckSquare, Plus, Loader2, Paperclip } from "lucide-react"
+import { Pencil, Trash2, BookOpen, PlayCircle, CheckSquare, Plus, Loader2, Paperclip, CalendarClock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { normalizeUrl } from "@/lib/utils/normalize-url"
 import { toast } from "sonner"
@@ -22,7 +22,7 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
     const [colaboradores, setColaboradores] = useState<any[]>([])
 
     // Form state
-    const [colaboradorId, setColaboradorId] = useState(pdi.colaborador_id)
+    const [colaboradorId, setColaboradorId] = useState(pdi.colaborador_id || '')
     const [titulo, setTitulo] = useState(pdi.titulo)
     const [descricao, setDescricao] = useState(pdi.descricao || "")
     const [observacaoInterna, setObservacaoInterna] = useState(pdi.observacao_interna || "")
@@ -63,6 +63,8 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
                         tipo: task.tipo,
                         links,
                         arquivos,
+                        prazo: task.prazo ? task.prazo.split('T')[0] : '',
+                        showPrazo: !!task.prazo,
                         isExisting: true
                     }
                 }))
@@ -71,7 +73,7 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
 
         if (open) {
             // Re-sync form state from pdi prop every time dialog opens
-            setColaboradorId(pdi.colaborador_id)
+            setColaboradorId(pdi.colaborador_id || pdi.colaboradores?.id || '')
             setTitulo(pdi.titulo)
             setDescricao(pdi.descricao || "")
             setObservacaoInterna(pdi.observacao_interna || "")
@@ -97,6 +99,8 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
             tipo,
             links: [''],
             arquivos: [],
+            prazo: '',
+            showPrazo: false,
             isExisting: false
         }])
     }
@@ -142,23 +146,26 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
                     titulo,
                     descricao,
                     observacao_interna: observacaoInterna || null,
-                    data_inicio: dataInicio ? new Date(dataInicio).toISOString() : pdi.data_inicio,
-                    data_prazo: new Date(dataPrazo).toISOString(),
+                    data_inicio: dataInicio ? new Date(dataInicio + 'T12:00:00').toISOString() : pdi.data_inicio,
+                    data_prazo: new Date(dataPrazo + 'T12:00:00').toISOString(),
                 })
                 .eq('id', pdi.id)
 
-            if (planError) throw planError
+            if (planError) {
+                console.error('Plan update error:', planError)
+                throw planError
+            }
 
-            // Manage tasks
-            // For simplicity in this edit, we'll delete existing tasks and re-insert 
-            // OR we can do a more complex sync. Let's do delete and re-insert for reliability in this POC.
-            
+            // Delete existing tasks and re-insert for reliability
             const { error: deleteError } = await supabase
                 .from('pdi_tarefas')
                 .delete()
                 .eq('plano_id', pdi.id)
 
-            if (deleteError) throw deleteError
+            if (deleteError) {
+                console.error('Delete tasks error:', deleteError)
+                throw deleteError
+            }
 
             if (atividades.length > 0) {
                 const tasksToInsert = atividades.map(a => {
@@ -179,11 +186,16 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
                         descricao: a.descricao,
                         tipo: a.tipo,
                         status: 'Não Iniciada',
+                        prazo: a.prazo ? new Date(a.prazo + 'T12:00:00').toISOString() : null,
                         anexos
                     }
                 })
 
-                await supabase.from('pdi_tarefas').insert(tasksToInsert)
+                const { error: insertError } = await supabase.from('pdi_tarefas').insert(tasksToInsert)
+                if (insertError) {
+                    console.error('Insert tasks error:', insertError)
+                    throw insertError
+                }
             }
 
             toast.success("PDI atualizado com sucesso!")
@@ -191,7 +203,7 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
             onSuccess?.()
         } catch (error: any) {
             console.error(error)
-            toast.error('Erro ao atualizar PDI')
+            toast.error('Erro ao atualizar PDI: ' + (error?.message || ''))
         } finally {
             setLoading(false)
         }
@@ -290,8 +302,8 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
 
                         <div className="space-y-3">
                             {atividades.map((a, i) => (
-                                <div key={a.id} className="bg-cyan-50/50 dark:bg-white/5 border border-cyan-100 dark:border-white/10 rounded-2xl p-4 flex gap-4 items-center group relative">
-                                    <div className="shrink-0 text-cyan-600 dark:text-cyan-400">
+                                <div key={a.id} className="bg-cyan-50/50 dark:bg-white/5 border border-cyan-100 dark:border-white/10 rounded-2xl p-4 flex gap-4 items-start group relative">
+                                    <div className="shrink-0 text-cyan-600 dark:text-cyan-400 mt-1">
                                         {a.tipo === 'video' && <PlayCircle className="w-5 h-5" />}
                                         {a.tipo === 'leitura' && <BookOpen className="w-5 h-5" />}
                                         {a.tipo === 'atividade' && <CheckSquare className="w-5 h-5" />}
@@ -304,6 +316,33 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
                                             placeholder="Título da Atividade"
                                         />
                                         <p className="text-xs text-slate-500">{a.descricao}</p>
+                                        
+                                        {/* Activity Deadline */}
+                                        {!a.showPrazo ? (
+                                            <button
+                                                onClick={() => updateAtividade(a.id, 'showPrazo', true)}
+                                                className="flex items-center gap-1.5 text-xs text-cyan-600 dark:text-cyan-400 hover:underline mt-1"
+                                            >
+                                                <CalendarClock className="w-3.5 h-3.5" />
+                                                Adicionar prazo?
+                                            </button>
+                                        ) : (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <CalendarClock className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                                                <Input
+                                                    type="date"
+                                                    value={a.prazo || ''}
+                                                    onChange={(e) => updateAtividade(a.id, 'prazo', e.target.value)}
+                                                    className="h-7 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg w-40"
+                                                />
+                                                <button
+                                                    onClick={() => { updateAtividade(a.id, 'showPrazo', false); updateAtividade(a.id, 'prazo', '') }}
+                                                    className="text-slate-400 hover:text-rose-500 p-0.5"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
                                         
                                         {/* Multiple links */}
                                         <div className="space-y-1">
@@ -389,7 +428,7 @@ export function EditPdiDialog({ pdi, onSuccess, children }: EditPdiDialogProps) 
                         Cancelar
                     </Button>
                     <Button onClick={handleSubmit} disabled={loading} className="rounded-xl font-bold h-11 px-8 bg-cyan-600 hover:bg-cyan-700 text-white tracking-wide shadow-lg shadow-cyan-500/20">
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Salvar Alterações"}
+                        {loading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : "Salvar Alterações"}
                     </Button>
                 </div>
             </DialogContent>

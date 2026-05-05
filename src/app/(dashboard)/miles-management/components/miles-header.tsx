@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button"
-import { Gift } from "lucide-react"
+"use client"
+import { ManageCatalogDialog } from "./manage-catalog-dialog"
 
 export function MilesHeader() {
     return (
@@ -12,10 +12,7 @@ export function MilesHeader() {
                     Gerencie catálogos, resgates e acompanhe o fluxo de troca de milhas.
                 </p>
             </div>
-            <Button className="bg-cyan-500 hover:bg-cyan-600 text-white shadow-lg shadow-cyan-500/25">
-                <Gift className="mr-2 h-4 w-4" />
-                Gerenciar Catálogo
-            </Button>
+            <ManageCatalogDialog />
         </div>
     )
 }
