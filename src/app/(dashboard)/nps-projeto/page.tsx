@@ -180,7 +180,10 @@ export default function NPSProjetoPage() {
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
-    const isConsultor = cargoAtual.toLowerCase().includes("consultor") || cargoAtual.toLowerCase().includes("assessor")
+    const isConsultor = cargoAtual.toLowerCase().includes("consultor") || 
+                        cargoAtual.toLowerCase().includes("assessor") ||
+                        cargoAtual.toLowerCase().includes("sdr") ||
+                        cargoAtual.toLowerCase().includes("closer")
     const isGerente = cargoAtual.toLowerCase().includes("gerente") && !cargoAtual.toLowerCase().includes("assessor")
 
     // Build step names based on role

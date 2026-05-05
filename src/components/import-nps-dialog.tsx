@@ -178,6 +178,7 @@ export function ImportNpsDialog() {
             mes: parseInt(m),
             ano: foundYear,
             colaborador_id: matchedUser.id,
+            tipo_avaliacao: 'gerente',
             ...data
         }))
 
