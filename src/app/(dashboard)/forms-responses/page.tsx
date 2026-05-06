@@ -1,9 +1,10 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter } from "lucide-react"
+import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search } from "lucide-react"
 import { FormResponsesDashboard } from "../forms-management/components/form-responses-dashboard"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export default function FormsResponsesPage() {
     const [formularios, setFormularios] = useState<any[]>([])
@@ -17,6 +18,7 @@ export default function FormsResponsesPage() {
     const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
     const [npsFilterTipo, setNpsFilterTipo] = useState<'todos' | 'consultor' | 'gerente'>('todos')
     const [npsViewMode, setNpsViewMode] = useState<'dashboard' | 'lista'>('dashboard')
+    const [searchAvaliado, setSearchAvaliado] = useState("")
 
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -84,10 +86,17 @@ export default function FormsResponsesPage() {
         setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }))
     }
 
-    // Filter NPS by type
-    const filteredNpsRespostas = npsFilterTipo === 'todos'
-        ? npsRespostas
-        : npsRespostas.filter(r => r.tipo_avaliacao === npsFilterTipo)
+    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+    // Filter NPS by type and by evaluated name
+    const filteredNpsRespostas = npsRespostas.filter(r => {
+        if (npsFilterTipo !== 'todos' && r.tipo_avaliacao !== npsFilterTipo) return false
+        if (searchAvaliado.trim() !== '') {
+            const nome = r.colaboradores?.nome || ''
+            if (!normalize(nome).includes(normalize(searchAvaliado))) return false
+        }
+        return true
+    })
 
     // Grouping NPS exactly like we group Form Responses
     const groupedNps: Record<string, any[]> = {}
@@ -420,7 +429,17 @@ export default function FormsResponsesPage() {
                                                         <Users className="h-4 w-4" />
                                                         {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} no total
                                                     </div>
-                                                    
+
+                                                    <div className="relative w-56">
+                                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                                        <Input
+                                                            placeholder="Buscar avaliado..."
+                                                            value={searchAvaliado}
+                                                            onChange={(e) => setSearchAvaliado(e.target.value)}
+                                                            className="pl-8 h-8 text-xs rounded-lg bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                                                        />
+                                                    </div>
+
                                                     <div className="ml-auto flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 mr-2">
                                                         <button onClick={() => setNpsViewMode('dashboard')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsViewMode === 'dashboard' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}>
                                                             <BarChart3 className="h-3 w-3 inline mr-1" />Dashboard

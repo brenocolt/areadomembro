@@ -33,11 +33,46 @@ export default function FormsManagementPage() {
 
 
 
+    // Sinaliza colaboradores que não responderam um formulário encerrado.
+    // Idempotente: pula quem já está como PENDENTE para o mesmo formulário.
+    const prePontuarNaoRespondentes = async (form: { id: string, titulo: string, tipo_formulario?: string | null }) => {
+        const { data: allColabs } = await supabase.from('colaboradores').select('id')
+        const { data: respondentes } = await supabase
+            .from('formulario_respostas')
+            .select('colaborador_id')
+            .eq('formulario_id', form.id)
+
+        const respondidos = new Set((respondentes || []).map((r: any) => r.colaborador_id))
+        const naoResponderam = (allColabs || []).filter((c: any) => !respondidos.has(c.id))
+        if (naoResponderam.length === 0) return 0
+
+        const { data: existing } = await supabase
+            .from('pontos_pre_pontuacao')
+            .select('colaborador_id')
+            .eq('formulario_id', form.id)
+            .eq('status', 'PENDENTE')
+        const jaCadastrados = new Set((existing || []).map((e: any) => e.colaborador_id))
+
+        const tipo = form.tipo_formulario || 'formulário'
+        const rows = naoResponderam
+            .filter((c: any) => !jaCadastrados.has(c.id))
+            .map((c: any) => ({
+                colaborador_id: c.id,
+                formulario_id: form.id,
+                descricao: `Não envio do ${tipo}: ${form.titulo}`,
+                origem: 'auto',
+                status: 'PENDENTE',
+            }))
+        if (rows.length === 0) return 0
+        await supabase.from('pontos_pre_pontuacao').insert(rows)
+        return rows.length
+    }
+
     const fetchForms = async () => {
-        // Auto-close expired forms and penalize
+        // Auto-close expired forms and pre-pontuar quem não respondeu
         const { data: expired } = await supabase
             .from('formularios')
-            .select('id')
+            .select('id, titulo, tipo_formulario')
             .eq('status', 'ativo')
             .lt('data_prazo', new Date().toISOString())
             .not('data_prazo', 'is', null)
@@ -48,7 +83,9 @@ export default function FormsManagementPage() {
                 .update({ status: 'encerrado' })
                 .in('id', expired.map(e => e.id))
 
-
+            for (const form of expired) {
+                await prePontuarNaoRespondentes(form)
+            }
         }
 
         const { data } = await supabase
@@ -81,7 +118,7 @@ export default function FormsManagementPage() {
             id: form.id,
             titulo: form.titulo,
             descricao: form.descricao || '',
-            dataPrazo: form.data_prazo ? new Date(form.data_prazo).toISOString().split('T')[0] : '',
+            dataPrazo: form.data_prazo ? new Date(form.data_prazo).toISOString().slice(0, 16) : '',
             status: form.status,
             pagina_destino: form.pagina_destino || null,
             tipo_formulario: form.tipo_formulario || 'formulário',
@@ -128,9 +165,17 @@ export default function FormsManagementPage() {
     const handleToggleStatus = async (form: any) => {
         const newStatus = form.status === 'ativo' ? 'encerrado' : 'ativo'
         await supabase.from('formularios').update({ status: newStatus }).eq('id', form.id)
-        toast.success(`Formulário ${newStatus === 'ativo' ? 'ativado' : 'encerrado'}!`)
 
-
+        if (newStatus === 'encerrado') {
+            const count = await prePontuarNaoRespondentes(form)
+            if (count > 0) {
+                toast.success(`Formulário encerrado. ${count} colaborador${count !== 1 ? 'es' : ''} sinalizado${count !== 1 ? 's' : ''} como pré pontuado${count !== 1 ? 's' : ''}.`)
+            } else {
+                toast.success('Formulário encerrado!')
+            }
+        } else {
+            toast.success('Formulário ativado!')
+        }
 
         fetchForms()
     }

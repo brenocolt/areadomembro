@@ -7,6 +7,7 @@ import { RemovalHistory } from "./components/removal-history"
 import { PointsDashboard } from "./components/points-dashboard"
 import { PointsRecurrence } from "./components/points-recurrence"
 import { AllFlagsView } from "./components/all-flags-view"
+import { PrePontuadosView } from "./components/pre-pontuados-view"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function PointsManagementPage() {
@@ -27,6 +28,9 @@ export default function PointsManagementPage() {
                     </TabsTrigger>
                     <TabsTrigger value="flags" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Flags
+                    </TabsTrigger>
+                    <TabsTrigger value="pre-pontuados" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
+                        Usuários Pré Pontuados
                     </TabsTrigger>
                 </TabsList>
 
@@ -58,6 +62,10 @@ export default function PointsManagementPage() {
 
                 <TabsContent value="flags" className="space-y-6 border-none p-0 outline-none">
                     <AllFlagsView />
+                </TabsContent>
+
+                <TabsContent value="pre-pontuados" className="space-y-6 border-none p-0 outline-none">
+                    <PrePontuadosView />
                 </TabsContent>
             </Tabs>
         </div>

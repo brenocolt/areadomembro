@@ -7,6 +7,14 @@ const ALIASES: Record<string, string> = {
     'ana gabriela': 'gabriel bacellar',
 };
 
+// Strip accents and collapse whitespace so "João Gabriel" and "joao gabriel" match
+const normalizeName = (s: string) =>
+    s.toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
 // Mapeamento dos meses (ex: "Janeiro" -> 1)
 const MONTHS: Record<string, number> = {
     'janeiro': 1,
@@ -38,7 +46,7 @@ export async function importNpsData(rows: Record<string, unknown>[]) {
             let n = typeof r[kNome] === 'string' ? r[kNome].trim() : '';
             if (!n) continue;
             
-            let normalizedName = n.toLowerCase();
+            let normalizedName = normalizeName(n);
             if (ALIASES[normalizedName]) {
                 normalizedName = ALIASES[normalizedName];
             }
@@ -94,7 +102,13 @@ export async function importNpsData(rows: Record<string, unknown>[]) {
                 targetName = 'gabriela bacelar'; // This matches the specific DB entry found previously
             }
 
-            const members = preCad.filter(m => m.nome.toLowerCase().includes(targetName) || targetName.includes(m.nome.toLowerCase()) || lowerName.includes(m.nome.toLowerCase()));
+            const members = preCad.filter(m => {
+                const dbName = normalizeName(m.nome);
+                return dbName === targetName
+                    || dbName.includes(targetName)
+                    || targetName.includes(dbName)
+                    || lowerName.includes(dbName);
+            });
 
             if (members.length > 0) {
                 // We'll update all matched members just in case

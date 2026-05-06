@@ -487,13 +487,16 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Prazo</label>
+                                <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Agendar Fechamento</label>
                                 <Input
-                                    type="date"
+                                    type="datetime-local"
                                     className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus-visible:ring-violet-500"
                                     value={dataPrazo}
                                     onChange={(e) => setDataPrazo(e.target.value)}
                                 />
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    No prazo, o formulário é encerrado e quem não respondeu é enviado para "Usuários Pré Pontuados" como "Não envio do {tipoFormulario || 'formulário'}".
+                                </p>
                             </div>
                             {!editMode && (
                                 <div className="space-y-2">

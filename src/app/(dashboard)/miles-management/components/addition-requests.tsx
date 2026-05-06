@@ -62,27 +62,47 @@ export function AdditionRequests() {
     }
 
     const handleAccept = async (req: any) => {
-        const { error } = await supabase.from('solicitacoes_saque').update({ status: 'APROVADO' }).eq('id', req.id);
-        if (!error) {
-            const { data: saldoData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', req.colaborador_id).single();
-            if (saldoData) {
-                await supabase.from('milhas_saldo').update({
-                    saldo_disponivel: (saldoData.saldo_disponivel || 0) + req.miles,
-                    saldo_total: (saldoData.saldo_total || 0) + req.miles
-                }).eq('colaborador_id', req.colaborador_id);
-            } else {
-                await supabase.from('milhas_saldo').insert({
-                    colaborador_id: req.colaborador_id,
-                    saldo_disponivel: req.miles,
-                    saldo_total: req.miles
-                });
-            }
-            setRequests(prev => prev.filter(r => r.id !== req.id));
-            window.dispatchEvent(new Event('refreshMilesData'))
-            await sendWebhook(req, 'Aceito');
-        } else {
-            alert('Erro ao aprovar solicitação');
+        const { error } = await supabase.from('solicitacoes_saque').update({
+            status: 'APROVADO',
+            data_aprovacao: new Date().toISOString(),
+        }).eq('id', req.id);
+        if (error) {
+            alert('Erro ao aprovar solicitação: ' + error.message);
+            return;
         }
+
+        const { data: saldoData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', req.colaborador_id).maybeSingle();
+        let saldoErr: any = null;
+        if (saldoData) {
+            const { error: e } = await supabase.from('milhas_saldo').update({
+                saldo_disponivel: (saldoData.saldo_disponivel || 0) + req.miles,
+                saldo_total: (saldoData.saldo_total || 0) + req.miles,
+                milhas_mes_atual: (saldoData.milhas_mes_atual || 0) + req.miles,
+            }).eq('colaborador_id', req.colaborador_id);
+            saldoErr = e;
+        } else {
+            const { error: e } = await supabase.from('milhas_saldo').insert({
+                colaborador_id: req.colaborador_id,
+                saldo_disponivel: req.miles,
+                saldo_total: req.miles,
+                milhas_mes_atual: req.miles,
+            });
+            saldoErr = e;
+        }
+
+        if (saldoErr) {
+            // Roll back the approval to keep state consistent
+            await supabase.from('solicitacoes_saque').update({
+                status: 'PENDENTE',
+                data_aprovacao: null,
+            }).eq('id', req.id);
+            alert('Erro ao atualizar saldo de milhas: ' + saldoErr.message + '. Aprovação revertida, tente novamente.');
+            return;
+        }
+
+        setRequests(prev => prev.filter(r => r.id !== req.id));
+        window.dispatchEvent(new Event('refreshMilesData'))
+        await sendWebhook(req, 'Aceito');
     }
 
     const handleReject = async (req: any) => {

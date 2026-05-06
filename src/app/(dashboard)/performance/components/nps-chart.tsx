@@ -23,6 +23,10 @@ export function NPSChart() {
     const [data, setData] = useState<any[]>([])
 
     useEffect(() => {
+        if (!colaboradorId) {
+            setData([])
+            return
+        }
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
@@ -58,6 +62,12 @@ export function NPSChart() {
             </CardHeader>
             <CardContent>
                 <div className="h-[340px] w-full">
+                    {data.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center h-full text-slate-400 text-center px-4">
+                            <p className="text-sm font-semibold">Sem dados de NPS para exibir.</p>
+                            <p className="text-xs mt-1 max-w-md">Você ainda não recebeu avaliações registradas em <code className="px-1 bg-slate-100 dark:bg-slate-800 rounded">avaliacoes_nps</code>. Assim que importações ou novas respostas chegarem ao seu nome, o gráfico será preenchido automaticamente.</p>
+                        </div>
+                    ) : (
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
@@ -79,6 +89,7 @@ export function NPSChart() {
                             <Line type="monotone" dataKey="Média Geral" stroke={COLORS.nps_geral} strokeWidth={3} strokeDasharray="6 3" dot={{ r: 5, fill: COLORS.nps_geral }} activeDot={{ r: 7 }} />
                         </LineChart>
                     </ResponsiveContainer>
+                    )}
                 </div>
             </CardContent>
         </Card>
