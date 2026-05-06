@@ -363,7 +363,7 @@ export default function NPSProjetoPage() {
                         .reduce((sum, v) => sum + parseFloat(v), 0) / 5
                 )
 
-                await supabase.from('avaliacoes_nps').insert({
+                await supabase.from('avaliacoes_nps').upsert({
                     colaborador_id: g.gerente_id,
                     avaliador_id: colaborador.id,
                     mes, ano,
@@ -378,7 +378,7 @@ export default function NPSProjetoPage() {
                     feedback_texto: g.feedback_texto,
                     precisa_feedback: g.precisa_feedback === "Sim",
                     tipo_avaliacao: 'gerente',
-                }).throwOnError()
+                }, { onConflict: 'colaborador_id, mes, ano, avaliador_id' }).throwOnError()
             }
 
             // 2. Save NPS Consultor evaluations (skip if apenasGerente)
@@ -390,7 +390,7 @@ export default function NPSProjetoPage() {
                             .reduce((sum, v) => sum + parseFloat(v), 0) / 8
                     )
 
-                    await supabase.from('avaliacoes_nps').insert({
+                    await supabase.from('avaliacoes_nps').upsert({
                         colaborador_id: c.consultor_id,
                         avaliador_id: colaborador.id,
                         mes, ano,
@@ -408,7 +408,7 @@ export default function NPSProjetoPage() {
                         feedback_texto: c.feedback_texto,
                         precisa_feedback: c.precisa_feedback === "Sim",
                         tipo_avaliacao: 'consultor',
-                    }).throwOnError()
+                    }, { onConflict: 'colaborador_id, mes, ano, avaliador_id' }).throwOnError()
                 }
             }
 

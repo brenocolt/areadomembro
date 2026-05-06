@@ -178,6 +178,7 @@ export function ImportNpsDialog() {
             mes: parseInt(m),
             ano: foundYear,
             colaborador_id: matchedUser.id,
+            avaliador_id: matchedUser.id, // Set to self to allow upsert to work properly with new unique constraint
             tipo_avaliacao: 'gerente',
             ...data
         }))
@@ -251,7 +252,7 @@ export function ImportNpsDialog() {
         for (const record of preview.records) {
             const { error } = await supabase
                 .from('avaliacoes_nps')
-                .upsert(record, { onConflict: 'colaborador_id, mes, ano' })
+                .upsert(record, { onConflict: 'colaborador_id, mes, ano, avaliador_id' })
 
             if (!error) successCount++
             else console.error('Import error:', error)
