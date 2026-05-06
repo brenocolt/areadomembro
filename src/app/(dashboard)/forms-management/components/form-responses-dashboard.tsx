@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter } from "lucide-react"
+import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3 } from "lucide-react"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -12,7 +12,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
-    const [groupMode, setGroupMode] = useState<'pessoa' | 'mes' | 'pergunta'>('pessoa')
+    const [groupMode, setGroupMode] = useState<'dashboard' | 'pessoa' | 'mes' | 'pergunta'>('dashboard')
 
     useEffect(() => {
         async function fetch() {
@@ -122,6 +122,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     {/* Group mode toggle */}
                     <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 overflow-x-auto max-w-full">
                         <button
+                            onClick={() => setGroupMode('dashboard')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${groupMode === 'dashboard' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <BarChart3 className="h-3 w-3 inline mr-1" />Dashboard
+                        </button>
+                        <button
                             onClick={() => setGroupMode('pessoa')}
                             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${groupMode === 'pessoa' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
                         >
@@ -147,20 +153,159 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             value={filterPerguntaId}
                             onChange={e => setFilterPerguntaId(e.target.value)}
                             className="appearance-none pl-8 pr-4 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-w-[140px]"
+                            disabled={groupMode === 'dashboard'}
                         >
                             <option value="">Todas as perguntas</option>
                             {perguntas.map((p, i) => (
                                 <option key={p.id} value={p.id}>{i + 1}. {p.titulo.substring(0, 40)}{p.titulo.length > 40 ? '...' : ''}</option>
                             ))}
                         </select>
-                        <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
+                        <Filter className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none ${groupMode === 'dashboard' ? 'text-slate-300' : 'text-slate-400'}`} />
                     </div>
                 </div>
             </div>
 
-            {/* Groups */}
-            {sortedKeys.map(key => {
-                const group = groups[key]
+            {/* Content */}
+            {groupMode === 'dashboard' ? (
+                <div className="space-y-6">
+                    {perguntas.map((p, idx) => {
+                        const itemResponses = respostas.flatMap(r => 
+                            (r.formulario_respostas_itens || []).filter((it: any) => it.pergunta_id === p.id)
+                        )
+                        
+                        if (itemResponses.length === 0) {
+                            return (
+                                <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{idx + 1}. {p.titulo}</h3>
+                                    <p className="text-sm text-slate-400">Nenhuma resposta para esta pergunta.</p>
+                                </div>
+                            )
+                        }
+
+                        if (p.tipo === 'escala') {
+                            const values = itemResponses.map(it => Number(it.valor)).filter(v => !isNaN(v))
+                            const avg = values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '0.0'
+                            
+                            const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
+                            values.forEach(v => { if (dist[v as keyof typeof dist] !== undefined) dist[v as keyof typeof dist]++ })
+                            
+                            return (
+                                <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <div className="flex flex-col sm:flex-row gap-8 items-center">
+                                        <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-[#0F172A] rounded-xl border border-slate-100 dark:border-slate-800 w-32 shrink-0 shadow-sm">
+                                            <span className={`text-4xl font-black ${Number(avg) >= 4.5 ? 'text-emerald-500' : Number(avg) >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{avg}</span>
+                                            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Média / 5</span>
+                                        </div>
+                                        <div className="flex-1 w-full space-y-2">
+                                            {[5, 4, 3, 2, 1].map(v => {
+                                                const count = dist[v as keyof typeof dist]
+                                                const pct = values.length > 0 ? (count / values.length) * 100 : 0
+                                                return (
+                                                    <div key={v} className="flex items-center gap-3">
+                                                        <span className="text-xs font-bold w-4 text-slate-500">{v}</span>
+                                                        <div className="flex-1 h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${v >= 4 ? 'bg-emerald-500' : v === 3 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${pct}%` }}></div>
+                                                        </div>
+                                                        <span className="text-xs text-slate-400 w-8 text-right">{count}</span>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            )
+                        }
+                        
+                        if (p.tipo === 'selecao_unica' || p.tipo === 'selecao_multipla') {
+                            const counts: Record<string, number> = {}
+                            itemResponses.forEach(it => {
+                                if (p.tipo === 'selecao_unica' && it.valor) {
+                                    counts[it.valor] = (counts[it.valor] || 0) + 1
+                                } else if (p.tipo === 'selecao_multipla' && it.valores) {
+                                    (it.valores as string[]).forEach(v => {
+                                        counts[v] = (counts[v] || 0) + 1
+                                    })
+                                }
+                            })
+                            
+                            const totalAnswers = itemResponses.length
+                            
+                            return (
+                                <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <div className="space-y-3">
+                                        {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([option, count]) => {
+                                            const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
+                                            return (
+                                                <div key={option} className="flex flex-col gap-1">
+                                                    <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                        <span>{option}</span>
+                                                        <span>{count} ({pct.toFixed(1)}%)</span>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-violet-500" style={{ width: `${pct}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        if (p.tipo === 'colaborador_unico' || p.tipo === 'colaborador_multiplo') {
+                            const counts: Record<string, number> = {}
+                            itemResponses.forEach(it => {
+                                if (p.tipo === 'colaborador_unico' && it.valor) {
+                                    counts[it.valor] = (counts[it.valor] || 0) + 1
+                                } else if (p.tipo === 'colaborador_multiplo' && it.valores) {
+                                    (it.valores as string[]).forEach(v => {
+                                        counts[v] = (counts[v] || 0) + 1
+                                    })
+                                }
+                            })
+                            
+                            const totalAnswers = itemResponses.length
+                            
+                            return (
+                                <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <div className="space-y-3">
+                                        {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([colabId, count]) => {
+                                            const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
+                                            const name = getColabName(colabId)
+                                            return (
+                                                <div key={colabId} className="flex flex-col gap-1">
+                                                    <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                        <span>{name}</span>
+                                                        <span>{count} ({pct.toFixed(1)}%)</span>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                        <div className="h-full bg-violet-500" style={{ width: `${pct}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            )
+                        }
+                        
+                        // For texto and other types
+                        return (
+                            <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{idx + 1}. {p.titulo}</h3>
+                                <div className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-[#0F172A] p-3 rounded-lg border border-slate-100 dark:border-slate-800/50 inline-block">
+                                    Esta pergunta recebeu <strong className="text-violet-600 dark:text-violet-400">{itemResponses.length}</strong> resposta(s) em texto. Mude para a visualização "Destrinchada" ou "Por Pessoa" para ler as respostas detalhadamente.
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            ) : (
+                sortedKeys.map(key => {
+                    const group = groups[key]
                 const isExpanded = expandedGroups[key] ?? false
 
                 return (
@@ -258,7 +403,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         )}
                     </div>
                 )
-            })}
+            }))}
         </div>
     )
 }

@@ -16,6 +16,7 @@ export default function FormsResponsesPage() {
     const [usuariosMap, setUsuariosMap] = useState<Record<string, string>>({})
     const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({})
     const [npsFilterTipo, setNpsFilterTipo] = useState<'todos' | 'consultor' | 'gerente'>('todos')
+    const [npsViewMode, setNpsViewMode] = useState<'dashboard' | 'lista'>('dashboard')
 
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -413,96 +414,107 @@ export default function FormsResponsesPage() {
                                         const npsEmpresa = Number(calcNps(npsGeralData.empresa));
 
                                         return (
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral Empresa</h3>
-                                                    <div className="flex items-end gap-3">
-                                                        <span className={`text-4xl font-black ${npsEmpresa >= 4.5 ? 'text-emerald-500' : npsEmpresa >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsEmpresa.toFixed(1)}</span>
-                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.empresa.total} avaliações)</span>
+                                            <>
+                                                <div className="flex flex-wrap items-center gap-3 mb-6">
+                                                    <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
+                                                        <Users className="h-4 w-4" />
+                                                        {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} no total
                                                     </div>
-                                                </div>
-                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Consultores</h3>
-                                                    <div className="flex items-end gap-3">
-                                                        <span className={`text-4xl font-black ${npsConsultores >= 4.5 ? 'text-emerald-500' : npsConsultores >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsConsultores.toFixed(1)}</span>
-                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.consultores.total} avaliações)</span>
-                                                    </div>
-                                                </div>
-                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Gerentes</h3>
-                                                    <div className="flex items-end gap-3">
-                                                        <span className={`text-4xl font-black ${npsGerentes >= 4.5 ? 'text-emerald-500' : npsGerentes >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsGerentes.toFixed(1)}</span>
-                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.gerentes.total} avaliações)</span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Dashboard Por Pergunta */}
-                                                <div className="col-span-1 sm:col-span-3 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Média por Pergunta</h3>
                                                     
-                                                    {npsFilterTipo !== 'gerente' && npsGeralData.questoesConsultor.total > 0 && (
-                                                        <div className="mb-6">
-                                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Consultores</h4>
-                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                {[{k:'comunicacao',l:'Comunicação'},{k:'dedicacao',l:'Dedicação'},{k:'confianca',l:'Confiança'},{k:'pontualidade',l:'Pontualidade'},{k:'organizacao',l:'Organização'},{k:'proatividade',l:'Proatividade'},{k:'qualidade_entregas',l:'Qualidade'},{k:'dominio_tecnico',l:'Dom. Técnico'}].map(f => {
-                                                                    const avg = npsGeralData.questoesConsultor.fields[f.k] / npsGeralData.questoesConsultor.total;
-                                                                    return (
-                                                                        <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
-                                                                            <div className="flex justify-between items-center mb-1">
-                                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
-                                                                            </div>
-                                                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                                                <div className="h-full rounded-full bg-violet-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    <div className="ml-auto flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 mr-2">
+                                                        <button onClick={() => setNpsViewMode('dashboard')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsViewMode === 'dashboard' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}>
+                                                            <BarChart3 className="h-3 w-3 inline mr-1" />Dashboard
+                                                        </button>
+                                                        <button onClick={() => setNpsViewMode('lista')} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsViewMode === 'lista' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}>
+                                                            <FileText className="h-3 w-3 inline mr-1" />Lista
+                                                        </button>
+                                                    </div>
 
-                                                    {npsFilterTipo !== 'consultor' && npsGeralData.questoesGerente.total > 0 && (
-                                                        <div>
-                                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gerentes</h4>
-                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                                                {[{k:'comunicacao',l:'Comunicação'},{k:'suporte',l:'Suporte'},{k:'relacionamento',l:'Relacionamento'},{k:'resolutividade',l:'Resolutividade'},{k:'lideranca',l:'Liderança'}].map(f => {
-                                                                    const avg = npsGeralData.questoesGerente.fields[f.k] / npsGeralData.questoesGerente.total;
-                                                                    return (
-                                                                        <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
-                                                                            <div className="flex justify-between items-center mb-1">
-                                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
-                                                                            </div>
-                                                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                                                <div className="h-full rounded-full bg-amber-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+                                                        {([{v:'todos',l:'Todos'},{v:'consultor',l:'Consultores'},{v:'gerente',l:'Gerentes'}] as const).map(opt => (
+                                                            <button key={opt.v} onClick={() => setNpsFilterTipo(opt.v)}
+                                                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsFilterTipo === opt.v ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                                                            >{opt.l}</button>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )
-                                    })()}
 
-                                    <div className="flex flex-wrap items-center gap-3 mb-6">
-                                        <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
-                                            <Users className="h-4 w-4" />
-                                            {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} no total
-                                        </div>
-                                        <div className="ml-auto flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
-                                            {([{v:'todos',l:'Todos'},{v:'consultor',l:'Consultores'},{v:'gerente',l:'Gerentes'}] as const).map(opt => (
-                                                <button key={opt.v} onClick={() => setNpsFilterTipo(opt.v)}
-                                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${npsFilterTipo === opt.v ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
-                                                >{opt.l}</button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                                {npsViewMode === 'dashboard' ? (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral Empresa</h3>
+                                                            <div className="flex items-end gap-3">
+                                                                <span className={`text-4xl font-black ${npsEmpresa >= 4.5 ? 'text-emerald-500' : npsEmpresa >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsEmpresa.toFixed(1)}</span>
+                                                                <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.empresa.total} avaliações)</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Consultores</h3>
+                                                            <div className="flex items-end gap-3">
+                                                                <span className={`text-4xl font-black ${npsConsultores >= 4.5 ? 'text-emerald-500' : npsConsultores >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsConsultores.toFixed(1)}</span>
+                                                                <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.consultores.total} avaliações)</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Gerentes</h3>
+                                                            <div className="flex items-end gap-3">
+                                                                <span className={`text-4xl font-black ${npsGerentes >= 4.5 ? 'text-emerald-500' : npsGerentes >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsGerentes.toFixed(1)}</span>
+                                                                <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.gerentes.total} avaliações)</span>
+                                                            </div>
+                                                        </div>
 
-                                    {sortedNpsKeys.map(key => {
+                                                        {/* Dashboard Por Pergunta */}
+                                                        <div className="col-span-1 sm:col-span-3 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Média por Pergunta</h3>
+                                                            
+                                                            {npsFilterTipo !== 'gerente' && npsGeralData.questoesConsultor.total > 0 && (
+                                                                <div className="mb-6">
+                                                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Consultores</h4>
+                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                        {[{k:'comunicacao',l:'Comunicação'},{k:'dedicacao',l:'Dedicação'},{k:'confianca',l:'Confiança'},{k:'pontualidade',l:'Pontualidade'},{k:'organizacao',l:'Organização'},{k:'proatividade',l:'Proatividade'},{k:'qualidade_entregas',l:'Qualidade'},{k:'dominio_tecnico',l:'Dom. Técnico'}].map(f => {
+                                                                            const avg = npsGeralData.questoesConsultor.fields[f.k] / npsGeralData.questoesConsultor.total;
+                                                                            return (
+                                                                                <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
+                                                                                    <div className="flex justify-between items-center mb-1">
+                                                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                    </div>
+                                                                                    <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                        <div className="h-full rounded-full bg-violet-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {npsFilterTipo !== 'consultor' && npsGeralData.questoesGerente.total > 0 && (
+                                                                <div>
+                                                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gerentes</h4>
+                                                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                                        {[{k:'comunicacao',l:'Comunicação'},{k:'suporte',l:'Suporte'},{k:'relacionamento',l:'Relacionamento'},{k:'resolutividade',l:'Resolutividade'},{k:'lideranca',l:'Liderança'}].map(f => {
+                                                                            const avg = npsGeralData.questoesGerente.fields[f.k] / npsGeralData.questoesGerente.total;
+                                                                            return (
+                                                                                <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
+                                                                                    <div className="flex justify-between items-center mb-1">
+                                                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                    </div>
+                                                                                    <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                        <div className="h-full rounded-full bg-amber-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-4">
+                                                        {sortedNpsKeys.map(key => {
                                         const [year, monthIdx] = key.split('-').map(Number)
                                         const monthRespostas = groupedNps[key]
                                         const isExpanded = expandedMonths[key] ?? false
@@ -622,13 +634,17 @@ export default function FormsResponsesPage() {
                                                         })}
                                                     </div>
                                                 )}
-
                                             </div>
                                         )
                                     })}
-                                </>
+                                </div>
                             )}
-                        </div>
+                        </>
+                    )
+                })()}
+                </>
+            )}
+        </div>
                     )}
                 </div>
             </div>
