@@ -180,11 +180,9 @@ export default function NPSProjetoPage() {
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
-    const isConsultor = cargoAtual.toLowerCase().includes("consultor") || 
-                        cargoAtual.toLowerCase().includes("assessor") ||
-                        cargoAtual.toLowerCase().includes("sdr") ||
-                        cargoAtual.toLowerCase().includes("closer")
     const isGerente = cargoAtual.toLowerCase().includes("gerente") && !cargoAtual.toLowerCase().includes("assessor")
+    // Anyone who is NOT a manager should evaluate the manager
+    const isConsultor = !isGerente
 
     // Build step names based on role
     const buildSteps = useCallback(() => {
@@ -380,7 +378,7 @@ export default function NPSProjetoPage() {
                     feedback_texto: g.feedback_texto,
                     precisa_feedback: g.precisa_feedback === "Sim",
                     tipo_avaliacao: 'gerente',
-                })
+                }).throwOnError()
             }
 
             // 2. Save NPS Consultor evaluations (skip if apenasGerente)
@@ -410,7 +408,7 @@ export default function NPSProjetoPage() {
                         feedback_texto: c.feedback_texto,
                         precisa_feedback: c.precisa_feedback === "Sim",
                         tipo_avaliacao: 'consultor',
-                    })
+                    }).throwOnError()
                 }
             }
 
@@ -419,7 +417,7 @@ export default function NPSProjetoPage() {
                 avaliador_id: colaborador.id,
                 projeto_id: projetoId || null,
                 mes, ano,
-            })
+            }).throwOnError()
 
             setDone(true)
             toast.success("NPS Projeto enviado com sucesso! 🎉")

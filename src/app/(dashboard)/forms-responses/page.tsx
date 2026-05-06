@@ -104,7 +104,9 @@ export default function FormsResponsesPage() {
     })
 
     // PDF generation function
-    function generatePDF() {
+    async function generatePDF() {
+        if (typeof window === 'undefined') return
+
         const selectedFormTitle = selectedFormId === 'nps_projeto'
             ? 'NPS Projeto'
             : formularios.find(f => f.id === selectedFormId)?.titulo || 'Formulário'
@@ -119,35 +121,49 @@ export default function FormsResponsesPage() {
                 const monthLabel = `${MESES[monthIdx]} ${year}`
 
                 let promotores = 0, detratores = 0, neutros = 0
+                let sumScore = 0
                 monthRespostas.forEach(r => {
+                    sumScore += Number(r.nps_geral || 0)
                     if (r.nps_geral >= 4.5) promotores++
                     else if (r.nps_geral <= 3.5) detratores++
                     else neutros++
                 })
-                const npsScore = Math.round(((promotores - detratores) / monthRespostas.length) * 100)
+                const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
 
-                const rows = monthRespostas.map(r => {
-                    const sendDate = new Date(r.created_at)
-                    const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                    const authorName = r.colaboradores?.nome || 'Anônimo'
-                    const respondidoPor = usuariosMap[r.avaliador_id] || 'Desconhecido'
-                    const isGer = r.tipo_avaliacao === 'gerente'
-                    const scoreFields = isGer
-                        ? ['comunicacao','suporte','relacionamento','resolutividade','lideranca']
-                        : ['comunicacao','dedicacao','confianca','pontualidade','organizacao','proatividade','qualidade_entregas','dominio_tecnico']
-                    const scoreLabels = isGer
-                        ? ['Com.','Sup.','Rel.','Res.','Lid.']
-                        : ['Com.','Ded.','Conf.','Pont.','Org.','Pro.','Qual.','Dom.']
-                    const scoresHtml = scoreFields.map((f, i) => {
-                        const v = Number(r[f] || 0)
-                        const color = v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444'
-                        return `<span style="display:inline-block;margin-right:6px;"><strong style="color:${color}">${v}</strong> <small style="color:#94a3b8">${scoreLabels[i]}</small></span>`
-                    }).join('')
-                    return `<tr>
-                        <td style="white-space:nowrap;">${authorName}</td>
-                        <td style="white-space:nowrap;">${respondidoPor}</td>
-                        <td style="text-align:center;font-weight:bold;color:${r.nps_geral >= 4.5 ? '#10b981' : r.nps_geral <= 3.5 ? '#ef4444' : '#f59e0b'}">${Number(r.nps_geral).toFixed(1)}/5</td>
-                        <td style="font-size:10px;line-height:1.6;">${scoresHtml}</td>
+                    const rows = monthRespostas.map(r => {
+                        const sendDate = new Date(r.created_at)
+                        const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                        const authorName = r.colaboradores?.nome || 'Anônimo'
+                        const respondidoPor = usuariosMap[r.avaliador_id] || 'Desconhecido'
+                        const isGer = r.tipo_avaliacao === 'gerente'
+                        const scoreFields = isGer
+                            ? [{k:'comunicacao',l:'Com.'},{k:'suporte',l:'Sup.'},{k:'relacionamento',l:'Rel.'},{k:'resolutividade',l:'Res.'},{k:'lideranca',l:'Lid.'}]
+                            : [{k:'comunicacao',l:'Com.'},{k:'dedicacao',l:'Ded.'},{k:'confianca',l:'Conf.'},{k:'pontualidade',l:'Pont.'},{k:'organizacao',l:'Org.'},{k:'proatividade',l:'Pro.'},{k:'qualidade_entregas',l:'Qual.'},{k:'dominio_tecnico',l:'Dom.'}]
+                        const scoresHtml = scoreFields.map(f => {
+                            const v = Number(r[f.k] || 0)
+                            const color = v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444'
+                            return `<div style="display:inline-block; margin-right:12px; margin-bottom:8px; background:#f8fafc; padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0;">
+                                <small style="color:#64748b; font-size:9px; text-transform:uppercase; display:block; margin-bottom:2px;">${f.l}</small>
+                                <strong style="color:${color}; font-size:12px;">${v}</strong>
+                            </div>`
+                        }).join('')
+                        return `<tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding:16px 12px; vertical-align:top;">
+                                <div style="font-weight:bold; color:#0f172a; margin-bottom:4px;">${authorName}</div>
+                                <div style="font-size:11px; color:#64748b; background:#f1f5f9; padding:2px 6px; border-radius:4px; display:inline-block;">${isGer ? 'Gerente' : 'Consultor'}</div>
+                            </td>
+                            <td style="padding:16px 12px; vertical-align:top; color:#475569; font-size:12px;">
+                                ${respondidoPor}
+                            </td>
+                            <td style="padding:16px 12px; vertical-align:top; text-align:center;">
+                                <div style="display:inline-block; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:14px; color:${r.nps_geral >= 4.5 ? '#10b981' : r.nps_geral <= 3.5 ? '#ef4444' : '#f59e0b'}; background:${r.nps_geral >= 4.5 ? '#ecfdf5' : r.nps_geral <= 3.5 ? '#fef2f2' : '#fffbeb'}">
+                                    ${Number(r.nps_geral).toFixed(1)}/5
+                                </div>
+                            </td>
+                            <td style="padding:16px 12px; vertical-align:top;">
+                                ${scoresHtml}
+                                ${r.feedback_texto ? `<div style="margin-top:12px; font-size:11px; color:#475569; background:#f8fafc; padding:8px; border-radius:6px; border-left:3px solid #cbd5e1;">${r.feedback_texto}</div>` : ''}
+                            </td>
                         <td style="white-space:nowrap;">${dateStr}</td>
                         <td style="max-width:250px;word-wrap:break-word;">${r.feedback_texto || '—'}</td>
                     </tr>`
@@ -155,7 +171,7 @@ export default function FormsResponsesPage() {
 
                 return `
                     <div class="month-section">
-                        <h2>${monthLabel} — NPS: ${npsScore} (P: ${promotores}, N: ${neutros}, D: ${detratores})</h2>
+                        <h2>${monthLabel} — Média: ${npsScore}/5 (P: ${promotores}, N: ${neutros}, D: ${detratores})</h2>
                         <table>
                             <thead><tr><th>Avaliado</th><th>Respondido por</th><th>Nota</th><th>Detalhamento</th><th>Data</th><th>Feedback</th></tr></thead>
                             <tbody>${rows}</tbody>
@@ -164,13 +180,55 @@ export default function FormsResponsesPage() {
                 `
             }).join('')
         } else {
-            // For regular forms, we render the visible content area
-            htmlContent = `<p style="text-align:center;color:#666;margin-top:40px;">As respostas do formulário "${selectedFormTitle}" foram exportadas com sucesso.</p>`
-            // Capture from the DOM
-            const contentEl = document.getElementById('form-responses-content')
-            if (contentEl) {
-                htmlContent = contentEl.innerHTML
-            }
+                // Default forms PDF generator
+                let groups: Record<string, { label: string; respostas: any[] }> = {}
+                // We'll group by month for the generic export
+                const rawResp = await supabase.from('formulario_respostas').select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores(nome)').eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false })
+                if (rawResp.data) {
+                    rawResp.data.forEach(r => {
+                        const date = new Date(r.enviado_em)
+                        const key = `${date.getFullYear()}-${date.getMonth()}`
+                        if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
+                        groups[key].respostas.push(r)
+                    })
+                }
+
+                htmlContent = Object.keys(groups).map(key => {
+                    const group = groups[key]
+                    return `
+                        <h2 style="color:#4f46e5; border-bottom:2px solid #e0e7ff; padding-bottom:8px; margin-top:30px; font-size:18px;">${group.label}</h2>
+                        <div style="display:flex; flex-direction:column; gap:20px;">
+                            ${group.respostas.map(r => {
+                                const sendDate = new Date(r.enviado_em)
+                                const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                                const author = r.colaboradores?.nome || 'Anônimo'
+                                
+                                const itemsHtml = r.formulario_respostas_itens?.map((item: any) => {
+                                    return `
+                                        <div style="margin-bottom:12px;">
+                                            <div style="font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px; text-transform:uppercase;">${item.formulario_perguntas?.titulo || 'Pergunta'}</div>
+                                            <div style="font-size:13px; color:#1e293b; background:#f8fafc; padding:8px 12px; border-radius:6px; border:1px solid #e2e8f0;">${item.valor_texto || item.valor_numero || item.valor_booleano || '-'}</div>
+                                        </div>
+                                    `
+                                }).join('') || ''
+
+                                return `
+                                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:20px; background:#ffffff; page-break-inside:avoid;">
+                                        <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+                                            <div>
+                                                <div style="font-weight:bold; font-size:16px; color:#0f172a;">${author}</div>
+                                                <div style="font-size:12px; color:#64748b;">Enviado em ${dateStr}</div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            ${itemsHtml}
+                                        </div>
+                                    </div>
+                                `
+                            }).join('')}
+                        </div>
+                    `
+                }).join('')
         }
 
         const fullHtml = `<!DOCTYPE html>
@@ -303,6 +361,133 @@ export default function FormsResponsesPage() {
                                 </div>
                             ) : (
                                 <>
+                                    {(() => {
+                                        let npsGeralData = {
+                                            consultores: { promotores: 0, neutros: 0, detratores: 0, total: 0, sum: 0 },
+                                            gerentes: { promotores: 0, neutros: 0, detratores: 0, total: 0, sum: 0 },
+                                            empresa: { promotores: 0, neutros: 0, detratores: 0, total: 0, sum: 0 },
+                                            questoesConsultor: { total: 0, fields: {} as Record<string, number> },
+                                            questoesGerente: { total: 0, fields: {} as Record<string, number> }
+                                        }
+
+                                        filteredNpsRespostas.forEach(r => {
+                                            const isP = r.nps_geral >= 4.5;
+                                            const isD = r.nps_geral <= 3.5;
+                                            
+                                            npsGeralData.empresa.total++;
+                                            npsGeralData.empresa.sum += Number(r.nps_geral || 0);
+                                            if (isP) npsGeralData.empresa.promotores++;
+                                            else if (isD) npsGeralData.empresa.detratores++;
+                                            else npsGeralData.empresa.neutros++;
+
+                                            if (r.tipo_avaliacao === 'gerente') {
+                                                npsGeralData.gerentes.total++;
+                                                npsGeralData.gerentes.sum += Number(r.nps_geral || 0);
+                                                if (isP) npsGeralData.gerentes.promotores++;
+                                                else if (isD) npsGeralData.gerentes.detratores++;
+                                                else npsGeralData.gerentes.neutros++;
+                                                
+                                                npsGeralData.questoesGerente.total++;
+                                                ['comunicacao','suporte','relacionamento','resolutividade','lideranca'].forEach(f => {
+                                                    if (!npsGeralData.questoesGerente.fields[f]) npsGeralData.questoesGerente.fields[f] = 0;
+                                                    npsGeralData.questoesGerente.fields[f] += Number(r[f] || 0);
+                                                });
+                                            } else {
+                                                npsGeralData.consultores.total++;
+                                                npsGeralData.consultores.sum += Number(r.nps_geral || 0);
+                                                if (isP) npsGeralData.consultores.promotores++;
+                                                else if (isD) npsGeralData.consultores.detratores++;
+                                                else npsGeralData.consultores.neutros++;
+
+                                                npsGeralData.questoesConsultor.total++;
+                                                ['comunicacao','dedicacao','confianca','pontualidade','organizacao','proatividade','qualidade_entregas','dominio_tecnico'].forEach(f => {
+                                                    if (!npsGeralData.questoesConsultor.fields[f]) npsGeralData.questoesConsultor.fields[f] = 0;
+                                                    npsGeralData.questoesConsultor.fields[f] += Number(r[f] || 0);
+                                                });
+                                            }
+                                        })
+
+                                        const calcNps = (data: any) => data.total === 0 ? 0 : (data.sum / data.total).toFixed(1);
+                                        const npsConsultores = Number(calcNps(npsGeralData.consultores));
+                                        const npsGerentes = Number(calcNps(npsGeralData.gerentes));
+                                        const npsEmpresa = Number(calcNps(npsGeralData.empresa));
+
+                                        return (
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral Empresa</h3>
+                                                    <div className="flex items-end gap-3">
+                                                        <span className={`text-4xl font-black ${npsEmpresa >= 4.5 ? 'text-emerald-500' : npsEmpresa >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsEmpresa.toFixed(1)}</span>
+                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.empresa.total} avaliações)</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Consultores</h3>
+                                                    <div className="flex items-end gap-3">
+                                                        <span className={`text-4xl font-black ${npsConsultores >= 4.5 ? 'text-emerald-500' : npsConsultores >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsConsultores.toFixed(1)}</span>
+                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.consultores.total} avaliações)</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Gerentes</h3>
+                                                    <div className="flex items-end gap-3">
+                                                        <span className={`text-4xl font-black ${npsGerentes >= 4.5 ? 'text-emerald-500' : npsGerentes >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsGerentes.toFixed(1)}</span>
+                                                        <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.gerentes.total} avaliações)</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Dashboard Por Pergunta */}
+                                                <div className="col-span-1 sm:col-span-3 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Média por Pergunta</h3>
+                                                    
+                                                    {npsFilterTipo !== 'gerente' && npsGeralData.questoesConsultor.total > 0 && (
+                                                        <div className="mb-6">
+                                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Consultores</h4>
+                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                {[{k:'comunicacao',l:'Comunicação'},{k:'dedicacao',l:'Dedicação'},{k:'confianca',l:'Confiança'},{k:'pontualidade',l:'Pontualidade'},{k:'organizacao',l:'Organização'},{k:'proatividade',l:'Proatividade'},{k:'qualidade_entregas',l:'Qualidade'},{k:'dominio_tecnico',l:'Dom. Técnico'}].map(f => {
+                                                                    const avg = npsGeralData.questoesConsultor.fields[f.k] / npsGeralData.questoesConsultor.total;
+                                                                    return (
+                                                                        <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
+                                                                            <div className="flex justify-between items-center mb-1">
+                                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
+                                                                                <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                            </div>
+                                                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                <div className="h-full rounded-full bg-violet-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {npsFilterTipo !== 'consultor' && npsGeralData.questoesGerente.total > 0 && (
+                                                        <div>
+                                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Gerentes</h4>
+                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                                                {[{k:'comunicacao',l:'Comunicação'},{k:'suporte',l:'Suporte'},{k:'relacionamento',l:'Relacionamento'},{k:'resolutividade',l:'Resolutividade'},{k:'lideranca',l:'Liderança'}].map(f => {
+                                                                    const avg = npsGeralData.questoesGerente.fields[f.k] / npsGeralData.questoesGerente.total;
+                                                                    return (
+                                                                        <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
+                                                                            <div className="flex justify-between items-center mb-1">
+                                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
+                                                                                <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                            </div>
+                                                                            <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                                                <div className="h-full rounded-full bg-amber-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })()}
+
                                     <div className="flex flex-wrap items-center gap-3 mb-6">
                                         <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
                                             <Users className="h-4 w-4" />
@@ -325,12 +510,16 @@ export default function FormsResponsesPage() {
 
                                         // Calculate NPS metrics for the month
                                         let promotores = 0, detratores = 0, neutros = 0
+                                        let sumScore = 0
                                         monthRespostas.forEach(r => {
+                                            sumScore += Number(r.nps_geral || 0)
                                             if (r.nps_geral >= 4.5) promotores++
                                             else if (r.nps_geral <= 3.5) detratores++
                                             else neutros++
                                         })
-                                        const npsScore = Math.round(((promotores - detratores) / monthRespostas.length) * 100)
+                                        const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
+                                        const isPromotorGlobal = Number(npsScore) >= 4.5
+                                        const isDetratorGlobal = Number(npsScore) <= 3.5
 
                                         return (
                                             <div key={key} className="border border-slate-100 dark:border-slate-800/50 rounded-2xl overflow-hidden mb-4">
@@ -345,8 +534,8 @@ export default function FormsResponsesPage() {
                                                         <div className="text-left">
                                                             <div className="flex items-center gap-4">
                                                                 <h3 className="font-bold text-slate-900 dark:text-white text-sm">{monthLabel}</h3>
-                                                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${npsScore >= 75 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : npsScore >= 50 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400'}`}>
-                                                                    NPS: {npsScore}
+                                                                <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${isPromotorGlobal ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : isDetratorGlobal ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'}`}>
+                                                                    Média: {npsScore}/5
                                                                 </span>
                                                             </div>
                                                             <p className="text-xs text-slate-400 mt-0.5">{monthRespostas.length} avaliação{monthRespostas.length !== 1 ? 'ões' : ''} (Promotores: {promotores}, Neutros: {neutros}, Detratores: {detratores})</p>

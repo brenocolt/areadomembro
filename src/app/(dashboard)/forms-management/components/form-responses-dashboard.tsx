@@ -12,7 +12,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
-    const [groupMode, setGroupMode] = useState<'pessoa' | 'mes'>('pessoa')
+    const [groupMode, setGroupMode] = useState<'pessoa' | 'mes' | 'pergunta'>('pessoa')
 
     useEffect(() => {
         async function fetch() {
@@ -31,7 +31,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                 if (groupMode === 'pessoa') {
                     const firstPerson = rData[0].colaborador_id || rData[0].colaboradores?.nome || 'anon'
                     setExpandedGroups({ [firstPerson]: true })
-                } else {
+                } else if (groupMode === 'mes') {
                     const firstDate = new Date(rData[0].enviado_em)
                     setExpandedGroups({ [`${firstDate.getFullYear()}-${firstDate.getMonth()}`]: true })
                 }
@@ -76,12 +76,22 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             if (!groups[personId]) groups[personId] = { label: personName, respostas: [] }
             groups[personId].respostas.push(r)
         })
-    } else {
+    } else if (groupMode === 'mes') {
         respostas.forEach(r => {
             const date = new Date(r.enviado_em)
             const key = `${date.getFullYear()}-${date.getMonth()}`
             if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
             groups[key].respostas.push(r)
+        })
+    } else if (groupMode === 'pergunta') {
+        perguntas.forEach((p, idx) => {
+            groups[p.id] = { label: `${idx + 1}. ${p.titulo}`, respostas: [] }
+            respostas.forEach(r => {
+                const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
+                if (item) {
+                    groups[p.id].respostas.push({ ...r, _mappedItem: item, _pergunta: p })
+                }
+            })
         })
     }
 
@@ -90,6 +100,11 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             const [ya, ma] = a.split('-').map(Number)
             const [yb, mb] = b.split('-').map(Number)
             return yb * 12 + mb - (ya * 12 + ma)
+        }
+        if (groupMode === 'pergunta') {
+            const idxA = perguntas.findIndex(p => p.id === a)
+            const idxB = perguntas.findIndex(p => p.id === b)
+            return idxA - idxB
         }
         return groups[a].label.localeCompare(groups[b].label)
     })
@@ -105,18 +120,24 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                 <div className="ml-auto flex flex-wrap items-center gap-2">
                     {/* Group mode toggle */}
-                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+                    <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5 overflow-x-auto max-w-full">
                         <button
                             onClick={() => setGroupMode('pessoa')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${groupMode === 'pessoa' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${groupMode === 'pessoa' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
                         >
                             <User className="h-3 w-3 inline mr-1" />Por Pessoa
                         </button>
                         <button
                             onClick={() => setGroupMode('mes')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${groupMode === 'mes' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${groupMode === 'mes' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
                         >
                             <Calendar className="h-3 w-3 inline mr-1" />Por Mês
+                        </button>
+                        <button
+                            onClick={() => setGroupMode('pergunta')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${groupMode === 'pergunta' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                        >
+                            <Filter className="h-3 w-3 inline mr-1" />Destrinchada
                         </button>
                     </div>
 
@@ -172,9 +193,34 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                     const authorName = resposta.colaboradores?.nome || 'Anônimo'
                                     const items = resposta.formulario_respostas_itens || []
 
+                                    const renderValue = (p: any, item: any) => {
+                                        let displayValue = ''
+                                        if (p.tipo === 'texto') displayValue = item.valor || '—'
+                                        else if (p.tipo === 'escala') displayValue = item.valor ? `${item.valor}/5` : '—'
+                                        else if (p.tipo === 'selecao_unica') displayValue = item.valor || '—'
+                                        else if (p.tipo === 'selecao_multipla') displayValue = item.valores ? (item.valores as string[]).join(', ') : (item.valor || '—')
+                                        else if (p.tipo === 'colaborador_unico') displayValue = item.valor ? getColabName(item.valor) : '—'
+                                        else if (p.tipo === 'colaborador_multiplo') displayValue = item.valores ? (item.valores as string[]).map(getColabName).join(', ') : (item.valor ? getColabName(item.valor) : '—')
+
+                                        if (p.tipo === 'escala' && item.valor) {
+                                            return (
+                                                <span className="inline-flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 px-2 py-1 rounded-lg">
+                                                    <span className="font-bold text-amber-600 dark:text-amber-400">{item.valor}</span>
+                                                    <span className="text-slate-400 text-xs">/5</span>
+                                                    <span className="flex gap-0.5 ml-1">
+                                                        {[1, 2, 3, 4, 5].map(v => (
+                                                            <Star key={v} className={`h-3 w-3 ${v <= Number(item.valor) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700'}`} />
+                                                        ))}
+                                                    </span>
+                                                </span>
+                                            )
+                                        }
+                                        return <div className="text-sm text-slate-700 dark:text-slate-300 font-medium whitespace-pre-wrap">{displayValue}</div>
+                                    }
+
                                     return (
-                                        <div key={resposta.id} className="p-4">
-                                            <div className="flex items-center gap-3 mb-3">
+                                        <div key={resposta.id} className="p-4 bg-white dark:bg-transparent">
+                                            <div className="flex items-center gap-3 mb-4">
                                                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold text-xs shrink-0">
                                                     {authorName.charAt(0).toUpperCase()}
                                                 </div>
@@ -184,54 +230,27 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-2 ml-11">
-                                                {filteredPerguntas.map((p, pi) => {
-                                                    const item = items.find((it: any) => it.pergunta_id === p.id)
-                                                    if (!item) return null
-
-                                                    let displayValue = ''
-
-                                                    if (p.tipo === 'texto') {
-                                                        displayValue = item.valor || '—'
-                                                    } else if (p.tipo === 'escala') {
-                                                        displayValue = item.valor ? `${item.valor}/5` : '—'
-                                                    } else if (p.tipo === 'selecao_unica') {
-                                                        displayValue = item.valor || '—'
-                                                    } else if (p.tipo === 'selecao_multipla') {
-                                                        displayValue = item.valores ? (item.valores as string[]).join(', ') : (item.valor || '—')
-                                                    } else if (p.tipo === 'colaborador_unico') {
-                                                        displayValue = item.valor ? getColabName(item.valor) : '—'
-                                                    } else if (p.tipo === 'colaborador_multiplo') {
-                                                        displayValue = item.valores ? (item.valores as string[]).map(getColabName).join(', ') : (item.valor ? getColabName(item.valor) : '—')
-                                                    }
-
-                                                    const questionIdx = perguntas.findIndex(q => q.id === p.id)
-
-                                                    return (
-                                                        <div key={p.id} className="text-xs">
-                                                            <span className="font-bold text-slate-500 dark:text-slate-400">
-                                                                {questionIdx + 1}. {p.titulo}:
-                                                            </span>{' '}
-                                                            {p.tipo === 'escala' && item.valor ? (
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <span className="font-bold text-amber-600 dark:text-amber-400">{item.valor}</span>
-                                                                    <span className="text-slate-400">/5</span>
-                                                                    <span className="flex gap-0.5 ml-1">
-                                                                        {[1, 2, 3, 4, 5].map(v => (
-                                                                            <Star
-                                                                                key={v}
-                                                                                className={`h-3 w-3 ${v <= Number(item.valor) ? 'text-amber-400 fill-amber-400' : 'text-slate-200 dark:text-slate-700'}`}
-                                                                            />
-                                                                        ))}
-                                                                    </span>
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-slate-700 dark:text-slate-300">{displayValue}</span>
-                                                            )}
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
+                                            {groupMode === 'pergunta' ? (
+                                                <div className="ml-11 bg-slate-50 dark:bg-white/[0.02] p-3.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                                                    {renderValue(resposta._pergunta, resposta._mappedItem)}
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3 ml-11">
+                                                    {filteredPerguntas.map((p, pi) => {
+                                                        const item = items.find((it: any) => it.pergunta_id === p.id)
+                                                        if (!item) return null
+                                                        const questionIdx = perguntas.findIndex(q => q.id === p.id)
+                                                        return (
+                                                            <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                                                    {questionIdx + 1}. {p.titulo}
+                                                                </div>
+                                                                {renderValue(p, item)}
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}
