@@ -12,6 +12,10 @@ export function NPSGerenteDetails() {
     const [data, setData] = useState<any[]>([])
 
     useEffect(() => {
+        if (!colaboradorId) {
+            setData([])
+            return
+        }
         async function fetch() {
             const { data: nps } = await supabase
                 .from('avaliacoes_nps')
@@ -20,12 +24,37 @@ export function NPSGerenteDetails() {
                 .eq('tipo_avaliacao', 'gerente')
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
-                .limit(6)
 
-            if (nps) {
-                const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-                setData(nps.reverse().map(n => ({ ...n, mesNome: `${months[n.mes - 1]} ${n.ano}` })))
+            if (!nps) {
+                setData([])
+                return
             }
+
+            const months = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+            const fields = ['comunicacao','suporte','relacionamento','lideranca','resolutividade','nps_geral'] as const
+
+            const groups = new Map<string, any[]>()
+            for (const row of nps) {
+                const key = `${row.ano}-${row.mes}`
+                if (!groups.has(key)) groups.set(key, [])
+                groups.get(key)!.push(row)
+            }
+
+            const avgField = (rows: any[], field: string) => {
+                const vals = rows.map(r => r[field]).filter(v => v !== null && v !== undefined && !isNaN(Number(v))).map(Number)
+                if (vals.length === 0) return null
+                return vals.reduce((a, b) => a + b, 0) / vals.length
+            }
+
+            const aggregated = Array.from(groups.entries()).map(([key, rows]) => {
+                const [ano, mes] = key.split('-').map(Number)
+                const result: any = { ano, mes, mesNome: `${months[mes - 1]} ${ano}`, avaliacoes: rows.length }
+                for (const f of fields) result[f] = avgField(rows, f)
+                return result
+            })
+
+            aggregated.sort((a, b) => (a.ano - b.ano) || (a.mes - b.mes))
+            setData(aggregated.slice(-6))
         }
         fetch()
     }, [colaboradorId])
@@ -55,18 +84,32 @@ export function NPSGerenteDetails() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
+                        {data.length === 0 && (
+                            <TableRow>
+                                <TableCell colSpan={7} className="text-center text-sm text-slate-400 italic py-8">
+                                    Sem avaliações registradas.
+                                </TableCell>
+                            </TableRow>
+                        )}
                         {data.map((row, i) => {
-                            const avg = ((Number(row.comunicacao) + Number(row.suporte) + Number(row.relacionamento) + Number(row.lideranca) + Number(row.resolutividade)) / 5)
+                            const fmt = (v: number | null) => (v === null ? '—' : v.toFixed(1))
+                            const fields = [row.comunicacao, row.suporte, row.relacionamento, row.lideranca, row.resolutividade].filter((v): v is number => v !== null)
+                            const avg = fields.length === 0 ? null : fields.reduce((a, b) => a + b, 0) / fields.length
                             return (
                                 <TableRow key={i} className="border-b-slate-100 dark:border-b-slate-800 hover:bg-slate-50/50">
-                                    <TableCell className="font-bold pl-6 text-sm">{row.mesNome}</TableCell>
-                                    <TableCell className="text-center">{Number(row.comunicacao).toFixed(1)}</TableCell>
-                                    <TableCell className="text-center">{Number(row.suporte).toFixed(1)}</TableCell>
-                                    <TableCell className="text-center">{Number(row.relacionamento).toFixed(1)}</TableCell>
-                                    <TableCell className="text-center">{Number(row.lideranca).toFixed(1)}</TableCell>
-                                    <TableCell className="text-center">{Number(row.resolutividade).toFixed(1)}</TableCell>
+                                    <TableCell className="font-bold pl-6 text-sm">
+                                        {row.mesNome}
+                                        <span className="ml-2 text-[10px] font-medium text-slate-400">
+                                            ({row.avaliacoes} aval.)
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-center">{fmt(row.comunicacao)}</TableCell>
+                                    <TableCell className="text-center">{fmt(row.suporte)}</TableCell>
+                                    <TableCell className="text-center">{fmt(row.relacionamento)}</TableCell>
+                                    <TableCell className="text-center">{fmt(row.lideranca)}</TableCell>
+                                    <TableCell className="text-center">{fmt(row.resolutividade)}</TableCell>
                                     <TableCell className="text-center">
-                                        <Badge className={getColor(avg)}>{avg.toFixed(1)}</Badge>
+                                        {avg === null ? <span className="text-slate-400">—</span> : <Badge className={getColor(avg)}>{avg.toFixed(1)}</Badge>}
                                     </TableCell>
                                 </TableRow>
                             )
