@@ -3,7 +3,7 @@
 import { NPSGerenteChart } from "./components/nps-gerente-chart"
 import { NPSGerenteDetails } from "./components/nps-gerente-details"
 import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
-import { MessageSquare, HeartHandshake, LifeBuoy, Crown, ShieldAlert } from "lucide-react"
+import { MessageSquare, HeartHandshake, LifeBuoy, Crown, ShieldAlert, Star } from "lucide-react"
 import { ImportNpsDialog } from "@/components/import-nps-dialog"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -24,7 +24,7 @@ export default function NPSGerentePage() {
         orderBy: 'ano',
         ascending: false,
         limit: 12,
-        select: 'nps_geral, comunicacao, suporte, lideranca, relacionamento, resolutividade, tipo_avaliacao'
+        select: 'mes, ano, nps_geral, comunicacao, suporte, lideranca, relacionamento, resolutividade, tipo_avaliacao'
     })
 
     if (!loadingColab && !isAdmin && !isGerente && !isAdministrador) {
@@ -55,6 +55,18 @@ export default function NPSGerentePage() {
         return (gerenteNpsData.reduce((sum: number, n: any) => sum + Number(n[field] || 0), 0) / gerenteNpsData.length).toFixed(1)
     }
 
+    // Média NPS do último mês com avaliações
+    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    const sortedByPeriod = [...gerenteNpsData].sort((a: any, b: any) => (b.ano - a.ano) || (b.mes - a.mes))
+    const ultimoPeriodo = sortedByPeriod[0]
+    const ultimoMesData = ultimoPeriodo
+        ? gerenteNpsData.filter((n: any) => n.mes === ultimoPeriodo.mes && n.ano === ultimoPeriodo.ano)
+        : []
+    const mediaUltimoMes = ultimoMesData.length === 0
+        ? '—'
+        : (ultimoMesData.reduce((s: number, n: any) => s + Number(n.nps_geral || 0), 0) / ultimoMesData.length).toFixed(1)
+    const ultimoMesLabel = ultimoPeriodo ? `${MESES[ultimoPeriodo.mes - 1]}/${ultimoPeriodo.ano}` : 'Sem dados'
+
     const metrics = [
         { title: "Comunicação", value: avg('comunicacao'), icon: MessageSquare, color: "text-violet-500", bg: "bg-violet-50 dark:bg-violet-500/10" },
         { title: "Suporte", value: avg('suporte'), icon: LifeBuoy, color: "text-cyan-500", bg: "bg-cyan-50 dark:bg-cyan-500/10" },
@@ -72,6 +84,19 @@ export default function NPSGerentePage() {
                     <span className="font-semibold text-primary dark:text-white">NPS Gerente</span>
                 </div>
                 <ImportNpsDialog />
+            </div>
+
+            <div className="bg-white dark:bg-[#0F172A] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-none">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-500/10">
+                        <Star className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">Média NPS — Último Mês</p>
+                </div>
+                <div className="flex items-end gap-3">
+                    <span className={`text-4xl font-display font-bold ${Number(mediaUltimoMes) >= 4.5 ? 'text-emerald-500' : Number(mediaUltimoMes) >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{mediaUltimoMes}</span>
+                    <span className="text-xs text-slate-500 mb-1.5 font-medium">/5 · {ultimoMesData.length} avaliação{ultimoMesData.length !== 1 ? 'ões' : ''} em {ultimoMesLabel}</span>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">

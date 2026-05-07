@@ -383,14 +383,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 <div className="space-y-3 ml-11">
                                                     {filteredPerguntas.map((p, pi) => {
                                                         const item = items.find((it: any) => it.pergunta_id === p.id)
-                                                        if (!item) return null
                                                         const questionIdx = perguntas.findIndex(q => q.id === p.id)
                                                         return (
                                                             <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
                                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                                                                     {questionIdx + 1}. {p.titulo}
                                                                 </div>
-                                                                {renderValue(p, item)}
+                                                                {item ? renderValue(p, item) : (
+                                                                    <span className="text-xs text-slate-400 italic">— sem resposta —</span>
+                                                                )}
                                                             </div>
                                                         )
                                                     })}

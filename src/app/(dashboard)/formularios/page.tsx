@@ -149,10 +149,24 @@ export default function FormulariosPage() {
                 valor: isMulti ? null : (val?.toString() || null),
                 valores: isMulti ? val : null,
             }
-        }).filter(item => item.valor || item.valores)
+        }).filter(item => item.valor || (Array.isArray(item.valores) && item.valores.length > 0))
 
-        if (items.length > 0) {
-            await supabase.from('formulario_respostas_itens').insert(items)
+        if (items.length === 0) {
+            // Rollback the empty resposta to keep the table clean
+            await supabase.from('formulario_respostas').delete().eq('id', respData.id)
+            toast.error('Não foi possível salvar suas respostas. Preencha pelo menos uma pergunta antes de enviar.')
+            setSubmitting(false)
+            return
+        }
+
+        const { error: itemsError } = await supabase.from('formulario_respostas_itens').insert(items)
+        if (itemsError) {
+            // Rollback: remove the response if items failed, so we don't keep orphan empty responses
+            await supabase.from('formulario_respostas').delete().eq('id', respData.id)
+            console.error('Erro ao salvar itens da resposta:', itemsError)
+            toast.error('Erro ao salvar suas respostas: ' + itemsError.message)
+            setSubmitting(false)
+            return
         }
 
         toast.success("Respostas enviadas com sucesso! 🎉")

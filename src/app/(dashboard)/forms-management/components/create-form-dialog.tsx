@@ -13,6 +13,17 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+// Parse "YYYY-MM-DDTHH:mm" datetime-local string as LOCAL time and return UTC ISO.
+// Without this, `new Date(value).toISOString()` round-trips fine on save, but the
+// reload path in forms-management/page.tsx was previously slicing UTC, shifting
+// the displayed value by the user's TZ offset.
+function localDatetimeInputToIso(local: string | null | undefined): string | null {
+    if (!local) return null
+    const d = new Date(local)
+    if (isNaN(d.getTime())) return null
+    return d.toISOString()
+}
+
 interface Pergunta {
     id: string
     titulo: string
@@ -363,7 +374,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             const { error: updateError } = await supabase.from('formularios').update({
                 titulo,
                 descricao,
-                data_prazo: dataPrazo ? new Date(dataPrazo).toISOString() : null,
+                data_prazo: localDatetimeInputToIso(dataPrazo),
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,
             }).eq('id', initialData.id)
@@ -374,20 +385,61 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 return
             }
 
-            // Delete old questions and insert new ones
-            await supabase.from('formulario_perguntas').delete().eq('formulario_id', initialData.id)
+            // IMPORTANT: don't blindly delete-and-reinsert perguntas.
+            // formulario_respostas_itens.pergunta_id has ON DELETE CASCADE,
+            // so wiping perguntas wipes all answer items for this form.
+            // Instead: UPDATE existing perguntas in place, INSERT new ones,
+            // and DELETE only the perguntas that were actually removed.
+            const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
 
-            const perguntasToInsert = validPerguntas.map((p, i) => ({
-                formulario_id: initialData.id!,
-                titulo: p.titulo,
-                descricao: p.descricao || null,
-                tipo: p.tipo,
-                opcoes: p.opcoes,
-                obrigatoria: p.obrigatoria,
-                ordem: i + 1,
-            }))
+            const { data: existingPerguntas } = await supabase
+                .from('formulario_perguntas')
+                .select('id')
+                .eq('formulario_id', initialData.id)
+            const existingIds = new Set((existingPerguntas || []).map((p: any) => p.id))
 
-            await supabase.from('formulario_perguntas').insert(perguntasToInsert)
+            const keptIds: string[] = []
+            for (let i = 0; i < validPerguntas.length; i++) {
+                const p = validPerguntas[i]
+                const payload = {
+                    titulo: p.titulo,
+                    descricao: p.descricao || null,
+                    tipo: p.tipo,
+                    opcoes: p.opcoes,
+                    obrigatoria: p.obrigatoria,
+                    ordem: i + 1,
+                }
+                if (p.id && isUuid(p.id) && existingIds.has(p.id)) {
+                    // Existing pergunta -> UPDATE (preserves itens via FK)
+                    const { error: upErr } = await supabase
+                        .from('formulario_perguntas')
+                        .update(payload)
+                        .eq('id', p.id)
+                    if (upErr) {
+                        toast.error('Erro ao atualizar pergunta: ' + upErr.message)
+                        setLoading(false)
+                        return
+                    }
+                    keptIds.push(p.id)
+                } else {
+                    // New pergunta -> INSERT
+                    const { error: insErr } = await supabase
+                        .from('formulario_perguntas')
+                        .insert({ formulario_id: initialData.id!, ...payload })
+                    if (insErr) {
+                        toast.error('Erro ao criar pergunta: ' + insErr.message)
+                        setLoading(false)
+                        return
+                    }
+                }
+            }
+
+            // Delete only the perguntas that the user removed in the UI
+            const toDelete = Array.from(existingIds).filter(id => !keptIds.includes(id))
+            if (toDelete.length > 0) {
+                await supabase.from('formulario_perguntas').delete().in('id', toDelete)
+            }
+
             toast.success("Formulário atualizado com sucesso!")
         } else {
             // CREATE new form (or copy)
@@ -395,8 +447,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 titulo,
                 descricao,
                 status,
-                data_prazo: dataPrazo ? new Date(dataPrazo).toISOString() : null,
-                data_prazo_original: dataPrazo ? new Date(dataPrazo).toISOString() : null,
+                data_prazo: localDatetimeInputToIso(dataPrazo),
+                data_prazo_original: localDatetimeInputToIso(dataPrazo),
                 data_inicio: status === 'ativo' ? new Date().toISOString() : null,
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,

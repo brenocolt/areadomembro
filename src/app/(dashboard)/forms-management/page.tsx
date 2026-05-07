@@ -10,6 +10,23 @@ import { CreateFormDialog, FormInitialData } from "./components/create-form-dial
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { toast } from "sonner"
 
+// Convert ISO/UTC string -> "YYYY-MM-DDTHH:mm" in LOCAL timezone (input format).
+function isoToLocalDatetimeInput(iso: string | null | undefined): string {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (isNaN(d.getTime())) return ''
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Convert "YYYY-MM-DDTHH:mm" (interpreted as local) -> ISO UTC string.
+function localDatetimeInputToIso(local: string | null | undefined): string | null {
+    if (!local) return null
+    const d = new Date(local)
+    if (isNaN(d.getTime())) return null
+    return d.toISOString()
+}
+
 function statusBadge(status: string) {
     const map: Record<string, { label: string, class: string }> = {
         rascunho: { label: "Rascunho", class: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
@@ -156,7 +173,7 @@ export default function FormsManagementPage() {
             setNpsAberto(aberto)
         }
 
-        setNpsPrazo(prazoIso ? new Date(prazoIso).toISOString().slice(0, 16) : '')
+        setNpsPrazo(isoToLocalDatetimeInput(prazoIso))
     }
 
     useEffect(() => { fetchForms() }, [])
@@ -172,7 +189,7 @@ export default function FormsManagementPage() {
             id: form.id,
             titulo: form.titulo,
             descricao: form.descricao || '',
-            dataPrazo: form.data_prazo ? new Date(form.data_prazo).toISOString().slice(0, 16) : '',
+            dataPrazo: isoToLocalDatetimeInput(form.data_prazo),
             status: form.status,
             pagina_destino: form.pagina_destino || null,
             tipo_formulario: form.tipo_formulario || 'formulário',
@@ -249,7 +266,7 @@ export default function FormsManagementPage() {
     }
 
     const handleSaveNpsPrazo = async () => {
-        const iso = npsPrazo ? new Date(npsPrazo).toISOString() : null
+        const iso = localDatetimeInputToIso(npsPrazo)
         await supabase.from('configuracoes').upsert({ chave: 'nps_projeto_prazo', valor: iso })
         toast.success(iso ? 'Prazo do NPS Projeto agendado.' : 'Agendamento removido.')
         fetchForms()
