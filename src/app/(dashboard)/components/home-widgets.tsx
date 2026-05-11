@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Wallet, Plane, Calendar, ArrowRight, TrendingUp, Loader2, MapPin, FileQuestion, Star } from "lucide-react"
+import { AlertTriangle, Wallet, Plane, Calendar, ArrowRight, TrendingUp, Loader2, MapPin, FileQuestion, Star, ShieldAlert } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,53 @@ import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
+
+export function PlanoPunicaoAlert() {
+    const { colaboradorId } = useColaborador()
+    const [plano, setPlano] = useState<any | null>(null)
+    const [checked, setChecked] = useState(false)
+
+    useEffect(() => {
+        async function check() {
+            if (!colaboradorId) return
+            const { data } = await supabase
+                .from('plano_punicao')
+                .select('motivo, data_inicio, data_fim, observacoes')
+                .eq('colaborador_id', colaboradorId)
+                .eq('ativo', true)
+                .limit(1)
+            if (data && data.length > 0) setPlano(data[0])
+            setChecked(true)
+        }
+        check()
+    }, [colaboradorId])
+
+    if (!checked || !plano) return null
+
+    return (
+        <div className="bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/60 rounded-2xl p-4 flex items-start gap-3 mb-6 shadow-sm">
+            <div className="p-2 bg-rose-100 dark:bg-rose-900/60 rounded-xl shrink-0 mt-0.5">
+                <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+            </div>
+            <div className="min-w-0">
+                <p className="font-bold text-rose-700 dark:text-rose-300 text-sm uppercase tracking-wide">
+                    Você está em Plano de Punição
+                </p>
+                <p className="text-sm text-rose-600 dark:text-rose-400 mt-0.5">
+                    <strong>Motivo:</strong> {plano.motivo}
+                    {plano.data_fim && (
+                        <span className="ml-2">
+                            · Até {new Date(plano.data_fim + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                    )}
+                </p>
+                <p className="text-xs text-rose-500 dark:text-rose-500 mt-1">
+                    Enquanto o plano estiver ativo, você <strong>não receberá PIPJ</strong>. Entre em contato com a diretoria para mais informações.
+                </p>
+            </div>
+        </div>
+    )
+}
 
 export function WelcomeHeader() {
     const { colaborador, loading } = useColaborador()

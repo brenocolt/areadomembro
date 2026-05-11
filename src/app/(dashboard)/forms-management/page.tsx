@@ -1,13 +1,15 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil } from "lucide-react"
+import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
+import { PlanoPunicaoTab } from "./components/plano-punicao-tab"
 import { toast } from "sonner"
 
 // Convert ISO/UTC string -> "YYYY-MM-DDTHH:mm" in LOCAL timezone (input format).
@@ -322,7 +324,7 @@ export default function FormsManagementPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Gestão de Formulários</h1>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Crie e gerencie formulários para a sua equipe.
+                            Crie, gerencie formulários e controle o plano de punição.
                         </p>
                     </div>
                 </div>
@@ -354,6 +356,19 @@ export default function FormsManagementPage() {
                 hideTrigger
             />
 
+            <Tabs defaultValue="formularios" className="w-full">
+                <TabsList className="bg-slate-100 dark:bg-slate-800/60 rounded-xl p-1 h-auto gap-1">
+                    <TabsTrigger value="formularios" className="rounded-lg px-4 py-2 text-sm font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">
+                        <FileQuestion className="h-4 w-4 mr-2" />
+                        Formulários
+                    </TabsTrigger>
+                    <TabsTrigger value="plano-punicao" className="rounded-lg px-4 py-2 text-sm font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:shadow-sm transition-all">
+                        <AlertTriangle className="h-4 w-4 mr-2 text-rose-500" />
+                        Plano de Punição
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="formularios" className="mt-6 space-y-6">
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm">
@@ -565,6 +580,14 @@ export default function FormsManagementPage() {
                     ))}
                 </div>
             </div>
+                </TabsContent>
+
+                <TabsContent value="plano-punicao" className="mt-6">
+                    <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
+                        <PlanoPunicaoTab />
+                    </div>
+                </TabsContent>
+            </Tabs>
         </div>
     )
 }

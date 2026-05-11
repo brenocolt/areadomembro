@@ -42,6 +42,7 @@ export function PipjForecastCard() {
     const [absenceDays, setAbsenceDays] = useState(0)
     const [businessDays, setBusinessDays] = useState(22)
     const [latestNps, setLatestNps] = useState(0)
+    const [emPlanoPunicao, setEmPlanoPunicao] = useState(false)
 
     useEffect(() => {
         async function fetchData() {
@@ -109,6 +110,15 @@ export function PipjForecastCard() {
                 const avg = rows.reduce((s, n) => s + Number(n.nps_geral || 0), 0) / rows.length
                 setLatestNps(avg)
             }
+
+            // Check if user is in plano de punição
+            const { data: punData } = await supabase
+                .from('plano_punicao')
+                .select('id')
+                .eq('colaborador_id', colaboradorId)
+                .eq('ativo', true)
+                .limit(1)
+            setEmPlanoPunicao((punData || []).length > 0)
         }
         if (colaboradorId) fetchData()
     }, [colaboradorId])
@@ -151,6 +161,9 @@ export function PipjForecastCard() {
     let previsao = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
     previsao = Math.min(previsao, MAX_PER_PERSON)
 
+    // 7. Plano de Punição — zera PIPJ
+    if (emPlanoPunicao) previsao = 0
+
     const items = [
         { label: "Base do Cargo", value: `+ R$ ${baseCargo.toFixed(2).replace('.', ',')}`, detail: cargo, icon: Briefcase, color: "text-blue-400" },
         { label: "Bônus Projetos", value: bonusProjetos > 0 ? `+ R$ ${bonusProjetos.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${projetos} projeto(s) × R$ ${VARIABLE_PER_PROJECT[cargo] || 0}`, icon: FolderKanban, color: "text-cyan-400" },
@@ -176,13 +189,24 @@ export function PipjForecastCard() {
                 <p className="text-xs text-blue-300 font-medium">{periodoAtual}</p>
             </CardHeader>
             <CardContent className="space-y-3">
-                {/* Forecast value */}
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-1">
-                        <TrendingUp className="h-5 w-5 text-emerald-400" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">Valor Estimado</span>
+                {/* Plano de Punição Warning */}
+                {emPlanoPunicao && (
+                    <div className="bg-rose-500/15 border border-rose-500/30 rounded-2xl p-3 flex items-start gap-2.5">
+                        <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-xs font-bold text-rose-300 uppercase tracking-wider">Plano de Punição Ativo</p>
+                            <p className="text-[11px] text-rose-400/80 mt-0.5">Você está em plano de punição. Seu PIPJ está zerado neste período.</p>
+                        </div>
                     </div>
-                    <span className="text-3xl font-display font-bold text-emerald-400">
+                )}
+
+                {/* Forecast value */}
+                <div className={`${emPlanoPunicao ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'} rounded-2xl p-4 text-center`}>
+                    <div className="flex items-center justify-center gap-2 mb-1">
+                        <TrendingUp className={`h-5 w-5 ${emPlanoPunicao ? 'text-rose-400' : 'text-emerald-400'}`} />
+                        <span className={`text-xs font-bold uppercase tracking-wider ${emPlanoPunicao ? 'text-rose-300' : 'text-emerald-300'}`}>Valor Estimado</span>
+                    </div>
+                    <span className={`text-3xl font-display font-bold ${emPlanoPunicao ? 'text-rose-400' : 'text-emerald-400'}`}>
                         R$ {previsao.toFixed(2).replace('.', ',')}
                     </span>
                 </div>
