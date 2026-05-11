@@ -8,6 +8,7 @@ import { PointsDashboard } from "./components/points-dashboard"
 import { PointsRecurrence } from "./components/points-recurrence"
 import { AllFlagsView } from "./components/all-flags-view"
 import { PrePontuadosView } from "./components/pre-pontuados-view"
+import { PlanoPunicaoTab } from "../forms-management/components/plano-punicao-tab"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function PointsManagementPage() {
@@ -31,6 +32,9 @@ export default function PointsManagementPage() {
                     </TabsTrigger>
                     <TabsTrigger value="pre-pontuados" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Usuários Pré Pontuados
+                    </TabsTrigger>
+                    <TabsTrigger value="plano-punicao" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold text-rose-600 dark:text-rose-400 data-[state=active]:text-rose-600 dark:data-[state=active]:text-rose-400">
+                        Plano de Punição
                     </TabsTrigger>
                 </TabsList>
 
@@ -66,6 +70,12 @@ export default function PointsManagementPage() {
 
                 <TabsContent value="pre-pontuados" className="space-y-6 border-none p-0 outline-none">
                     <PrePontuadosView />
+                </TabsContent>
+
+                <TabsContent value="plano-punicao" className="border-none p-0 outline-none">
+                    <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
+                        <PlanoPunicaoTab />
+                    </div>
                 </TabsContent>
             </Tabs>
         </div>
