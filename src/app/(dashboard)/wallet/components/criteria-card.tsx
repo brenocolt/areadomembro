@@ -16,16 +16,21 @@ export function CriteriaCard() {
         async function fetchLatestNps() {
             if (!colaboradorId) { setNpsLoading(false); return }
 
+            // NPS = média das avaliações do mês mais recente com dados
+            // (mesma lógica de wallet/performance-card e /performance).
             const { data } = await supabase
                 .from('avaliacoes_nps')
-                .select('nps_geral')
+                .select('nps_geral, mes, ano')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
-                .limit(1)
+                .limit(12)
 
             if (data && data.length > 0) {
-                setNps(Number(data[0].nps_geral))
+                const latest = data[0]
+                const rows = data.filter(d => d.mes === latest.mes && d.ano === latest.ano)
+                const avg = rows.reduce((s, d) => s + Number(d.nps_geral || 0), 0) / rows.length
+                setNps(avg)
             }
             setNpsLoading(false)
         }

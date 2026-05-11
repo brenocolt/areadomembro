@@ -93,17 +93,21 @@ export function PipjForecastCard() {
                 setAbsenceDays(totalDays)
             }
 
-            // Fetch latest NPS
+            // NPS = média do mês mais recente com avaliações (consistente com
+            // wallet/performance-card, wallet/criteria-card e /performance).
             const { data: npsData } = await supabase
                 .from('avaliacoes_nps')
-                .select('nps_geral')
+                .select('nps_geral, mes, ano')
                 .eq('colaborador_id', colaboradorId)
                 .order('ano', { ascending: false })
                 .order('mes', { ascending: false })
-                .limit(1)
+                .limit(12)
 
             if (npsData && npsData.length > 0) {
-                setLatestNps(Number(npsData[0].nps_geral))
+                const latest = npsData[0]
+                const rows = npsData.filter(n => n.mes === latest.mes && n.ano === latest.ano)
+                const avg = rows.reduce((s, n) => s + Number(n.nps_geral || 0), 0) / rows.length
+                setLatestNps(avg)
             }
         }
         if (colaboradorId) fetchData()

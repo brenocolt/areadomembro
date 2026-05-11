@@ -23,14 +23,23 @@ export function PerformanceCard() {
         return b.mes - a.mes;
     });
 
-    const nps = npsData.length > 0 ? Number(npsData[0].nps_geral) : 0
+    // NPS = média das avaliações do mês mais recente com dados.
+    // Antes pegava apenas a última avaliação (1 nota), o que destoava da página
+    // /performance e do nps-gerente, que usam média.
+    const latestPeriod = npsData[0]
+    const latestMonthRows = latestPeriod
+        ? npsData.filter(n => n.mes === latestPeriod.mes && n.ano === latestPeriod.ano)
+        : []
+    const nps = latestMonthRows.length > 0
+        ? latestMonthRows.reduce((s, n) => s + Number(n.nps_geral || 0), 0) / latestMonthRows.length
+        : 0
     const punishments = colaborador?.pontos_negativos || 0
     const nomeUsuario = colaborador?.nome || '—'
     const primeiroNome = nomeUsuario.split(' ')[0]
 
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    const periodoNps = npsData.length > 0
-        ? `${months[npsData[0].mes - 1]}/${npsData[0].ano}`
+    const periodoNps = latestPeriod
+        ? `${months[latestPeriod.mes - 1]}/${latestPeriod.ano}`
         : null
 
     return (

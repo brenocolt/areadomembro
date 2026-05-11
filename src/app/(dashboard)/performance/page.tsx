@@ -13,13 +13,20 @@ export default function PerformancePage() {
         value: colaboradorId,
         orderBy: 'ano',
         ascending: false,
-        limit: 12,
-        select: 'nps_geral, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico'
+        limit: 50,
+        select: 'mes, ano, nps_geral, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico'
     })
 
+    // NPS atual = média do mês mais recente com avaliações (consistente com wallet).
+    const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+    const sorted = [...npsData].sort((a: any, b: any) => (b.ano - a.ano) || (b.mes - a.mes))
+    const latest = sorted[0]
+    const latestMonthRows = latest ? sorted.filter((n: any) => n.mes === latest.mes && n.ano === latest.ano) : []
+    const ultimoMesLabel = latest ? `${MESES[latest.mes - 1]}/${latest.ano}` : '—'
+
     const avg = (field: string) => {
-        if (npsData.length === 0) return '—'
-        return (npsData.reduce((sum: number, n: any) => sum + Number(n[field] || 0), 0) / npsData.length).toFixed(1)
+        if (latestMonthRows.length === 0) return '—'
+        return (latestMonthRows.reduce((sum: number, n: any) => sum + Number(n[field] || 0), 0) / latestMonthRows.length).toFixed(1)
     }
 
     const projetos = colaborador?.projetos || 0
@@ -56,13 +63,13 @@ export default function PerformancePage() {
                             <p className="text-xs font-bold uppercase text-slate-400 tracking-wider">{m.title}</p>
                         </div>
                         <div className={`text-3xl font-display font-bold ${m.color}`}>{m.value}</div>
-                        <p className="text-xs text-slate-500 mt-1.5 font-medium">{npsData.length} avaliações</p>
+                        <p className="text-xs text-slate-500 mt-1.5 font-medium">{latestMonthRows.length} aval. em {ultimoMesLabel}</p>
                     </div>
                 ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <CardStat title="Média Geral" value={avg('nps_geral')} trend={`${npsData.length} avaliações`} color="text-green-500" />
+                <CardStat title="Média Geral" value={avg('nps_geral')} trend={`${latestMonthRows.length} aval. em ${ultimoMesLabel}`} color="text-green-500" />
                 <CardStat title="Total Avaliações" value={String(npsData.length)} trend="Registradas no sistema" color="text-blue-500" />
                 <CardStat title="Projetos Alocados" value={String(projetos)} trend={`Impacta no cálculo de PIPJ (+R$${projetos > 0 ? (15 * projetos) : 0}/mês)`} color="text-violet-500" />
             </div>
