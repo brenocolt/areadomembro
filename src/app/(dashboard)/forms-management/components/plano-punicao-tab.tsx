@@ -43,7 +43,7 @@ export function PlanoPunicaoTab() {
         setLoading(true)
         const { data } = await supabase
             .from('plano_punicao')
-            .select('*, colaboradores(nome, cargo_atual)')
+            .select('*, colaboradores!colaborador_id(nome, cargo_atual)')
             .eq('ativo', true)
             .order('created_at', { ascending: false })
         if (data) setPlanos(data)
