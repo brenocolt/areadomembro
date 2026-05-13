@@ -62,8 +62,10 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         )
     }
 
-    // Filter questions to display
-    const filteredPerguntas = filterPerguntaId
+    // Filter questions to display.
+    // Quando filterAnswerValue está ativo, mostra TODAS as perguntas dos respondentes
+    // que bateram — o usuário quer ver o contexto completo, não só a pergunta filtrada.
+    const filteredPerguntas = (filterPerguntaId && !filterAnswerValue.trim())
         ? perguntas.filter(p => p.id === filterPerguntaId)
         : perguntas
 
@@ -409,10 +411,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                     {filteredPerguntas.map((p, pi) => {
                                                         const item = items.find((it: any) => it.pergunta_id === p.id)
                                                         const questionIdx = perguntas.findIndex(q => q.id === p.id)
+                                                        const isFilteredQuestion = filterAnswerValue.trim() && p.id === filterPerguntaId
                                                         return (
-                                                            <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                                            <div key={p.id} className={`p-3 rounded-xl border ${isFilteredQuestion ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800/80'}`}>
+                                                                <div className={`text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 ${isFilteredQuestion ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
                                                                     {questionIdx + 1}. {p.titulo}
+                                                                    {isFilteredQuestion && <span className="bg-violet-200 dark:bg-violet-500/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded text-[9px] font-black normal-case tracking-normal">filtro</span>}
                                                                 </div>
                                                                 {item ? renderValue(p, item) : (
                                                                     <span className="text-xs text-slate-400 italic">— sem resposta —</span>
