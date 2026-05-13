@@ -69,12 +69,23 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         ? perguntas.filter(p => p.id === filterPerguntaId)
         : perguntas
 
-    // Filter responses by answer value
+    // Filter responses by answer value.
+    // Para perguntas do tipo colaborador_*, o valor salvo é UUID — resolve para nome antes de comparar.
     const displayRespostas = (filterAnswerValue.trim() && filterPerguntaId)
         ? respostas.filter(r => {
             const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === filterPerguntaId)
             if (!item) return false
-            const rawVal = item.valor ?? (Array.isArray(item.valores) ? item.valores.join(', ') : '') ?? ''
+            const pergunta = perguntas.find(p => p.id === filterPerguntaId)
+            let rawVal = ''
+            if (pergunta?.tipo === 'colaborador_unico') {
+                rawVal = item.valor ? getColabName(item.valor) : ''
+            } else if (pergunta?.tipo === 'colaborador_multiplo') {
+                rawVal = Array.isArray(item.valores)
+                    ? item.valores.map((id: string) => getColabName(id)).join(', ')
+                    : (item.valor ? getColabName(item.valor) : '')
+            } else {
+                rawVal = item.valor ?? (Array.isArray(item.valores) ? item.valores.join(', ') : '') ?? ''
+            }
             return rawVal.toString().toLowerCase().includes(filterAnswerValue.toLowerCase().trim())
         })
         : respostas
