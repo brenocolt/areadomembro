@@ -29,7 +29,8 @@ export function useColaborador() {
         fetch()
     }, [colaboradorId, status])
 
-    return { colaborador, loading: loading || status === 'loading', colaboradorId: colaboradorId || '' }
+    const role = (session?.user as any)?.role as string | undefined
+    return { colaborador, loading: loading || status === 'loading', colaboradorId: colaboradorId || '', role }
 }
 
 export function useSupabaseQuery<T>(

@@ -2,20 +2,21 @@
 
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { useSession } from "next-auth/react"
 import { useColaborador } from "@/hooks/use-supabase"
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
-    const { colaborador, loading } = useColaborador()
-    const { data: session } = useSession()
+    // Role vem do mesmo hook que controla o loading — sem race condition
+    const { colaborador, loading, role } = useColaborador()
     const pathname = usePathname()
     const router = useRouter()
 
-    const isAdmin = (session?.user as any)?.role === 'ADMIN'
+    const isAdmin = (role ?? '').toUpperCase() === 'ADMIN'
     const allowedPages: string[] | null = colaborador?.paginas_permitidas ?? null
 
-    const isAllowed = isAdmin || !allowedPages
-        || allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
+    const isAllowed =
+        isAdmin ||           // admin bypass total
+        !allowedPages ||     // sem restrições configuradas → libera
+        allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
 
     useEffect(() => {
         if (loading) return
@@ -31,7 +32,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
         )
     }
 
-    // Após carregar: bloqueia se não autorizado (sem flash)
+    // Após carregar: bloqueia se não autorizado
     if (!isAllowed) return null
 
     return <>{children}</>
