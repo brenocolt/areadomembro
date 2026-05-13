@@ -180,18 +180,17 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             value={filterPerguntaId}
                             onChange={e => { setFilterPerguntaId(e.target.value); setFilterAnswerValue('') }}
                             className="appearance-none pl-8 pr-4 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-w-[140px]"
-                            disabled={groupMode === 'dashboard'}
                         >
                             <option value="">Todas as perguntas</option>
                             {perguntas.map((p, i) => (
                                 <option key={p.id} value={p.id}>{i + 1}. {p.titulo.substring(0, 40)}{p.titulo.length > 40 ? '...' : ''}</option>
                             ))}
                         </select>
-                        <Filter className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none ${groupMode === 'dashboard' ? 'text-slate-300' : 'text-slate-400'}`} />
+                        <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none text-slate-400" />
                     </div>
 
-                    {/* Answer value filter — só aparece quando uma pergunta está selecionada */}
-                    {filterPerguntaId && groupMode !== 'dashboard' && (
+                    {/* Answer value filter — aparece quando uma pergunta está selecionada (inclusive no dashboard) */}
+                    {filterPerguntaId && (
                         <input
                             type="text"
                             placeholder="Filtrar por resposta..."
@@ -206,6 +205,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             {/* Content */}
             {groupMode === 'dashboard' ? (
                 <div className="space-y-6">
+                    {/* Banner quando filtro por resposta está ativo */}
+                    {filterAnswerValue.trim() && filterPerguntaId && (() => {
+                        const p = perguntas.find(q => q.id === filterPerguntaId)
+                        return (
+                            <div className="flex items-center gap-2 bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 rounded-xl px-4 py-2.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                                <Filter className="h-3.5 w-3.5 shrink-0" />
+                                Mostrando métricas de <strong>{displayRespostas.length}</strong> respondente{displayRespostas.length !== 1 ? 's' : ''} que responderam <strong>"{filterAnswerValue}"</strong> em <strong>{p?.titulo || 'pergunta selecionada'}</strong>
+                            </div>
+                        )
+                    })()}
                     {perguntas.map((p, idx) => {
                         const itemResponses = displayRespostas.flatMap(r =>
                             (r.formulario_respostas_itens || []).filter((it: any) => it.pergunta_id === p.id)
