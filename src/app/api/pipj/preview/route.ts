@@ -81,6 +81,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Erro ao buscar colaboradores.' }, { status: 500 })
     }
 
+    // Fetch colaboradores em plano de punição ativo
+    const { data: planosPunicao } = await supabaseAdmin
+      .from('plano_punicao')
+      .select('colaborador_id')
+      .eq('ativo', true)
+
+    const emPlanoPunicao = new Set((planosPunicao || []).map((p: any) => p.colaborador_id))
+
     // Fetch scheduled absences for this month
     const monthStart = `${ano}-${String(mes).padStart(2, '0')}-01`
     const monthEnd = `${ano}-${String(mes).padStart(2, '0')}-${new Date(ano, mes, 0).getDate()}`
@@ -160,6 +168,10 @@ export async function GET(req: NextRequest) {
       let pipj = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
       pipj = Math.min(pipj, MAX_PER_PERSON)
 
+      // Plano de punição: zera o PIPJ
+      const planoPunicaoAtivo = emPlanoPunicao.has(colab.id)
+      if (planoPunicaoAtivo) pipj = 0
+
       // Build calculation breakdown
       const detalhesCalculo = {
         base_cargo: baseCargo,
@@ -174,6 +186,7 @@ export async function GET(req: NextRequest) {
         dias_uteis_mes: businessDays,
         nps_score: latestNps,
         bonus_nps: bonusNps,
+        plano_punicao: planoPunicaoAtivo,
       }
 
       detalhes.push({

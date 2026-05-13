@@ -190,23 +190,27 @@ export function PipjLaunchDialog() {
                                                             </div>
                                                         </td>
                                                         <td className="p-3 text-right font-medium text-slate-600 dark:text-slate-400">
-                                                            R$ {Number(d.valor_calculado).toFixed(2).replace('.', ',')}
+                                                            {d.detalhes_calculo?.plano_punicao
+                                                                ? <span className="text-rose-500 font-bold text-xs">R$ 0,00 <span className="text-[10px] opacity-70">(punição)</span></span>
+                                                                : `R$ ${Number(d.valor_calculado).toFixed(2).replace('.', ',')}`
+                                                            }
                                                         </td>
                                                         <td className="p-2">
-                                                            <Input 
-                                                                type="number" 
-                                                                className="h-8 text-right text-xs" 
+                                                            <Input
+                                                                type="number"
+                                                                className="h-8 text-right text-xs"
                                                                 placeholder="0,00"
                                                                 value={deducao}
+                                                                disabled={!!d.detalhes_calculo?.plano_punicao}
                                                                 onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, d.valor_calculado)}
                                                             />
                                                         </td>
                                                         <td className="p-2">
-                                                            <Input 
-                                                                type="text" 
-                                                                className="h-8 text-xs" 
+                                                            <Input
+                                                                type="text"
+                                                                className="h-8 text-xs"
                                                                 placeholder="Motivo da alteração..."
-                                                                disabled={!isChanged}
+                                                                disabled={!isChanged || !!d.detalhes_calculo?.plano_punicao}
                                                                 value={override?.motivo || ''}
                                                                 onChange={(e) => handleOverrideChange(d.colaborador_id, 'motivo', e.target.value)}
                                                             />
@@ -248,6 +252,13 @@ export function PipjLaunchDialog() {
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Ausência ({d.detalhes_calculo.dias_ausencia || 0}d)</span>
                                                                         <span className="text-red-500">- R$ {Number(d.detalhes_calculo.desconto_ausencia || 0).toFixed(2).replace('.', ',')}</span>
                                                                     </div>
+                                                                    {d.detalhes_calculo.plano_punicao && (
+                                                                        <div className="col-span-2 sm:col-span-6 mt-1">
+                                                                            <span className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 text-[10px] font-bold px-2 py-1 rounded-full">
+                                                                                <AlertTriangle className="h-3 w-3" /> PLANO DE PUNIÇÃO ATIVO — PIPJ zerado
+                                                                            </span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </td>
                                                         </tr>

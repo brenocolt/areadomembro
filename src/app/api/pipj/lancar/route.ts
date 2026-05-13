@@ -86,6 +86,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Erro ao buscar colaboradores.' }, { status: 500 })
     }
 
+    // Fetch colaboradores em plano de punição ativo
+    const { data: planosPunicao } = await supabaseAdmin
+      .from('plano_punicao')
+      .select('colaborador_id')
+      .eq('ativo', true)
+
+    const emPlanoPunicao = new Set((planosPunicao || []).map((p: any) => p.colaborador_id))
+
     // Fetch scheduled absences for this month
     const monthStart = `${ano}-${String(mes).padStart(2, '0')}-01`
     const monthEnd = `${ano}-${String(mes).padStart(2, '0')}-${new Date(ano, mes, 0).getDate()}`
@@ -165,10 +173,13 @@ export async function POST(req: NextRequest) {
       let pipjCalculado = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
       pipjCalculado = Math.min(pipjCalculado, MAX_PER_PERSON)
 
+      // Plano de punição: zera o PIPJ (override manual não pode reverter)
+      if (emPlanoPunicao.has(colab.id)) pipjCalculado = 0
+
       let pipj = pipjCalculado;
 
-      // 7. Manual adjustment from preview table
-      const override = overrides[colab.id];
+      // 7. Manual adjustment from preview table (bloqueado para plano de punição)
+      const override = emPlanoPunicao.has(colab.id) ? undefined : overrides[colab.id];
       const hasOverride = override && override.valor_final !== undefined;
       
       if (hasOverride) {

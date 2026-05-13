@@ -13,9 +13,20 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     const isAdmin = (role ?? '').toUpperCase() === 'ADMIN'
     const allowedPages: string[] | null = colaborador?.paginas_permitidas ?? null
 
+    // Rotas que são acessíveis implicitamente quando a rota-pai está liberada
+    const ROUTE_IMPLICATIONS: Record<string, string> = {
+        '/forms-responses': '/forms-management',
+        '/nps-projeto':     '/forms-management',
+    }
+    const impliedByParent = (() => {
+        const parent = ROUTE_IMPLICATIONS[pathname]
+        return parent ? (allowedPages?.includes(parent) ?? false) : false
+    })()
+
     const isAllowed =
         isAdmin ||           // admin bypass total
         !allowedPages ||     // sem restrições configuradas → libera
+        impliedByParent ||   // rota implícita por outra rota permitida
         allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
 
     useEffect(() => {
