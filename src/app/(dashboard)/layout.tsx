@@ -4,6 +4,7 @@ import { Separator } from "@/components/ui/separator"
 import { ModeToggle } from "@/components/theme-toggle"
 import { AuthProvider } from "@/components/auth-provider"
 import { LogoutButton } from "@/components/logout-button"
+import { RouteGuard } from "@/components/route-guard"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -26,7 +27,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
                     </header>
                     <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
-                        {children}
+                        <RouteGuard>
+                            {children}
+                        </RouteGuard>
                     </div>
                 </main>
             </SidebarProvider>

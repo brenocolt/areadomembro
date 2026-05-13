@@ -12,6 +12,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
+    const [filterAnswerValue, setFilterAnswerValue] = useState<string>('')
     const [groupMode, setGroupMode] = useState<'dashboard' | 'pessoa' | 'mes' | 'pergunta'>('dashboard')
 
     useEffect(() => {
@@ -66,18 +67,28 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         ? perguntas.filter(p => p.id === filterPerguntaId)
         : perguntas
 
+    // Filter responses by answer value
+    const displayRespostas = (filterAnswerValue.trim() && filterPerguntaId)
+        ? respostas.filter(r => {
+            const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === filterPerguntaId)
+            if (!item) return false
+            const rawVal = item.valor ?? (Array.isArray(item.valores) ? item.valores.join(', ') : '') ?? ''
+            return rawVal.toString().toLowerCase().includes(filterAnswerValue.toLowerCase().trim())
+        })
+        : respostas
+
     // Group responses
     let groups: Record<string, { label: string; respostas: any[] }> = {}
 
     if (groupMode === 'pessoa') {
-        respostas.forEach(r => {
+        displayRespostas.forEach(r => {
             const personId = r.colaborador_id || 'anon'
             const personName = r.colaboradores?.nome || 'Anônimo'
             if (!groups[personId]) groups[personId] = { label: personName, respostas: [] }
             groups[personId].respostas.push(r)
         })
     } else if (groupMode === 'mes') {
-        respostas.forEach(r => {
+        displayRespostas.forEach(r => {
             const date = new Date(r.enviado_em)
             const key = `${date.getFullYear()}-${date.getMonth()}`
             if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
@@ -86,7 +97,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     } else if (groupMode === 'pergunta') {
         perguntas.forEach((p, idx) => {
             groups[p.id] = { label: `${idx + 1}. ${p.titulo}`, respostas: [] }
-            respostas.forEach(r => {
+            displayRespostas.forEach(r => {
                 const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
                 if (item) {
                     groups[p.id].respostas.push({ ...r, _mappedItem: item, _pergunta: p })
@@ -115,7 +126,10 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             <div className="flex flex-wrap items-center gap-3 mb-2">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
                     <Users className="h-4 w-4" />
-                    {respostas.length} resposta{respostas.length !== 1 ? 's' : ''} no total
+                    {displayRespostas.length !== respostas.length
+                        ? <>{displayRespostas.length} <span className="font-normal text-slate-400">de {respostas.length} resposta{respostas.length !== 1 ? 's' : ''}</span></>
+                        : <>{respostas.length} resposta{respostas.length !== 1 ? 's' : ''} no total</>
+                    }
                 </div>
 
                 <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -151,7 +165,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     <div className="relative">
                         <select
                             value={filterPerguntaId}
-                            onChange={e => setFilterPerguntaId(e.target.value)}
+                            onChange={e => { setFilterPerguntaId(e.target.value); setFilterAnswerValue('') }}
                             className="appearance-none pl-8 pr-4 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-w-[140px]"
                             disabled={groupMode === 'dashboard'}
                         >
@@ -162,6 +176,17 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         </select>
                         <Filter className={`absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none ${groupMode === 'dashboard' ? 'text-slate-300' : 'text-slate-400'}`} />
                     </div>
+
+                    {/* Answer value filter — só aparece quando uma pergunta está selecionada */}
+                    {filterPerguntaId && groupMode !== 'dashboard' && (
+                        <input
+                            type="text"
+                            placeholder="Filtrar por resposta..."
+                            value={filterAnswerValue}
+                            onChange={e => setFilterAnswerValue(e.target.value)}
+                            className="h-8 px-3 text-xs rounded-xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 placeholder:text-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400 min-w-[160px]"
+                        />
+                    )}
                 </div>
             </div>
 
@@ -169,7 +194,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             {groupMode === 'dashboard' ? (
                 <div className="space-y-6">
                     {perguntas.map((p, idx) => {
-                        const itemResponses = respostas.flatMap(r => 
+                        const itemResponses = displayRespostas.flatMap(r =>
                             (r.formulario_respostas_itens || []).filter((it: any) => it.pergunta_id === p.id)
                         )
                         
@@ -405,6 +430,62 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     </div>
                 )
             }))}
+
+            {/* ── Participação ─────────────────────────────────────────── */}
+            {(() => {
+                const respondentesMap: Record<string, { nome: string; count: number }> = {}
+                respostas.forEach(r => {
+                    const id = r.colaborador_id || 'anon'
+                    const nome = r.colaboradores?.nome || 'Anônimo'
+                    if (!respondentesMap[id]) respondentesMap[id] = { nome, count: 0 }
+                    respondentesMap[id].count++
+                })
+                const respondentesIds = new Set(Object.keys(respondentesMap))
+                const naoRespondentes = colaboradores.filter(c => !respondentesIds.has(c.id))
+                const respondentes = Object.entries(respondentesMap)
+                    .map(([id, d]) => ({ id, nome: d.nome, count: d.count }))
+                    .sort((a, b) => b.count - a.count)
+
+                return (
+                    <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Users className="h-4 w-4 text-violet-500" />
+                            Participação — {respondentes.length} de {colaboradores.length} membros responderam
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Responderam */}
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">✓ Responderam ({respondentes.length})</p>
+                                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                    {respondentes.map(r => (
+                                        <div key={r.id} className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 rounded-xl px-3 py-2">
+                                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{r.nome}</span>
+                                            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 ml-2 shrink-0">{r.count}×</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Não responderam */}
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-2">✗ Não responderam ({naoRespondentes.length})</p>
+                                {naoRespondentes.length === 0 ? (
+                                    <div className="text-xs text-slate-400 italic">Todos os membros responderam! 🎉</div>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                                        {naoRespondentes.map(c => (
+                                            <div key={c.id} className="flex items-center bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/10 rounded-xl px-3 py-2">
+                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
         </div>
     )
 }

@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search } from "lucide-react"
+import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search, Trophy, TrendingDown } from "lucide-react"
 import { FormResponsesDashboard } from "../forms-management/components/form-responses-dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,24 +19,23 @@ export default function FormsResponsesPage() {
     const [npsFilterTipo, setNpsFilterTipo] = useState<'todos' | 'consultor' | 'gerente'>('todos')
     const [npsViewMode, setNpsViewMode] = useState<'dashboard' | 'lista'>('dashboard')
     const [searchAvaliado, setSearchAvaliado] = useState("")
+    const [allColaboradores, setAllColaboradores] = useState<any[]>([])
 
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
     useEffect(() => {
         async function fetchForms() {
             setLoading(true)
-            const { data } = await supabase
-                .from('formularios')
-                .select('id, titulo')
-                .order('created_at', { ascending: false })
+            const [{ data }, { data: colabs }] = await Promise.all([
+                supabase.from('formularios').select('id, titulo').order('created_at', { ascending: false }),
+                supabase.from('colaboradores').select('id, nome').order('nome'),
+            ])
 
             if (data) {
                 setFormularios(data)
-                // Auto select first form or NPS by default
-                if (data.length > 0) {
-                    setSelectedFormId('nps_projeto') // Default priority
-                }
+                if (data.length > 0) setSelectedFormId('nps_projeto')
             }
+            if (colabs) setAllColaboradores(colabs)
             setLoading(false)
         }
         fetchForms()
@@ -422,6 +421,45 @@ export default function FormsResponsesPage() {
                                         const npsGerentes = Number(calcNps(npsGeralData.gerentes));
                                         const npsEmpresa = Number(calcNps(npsGeralData.empresa));
 
+                                        // ── Top 3 consultores / gerentes / abaixo da média ──────
+                                        const byColabConsultor: Record<string, { nome: string, sum: number, count: number }> = {}
+                                        filteredNpsRespostas.filter(r => r.tipo_avaliacao !== 'gerente').forEach(r => {
+                                            const id = r.colaborador_id; if (!id) return
+                                            if (!byColabConsultor[id]) byColabConsultor[id] = { nome: r.colaboradores?.nome || '?', sum: 0, count: 0 }
+                                            byColabConsultor[id].sum += Number(r.nps_geral || 0); byColabConsultor[id].count++
+                                        })
+                                        const top3Consultores = Object.entries(byColabConsultor)
+                                            .map(([, d]) => ({ nome: d.nome, avg: d.sum / d.count, count: d.count }))
+                                            .sort((a, b) => b.avg - a.avg).slice(0, 3)
+                                        const consultoresAbaixoMedia = Object.entries(byColabConsultor)
+                                            .map(([, d]) => ({ nome: d.nome, avg: d.sum / d.count, count: d.count }))
+                                            .filter(c => c.avg < npsConsultores)
+                                            .sort((a, b) => a.avg - b.avg)
+
+                                        const byColabGerente: Record<string, { nome: string, sum: number, count: number }> = {}
+                                        filteredNpsRespostas.filter(r => r.tipo_avaliacao === 'gerente').forEach(r => {
+                                            const id = r.colaborador_id; if (!id) return
+                                            if (!byColabGerente[id]) byColabGerente[id] = { nome: r.colaboradores?.nome || '?', sum: 0, count: 0 }
+                                            byColabGerente[id].sum += Number(r.nps_geral || 0); byColabGerente[id].count++
+                                        })
+                                        const top3Gerentes = Object.entries(byColabGerente)
+                                            .map(([, d]) => ({ nome: d.nome, avg: d.sum / d.count, count: d.count }))
+                                            .sort((a, b) => b.avg - a.avg).slice(0, 3)
+
+                                        // ── Participação NPS ─────────────────────────────────
+                                        const npsAvaliadores = new Map<string, { nome: string, count: number }>()
+                                        npsRespostas.forEach(r => {
+                                            if (!r.avaliador_id) return
+                                            const nome = usuariosMap[r.avaliador_id] || 'Desconhecido'
+                                            npsAvaliadores.set(r.avaliador_id, {
+                                                nome,
+                                                count: (npsAvaliadores.get(r.avaliador_id)?.count || 0) + 1
+                                            })
+                                        })
+                                        const npsNaoRespondentes = allColaboradores.filter(c => !npsAvaliadores.has(c.id))
+                                        const npsRespondentesArr = Array.from(npsAvaliadores.entries())
+                                            .map(([, d]) => d).sort((a, b) => b.count - a.count)
+
                                         return (
                                             <>
                                                 <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -529,6 +567,98 @@ export default function FormsResponsesPage() {
                                                                     </div>
                                                                 </div>
                                                             )}
+                                                        </div>
+
+                                                        {/* ── Top 3 Consultores ── */}
+                                                        {npsFilterTipo !== 'gerente' && top3Consultores.length > 0 && (
+                                                            <div className="col-span-1 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                                                    <Trophy className="h-3.5 w-3.5 text-amber-500" />Top 3 Consultores
+                                                                </h3>
+                                                                <div className="space-y-2">
+                                                                    {top3Consultores.map((c, i) => (
+                                                                        <div key={i} className="flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                <span className={`text-xs font-black w-5 shrink-0 ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : 'text-amber-700'}`}>#{i + 1}</span>
+                                                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                                                            </div>
+                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(1)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* ── Top 3 Gerentes ── */}
+                                                        {npsFilterTipo !== 'consultor' && top3Gerentes.length > 0 && (
+                                                            <div className="col-span-1 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                                                    <Trophy className="h-3.5 w-3.5 text-violet-500" />Top 3 Gerentes
+                                                                </h3>
+                                                                <div className="space-y-2">
+                                                                    {top3Gerentes.map((c, i) => (
+                                                                        <div key={i} className="flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                                <span className={`text-xs font-black w-5 shrink-0 ${i === 0 ? 'text-violet-500' : i === 1 ? 'text-slate-400' : 'text-violet-700'}`}>#{i + 1}</span>
+                                                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                                                            </div>
+                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(1)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* ── Consultores Abaixo da Média ── */}
+                                                        {npsFilterTipo !== 'gerente' && consultoresAbaixoMedia.length > 0 && (
+                                                            <div className="col-span-1 bg-rose-50 dark:bg-rose-500/5 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
+                                                                <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                                                    <TrendingDown className="h-3.5 w-3.5" />Abaixo da Média ({npsConsultores.toFixed(1)})
+                                                                </h3>
+                                                                <div className="space-y-2 max-h-40 overflow-y-auto">
+                                                                    {consultoresAbaixoMedia.map((c, i) => (
+                                                                        <div key={i} className="flex items-center justify-between gap-2">
+                                                                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                                                            <span className="text-sm font-black text-rose-500 shrink-0">{c.avg.toFixed(1)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* ── Participação NPS ── */}
+                                                        <div className="col-span-1 sm:col-span-3 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                                                <Users className="h-4 w-4 text-violet-500" />
+                                                                Participação — {npsRespondentesArr.length} de {allColaboradores.length} membros submeteram avaliações
+                                                            </h3>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                <div>
+                                                                    <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-2">✓ Responderam ({npsRespondentesArr.length})</p>
+                                                                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                                        {npsRespondentesArr.map((r, i) => (
+                                                                            <div key={i} className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 rounded-xl px-3 py-2">
+                                                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{r.nome}</span>
+                                                                                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 ml-2 shrink-0">{r.count} aval.</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 mb-2">✗ Não submeteram ({npsNaoRespondentes.length})</p>
+                                                                    {npsNaoRespondentes.length === 0 ? (
+                                                                        <p className="text-xs text-slate-400 italic">Todos os membros submeteram! 🎉</p>
+                                                                    ) : (
+                                                                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                                            {npsNaoRespondentes.map(c => (
+                                                                                <div key={c.id} className="flex items-center bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/10 rounded-xl px-3 py-2">
+                                                                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 ) : (
