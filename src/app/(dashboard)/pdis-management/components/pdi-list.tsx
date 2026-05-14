@@ -86,16 +86,17 @@ export function PdiList() {
     })
 
     // Group by colaborador_id
-    const grouped = filteredPlans.reduce((acc, plan) => {
+    type GroupEntry = { colaborador: any; plans: any[] }
+    const grouped: Record<string, GroupEntry> = filteredPlans.reduce((acc: Record<string, GroupEntry>, plan) => {
         const colabId = plan.colaborador_id
         if (!acc[colabId]) {
             acc[colabId] = { colaborador: plan.colaboradores, plans: [] }
         }
         acc[colabId].plans.push(plan)
         return acc
-    }, {} as Record<string, { colaborador: any; plans: any[] }>)
+    }, {})
 
-    const groupedEntries = Object.entries(grouped)
+    const groupedEntries: [string, GroupEntry][] = Object.entries(grouped)
     const hasActiveFilters = searchName || searchTitulo || filterDateFrom || filterDateTo
 
     const clearFilters = () => {
