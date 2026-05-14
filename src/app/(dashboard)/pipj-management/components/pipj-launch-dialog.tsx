@@ -165,7 +165,7 @@ export function PipjLaunchDialog() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {previewData.detalhes?.map((d: any) => {
+                                        {[...(previewData.detalhes ?? [])].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')).map((d: any) => {
                                             const override = overrides[d.colaborador_id]
                                             const deducao = override?.deducao ?? ''
                                             const final = override?.valor_final ?? Math.max(0, d.valor_calculado)

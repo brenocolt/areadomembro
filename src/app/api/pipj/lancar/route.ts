@@ -77,10 +77,11 @@ export async function POST(req: NextRequest) {
 
     // Monthly limit check removed for testing purposes
 
-    // Fetch active colaboradores
+    // Fetch active colaboradores sorted alphabetically
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
       .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .order('nome', { ascending: true })
 
     if (colabError || !colaboradores) {
       return NextResponse.json({ error: 'Erro ao buscar colaboradores.' }, { status: 500 })

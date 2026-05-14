@@ -72,10 +72,11 @@ export async function GET(req: NextRequest) {
     const mes = now.getMonth() + 1
     const ano = now.getFullYear()
 
-    // Fetch active colaboradores
+    // Fetch active colaboradores sorted alphabetically
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
       .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .order('nome', { ascending: true })
 
     if (colabError || !colaboradores) {
       return NextResponse.json({ error: 'Erro ao buscar colaboradores.' }, { status: 500 })
