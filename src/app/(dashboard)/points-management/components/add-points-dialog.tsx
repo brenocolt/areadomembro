@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, AlertTriangle, Settings2 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import { ManagePointsTypesDialog } from "./manage-points-types-dialog"
 
@@ -33,6 +34,7 @@ export function AddPointsDialog() {
     const [selectedNucleo, setSelectedNucleo] = useState<string>("")
     const [selectedColaboradorId, setSelectedColaboradorId] = useState<string>("")
     const [selectedMotivoId, setSelectedMotivoId] = useState<string>("")
+    const [descricao, setDescricao] = useState<string>("")
 
     const selectedMotivo = motivoTypes.find(m => m.id === selectedMotivoId)
 
@@ -84,7 +86,7 @@ export function AddPointsDialog() {
                     data: new Date().toISOString(),
                     cargo_na_epoca: colab?.cargo_atual || 'Colaborador',
                     motivo: selectedMotivo.titulo,
-                    descricao: `${selectedMotivo.grupo} — ${selectedMotivo.pontos} ponto${selectedMotivo.pontos > 1 ? 's' : ''}`,
+                    descricao: descricao.trim() || `${selectedMotivo.grupo} — ${selectedMotivo.pontos} ponto${selectedMotivo.pontos > 1 ? 's' : ''}`,
                     pontuacao: selectedMotivo.pontos,
                 })
 
@@ -107,6 +109,7 @@ export function AddPointsDialog() {
             setSelectedNucleo("")
             setSelectedColaboradorId("")
             setSelectedMotivoId("")
+            setDescricao("")
 
             window.dispatchEvent(new Event('refreshPointsData'))
             window.location.reload()
@@ -213,6 +216,19 @@ export function AddPointsDialog() {
                                     })}
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        {/* Descrição (opcional, visível ao colaborador) */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-slate-900 dark:text-slate-200">4. Descrição <span className="text-slate-400 font-normal text-xs">(opcional — visível ao colaborador)</span></Label>
+                            </div>
+                            <Textarea
+                                placeholder="Detalhe o ocorrido para que o colaborador entenda o motivo..."
+                                className="bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 resize-none h-20 text-sm"
+                                value={descricao}
+                                onChange={(e) => setDescricao(e.target.value)}
+                            />
                         </div>
 
                         {/* Points preview */}
