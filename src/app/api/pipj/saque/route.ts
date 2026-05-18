@@ -11,9 +11,27 @@ export async function POST(request: Request) {
         }
 
         const userRole = (session.user as any).role;
-        // In some systems role is uppercase 'ADMIN', in others 'admin'. We check both just in case.
-        if (userRole !== 'ADMIN' && userRole !== 'admin') {
-            return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+        const isAdmin = userRole === 'ADMIN' || userRole === 'admin';
+
+        if (!isAdmin) {
+            // Allow users who have explicit access to pipj-management page
+            const colaboradorId = (session.user as any).colaborador_id
+            if (!colaboradorId) {
+                return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+            }
+            const supabaseCheck = createServerSupabaseClient()
+            const { data: colab } = await supabaseCheck
+                .from('colaboradores')
+                .select('paginas_permitidas')
+                .eq('id', colaboradorId)
+                .single()
+
+            const hasPipjAccess = Array.isArray(colab?.paginas_permitidas) &&
+                colab.paginas_permitidas.includes('/pipj-management')
+
+            if (!hasPipjAccess) {
+                return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+            }
         }
 
         const supabase = await createServerSupabaseClient()

@@ -3,6 +3,7 @@ import { PipjStats } from "./components/pipj-stats"
 import { PipjTopHolders } from "./components/pipj-top-holders"
 import { PipjHistory, SaquePendingRequestsList, SaqueHistoryList } from "./components/pipj-history"
 import { PipjDashboard } from "./components/pipj-dashboard"
+import { PipjSaldos } from "./components/pipj-saldos"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function PipjManagementPage() {
@@ -23,6 +24,9 @@ export default function PipjManagementPage() {
                     </TabsTrigger>
                     <TabsTrigger value="saques-historico" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Histórico de Saques
+                    </TabsTrigger>
+                    <TabsTrigger value="saldos" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
+                        Saldos da Equipe
                     </TabsTrigger>
                 </TabsList>
 
@@ -49,6 +53,10 @@ export default function PipjManagementPage() {
 
                 <TabsContent value="saques-historico" className="space-y-6 border-none p-0 outline-none">
                     <SaqueHistoryList />
+                </TabsContent>
+
+                <TabsContent value="saldos" className="border-none p-0 outline-none">
+                    <PipjSaldos />
                 </TabsContent>
             </Tabs>
         </div>

@@ -72,8 +72,8 @@ export async function POST(req: NextRequest) {
 
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
-    const mes = now.getMonth() + 1
-    const ano = now.getFullYear()
+    const mes: number = body.mes ? parseInt(body.mes) : now.getMonth() + 1
+    const ano: number = body.ano ? parseInt(body.ano) : now.getFullYear()
 
     // Monthly limit check removed for testing purposes
 

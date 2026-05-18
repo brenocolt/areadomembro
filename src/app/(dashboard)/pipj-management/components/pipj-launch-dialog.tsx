@@ -7,10 +7,24 @@ import {
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Zap, Loader2, CheckCircle, AlertTriangle, Calculator, ChevronDown, ChevronRight } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Zap, Loader2, CheckCircle, AlertTriangle, ChevronDown, ChevronRight, CalendarDays } from "lucide-react"
+
+const MESES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+]
+
+function getYearOptions() {
+    const current = new Date().getFullYear()
+    return [current - 1, current, current + 1]
+}
 
 export function PipjLaunchDialog() {
+    const now = new Date()
     const [open, setOpen] = useState(false)
+    const [selectedMes, setSelectedMes] = useState(now.getMonth() + 1)
+    const [selectedAno, setSelectedAno] = useState(now.getFullYear())
     const [countdown, setCountdown] = useState(5)
     const [canConfirm, setCanConfirm] = useState(false)
     const [launching, setLaunching] = useState(false)
@@ -41,7 +55,7 @@ export function PipjLaunchDialog() {
         setFetchingPreview(true)
         setError(null)
         try {
-            const res = await fetch('/api/pipj/preview')
+            const res = await fetch(`/api/pipj/preview?mes=${selectedMes}&ano=${selectedAno}`)
             const data = await res.json()
             if (!res.ok) {
                 setError(data.error || 'Erro ao carregar prévia.')
@@ -64,7 +78,7 @@ export function PipjLaunchDialog() {
         } finally {
             setFetchingPreview(false)
         }
-    }, [])
+    }, [selectedMes, selectedAno])
 
     useEffect(() => {
         if (open) {
@@ -96,10 +110,10 @@ export function PipjLaunchDialog() {
         setLaunching(true)
         setError(null)
         try {
-            const res = await fetch('/api/pipj/lancar', { 
+            const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides })
+                body: JSON.stringify({ overrides, mes: selectedMes, ano: selectedAno })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -131,8 +145,40 @@ export function PipjLaunchDialog() {
                         Lançar PIPJ Mensal
                     </DialogTitle>
                     <DialogDescription>
-                        Revise os cálculos abaixo. Você pode aplicar ajustes manuais (+/-) e informar o motivo antes de confirmar o lançamento.
+                        Selecione o mês de referência, revise os cálculos e aplique ajustes se necessário.
                     </DialogDescription>
+                    {/* Seletor de mês/ano (sempre visível) */}
+                    {!result && (
+                        <div className="flex items-center gap-2 pt-2 flex-wrap">
+                            <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span className="text-xs text-slate-500 font-medium shrink-0">Referência:</span>
+                            <Select value={String(selectedMes)} onValueChange={v => { setSelectedMes(Number(v)); resetState(); }}>
+                                <SelectTrigger className="h-7 w-32 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {MESES.map((m, i) => (
+                                        <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <Select value={String(selectedAno)} onValueChange={v => { setSelectedAno(Number(v)); resetState(); }}>
+                                <SelectTrigger className="h-7 w-20 text-xs">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {getYearOptions().map(y => (
+                                        <SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {!fetchingPreview && (
+                                <Button size="sm" variant="outline" className="h-7 text-xs px-2" onClick={() => { resetState(); fetchPreview() }}>
+                                    Calcular
+                                </Button>
+                            )}
+                        </div>
+                    )}
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto py-4">
@@ -145,6 +191,35 @@ export function PipjLaunchDialog() {
 
                     {!result && !error && previewData && (
                         <div className="space-y-4">
+                            {/* Mês/Ano referência */}
+                            <div className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10">
+                                <CalendarDays className="h-4 w-4 text-slate-500 shrink-0" />
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">Mês de referência:</span>
+                                <Select value={String(selectedMes)} onValueChange={v => { setSelectedMes(Number(v)); resetState(); }}>
+                                    <SelectTrigger className="h-8 w-36 text-xs bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {MESES.map((m, i) => (
+                                            <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{m}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={String(selectedAno)} onValueChange={v => { setSelectedAno(Number(v)); resetState(); }}>
+                                    <SelectTrigger className="h-8 w-24 text-xs bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {getYearOptions().map(y => (
+                                            <SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button size="sm" variant="outline" className="h-8 text-xs ml-auto" onClick={() => { resetState(); fetchPreview() }}>
+                                    Recalcular
+                                </Button>
+                            </div>
+
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
                                 <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
                                 <div className="text-sm text-amber-800 dark:text-amber-200">

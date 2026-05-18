@@ -69,8 +69,9 @@ export async function GET(req: NextRequest) {
   try {
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
-    const mes = now.getMonth() + 1
-    const ano = now.getFullYear()
+    const url = new URL(req.url)
+    const mes = url.searchParams.get('mes') ? parseInt(url.searchParams.get('mes')!) : now.getMonth() + 1
+    const ano = url.searchParams.get('ano') ? parseInt(url.searchParams.get('ano')!) : now.getFullYear()
 
     // Fetch active colaboradores sorted alphabetically
     const { data: colaboradores, error: colabError } = await supabaseAdmin
