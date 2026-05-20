@@ -1,22 +1,18 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { PlusCircle, Trash2, GripVertical, Plus, Loader2, Copy, Bold, Italic } from "lucide-react"
+import { PlusCircle, Trash2, GripVertical, Plus, Loader2, Copy, Bold, Italic, ImagePlus, X, Heading1, Columns } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Parse "YYYY-MM-DDTHH:mm" datetime-local string as LOCAL time and return UTC ISO.
-// Without this, `new Date(value).toISOString()` round-trips fine on save, but the
-// reload path in forms-management/page.tsx was previously slicing UTC, shifting
-// the displayed value by the user's TZ offset.
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
     if (!local) return null
     const d = new Date(local)
@@ -34,7 +30,7 @@ interface Pergunta {
 }
 
 export interface FormInitialData {
-    id?: string // only for edit mode
+    id?: string
     titulo: string
     descricao: string
     dataPrazo: string
@@ -42,6 +38,7 @@ export interface FormInitialData {
     pagina_destino?: string | null
     tipo_formulario?: string
     perguntas: Pergunta[]
+    banner_url?: string | null
 }
 
 const TIPOS = [
@@ -51,18 +48,15 @@ const TIPOS = [
     { value: 'escala', label: 'Escala (1-5)' },
     { value: 'colaborador_unico', label: 'Selecionar 1 Colaborador' },
     { value: 'colaborador_multiplo', label: 'Selecionar Múltiplos Colaboradores' },
+    { value: 'grade_multipla_escolha', label: 'Grade de Múltipla Escolha' },
 ]
 
 interface CreateFormDialogProps {
     onSuccess?: () => void
-    /** Pre-fill the form with data (copy mode) */
     initialData?: FormInitialData | null
-    /** Edit an existing form instead of creating */
     editMode?: boolean
-    /** Controlled open state */
     open?: boolean
     onOpenChange?: (open: boolean) => void
-    /** Hide the trigger button (when controlled externally) */
     hideTrigger?: boolean
 }
 
@@ -79,6 +73,75 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
         transform: CSS.Transform.toString(transform),
         transition,
     };
+
+    if (p.tipo === 'titulo') {
+        return (
+            <div ref={setNodeRef} style={style} className="bg-violet-100/30 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                    <div {...attributes} {...listeners} className="cursor-grab hover:text-violet-500 text-slate-400 mt-1">
+                        <GripVertical className="h-5 w-5" />
+                    </div>
+                    <div className="bg-violet-100 dark:bg-violet-500/20 rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-1">
+                        <Heading1 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                        <Input
+                            value={p.titulo}
+                            onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
+                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500 font-bold text-base"
+                            placeholder="Título do formulário"
+                        />
+                        <Input
+                            value={p.descricao || ''}
+                            onChange={(e) => updatePergunta(p.id, 'descricao', e.target.value)}
+                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-9 focus-visible:ring-violet-500 text-sm"
+                            placeholder="Subtítulo ou descrição (opcional)"
+                        />
+                    </div>
+                    <button type="button" onClick={() => removePergunta(p.id)} className="text-slate-400 hover:text-rose-500 p-1 mt-1" title="Excluir">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    if (p.tipo === 'secao') {
+        return (
+            <div ref={setNodeRef} style={style} className="border border-dashed border-slate-300 dark:border-slate-600 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                    <div {...attributes} {...listeners} className="cursor-grab hover:text-violet-500 text-slate-400 mt-1">
+                        <GripVertical className="h-5 w-5" />
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-700 rounded-full w-6 h-6 flex items-center justify-center shrink-0 mt-1">
+                        <Columns className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Seção</span>
+                            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+                        </div>
+                        <Input
+                            value={p.titulo}
+                            onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
+                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-9 focus-visible:ring-violet-500 font-semibold"
+                            placeholder="Nome da seção"
+                        />
+                        <Input
+                            value={p.descricao || ''}
+                            onChange={(e) => updatePergunta(p.id, 'descricao', e.target.value)}
+                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-8 focus-visible:ring-violet-500 text-sm"
+                            placeholder="Descrição da seção (opcional)"
+                        />
+                    </div>
+                    <button type="button" onClick={() => removePergunta(p.id)} className="text-slate-400 hover:text-rose-500 p-1 mt-1" title="Excluir">
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+        )
+    }
 
     return (
         <div ref={setNodeRef} style={style} className="bg-violet-50/50 dark:bg-white/5 border border-violet-100 dark:border-white/10 rounded-2xl p-4 space-y-3">
@@ -127,7 +190,6 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                         </div>
                     </div>
 
-                    {/* Options for selecao_unica / selecao_multipla */}
                     {(p.tipo === 'selecao_unica' || p.tipo === 'selecao_multipla') && Array.isArray(p.opcoes) && (
                         <div className="space-y-2 pl-2">
                             {p.opcoes.map((opt: string, oi: number) => (
@@ -149,7 +211,6 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                         </div>
                     )}
 
-                    {/* Scale labels */}
                     {p.tipo === 'escala' && p.opcoes && (
                         <div className="grid grid-cols-2 gap-2">
                             <Input
@@ -164,6 +225,69 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                                 className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
                                 placeholder="Label 5 (ex: Muito Satisfeito)"
                             />
+                        </div>
+                    )}
+
+                    {p.tipo === 'grade_multipla_escolha' && p.opcoes && (
+                        <div className="space-y-3 pl-2">
+                            <div className="space-y-2">
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Linhas</span>
+                                {(p.opcoes.linhas || []).map((linha: string, li: number) => (
+                                    <div key={li} className="flex items-center gap-2">
+                                        <div className="w-3.5 h-3.5 border-2 border-slate-300 rounded" />
+                                        <Input
+                                            value={linha}
+                                            onChange={(e) => {
+                                                const novas = [...p.opcoes.linhas]
+                                                novas[li] = e.target.value
+                                                updatePergunta(p.id, 'opcoes', { ...p.opcoes, linhas: novas })
+                                            }}
+                                            className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                        />
+                                        <button type="button" onClick={() => {
+                                            const novas = p.opcoes.linhas.filter((_: string, idx: number) => idx !== li)
+                                            updatePergunta(p.id, 'opcoes', { ...p.opcoes, linhas: novas })
+                                        }} className="text-slate-400 hover:text-rose-500">
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button type="button" onClick={() => {
+                                    const novas = [...(p.opcoes.linhas || []), `Linha ${(p.opcoes.linhas || []).length + 1}`]
+                                    updatePergunta(p.id, 'opcoes', { ...p.opcoes, linhas: novas })
+                                }} className="text-xs text-violet-600 dark:text-violet-400 font-bold hover:underline flex items-center gap-1">
+                                    <Plus className="w-3 h-3" /> Adicionar linha
+                                </button>
+                            </div>
+                            <div className="space-y-2">
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">Colunas</span>
+                                {(p.opcoes.colunas || []).map((coluna: string, ci: number) => (
+                                    <div key={ci} className="flex items-center gap-2">
+                                        <div className="w-3.5 h-3.5 border-2 border-slate-300 rounded-full" />
+                                        <Input
+                                            value={coluna}
+                                            onChange={(e) => {
+                                                const novas = [...p.opcoes.colunas]
+                                                novas[ci] = e.target.value
+                                                updatePergunta(p.id, 'opcoes', { ...p.opcoes, colunas: novas })
+                                            }}
+                                            className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                        />
+                                        <button type="button" onClick={() => {
+                                            const novas = p.opcoes.colunas.filter((_: string, idx: number) => idx !== ci)
+                                            updatePergunta(p.id, 'opcoes', { ...p.opcoes, colunas: novas })
+                                        }} className="text-slate-400 hover:text-rose-500">
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <button type="button" onClick={() => {
+                                    const novas = [...(p.opcoes.colunas || []), `Coluna ${(p.opcoes.colunas || []).length + 1}`]
+                                    updatePergunta(p.id, 'opcoes', { ...p.opcoes, colunas: novas })
+                                }} className="text-xs text-violet-600 dark:text-violet-400 font-bold hover:underline flex items-center gap-1">
+                                    <Plus className="w-3 h-3" /> Adicionar coluna
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -193,6 +317,10 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const [status, setStatus] = useState("rascunho")
     const [tipoFormulario, setTipoFormulario] = useState("formulário")
     const [paginaDestino, setPaginaDestino] = useState("")
+    const [bannerFile, setBannerFile] = useState<File | null>(null)
+    const [bannerPreview, setBannerPreview] = useState<string | null>(null)
+    const [existingBannerUrl, setExistingBannerUrl] = useState<string | null>(null)
+    const bannerInputRef = useRef<HTMLInputElement>(null)
 
     const [perguntas, setPerguntas] = useState<Pergunta[]>([
         { id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }
@@ -205,7 +333,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         })
     );
 
-    // Populate from initialData when it changes
     useEffect(() => {
         if (initialData) {
             setTitulo(editMode ? initialData.titulo : `${initialData.titulo} (Cópia)`)
@@ -214,6 +341,9 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setStatus(initialData.status || "rascunho")
             setTipoFormulario(initialData.tipo_formulario || "formulário")
             setPaginaDestino(initialData.pagina_destino || "")
+            setExistingBannerUrl(initialData.banner_url || null)
+            setBannerPreview(initialData.banner_url || null)
+            setBannerFile(null)
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
                     ...p,
@@ -223,7 +353,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         }
     }, [initialData, editMode])
 
-    // Reset when dialog closes
     useEffect(() => {
         if (!open && !initialData) {
             resetForm()
@@ -237,7 +366,24 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setStatus("rascunho")
         setTipoFormulario("formulário")
         setPaginaDestino("")
+        setBannerFile(null)
+        setBannerPreview(null)
+        setExistingBannerUrl(null)
         setPerguntas([{ id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }])
+    }
+
+    const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setBannerFile(file)
+        setBannerPreview(URL.createObjectURL(file))
+    }
+
+    const removeBanner = () => {
+        setBannerFile(null)
+        setBannerPreview(null)
+        setExistingBannerUrl(null)
+        if (bannerInputRef.current) bannerInputRef.current.value = ''
     }
 
     const insertFormat = (format: 'bold' | 'italic') => {
@@ -255,7 +401,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setDescricao(newText);
         setTimeout(() => {
             textarea.focus();
-            textarea.setSelectionRange(start + 3, end + 3); // approximate
+            textarea.setSelectionRange(start + 3, end + 3);
         }, 0);
     }
 
@@ -303,6 +449,28 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         }])
     }
 
+    const addTitulo = () => {
+        setPerguntas([...perguntas, {
+            id: Math.random().toString(),
+            titulo: '',
+            descricao: '',
+            tipo: 'titulo',
+            opcoes: null,
+            obrigatoria: false,
+        }])
+    }
+
+    const addSecao = () => {
+        setPerguntas([...perguntas, {
+            id: Math.random().toString(),
+            titulo: '',
+            descricao: '',
+            tipo: 'secao',
+            opcoes: null,
+            obrigatoria: false,
+        }])
+    }
+
     const duplicatePergunta = (id: string) => {
         const p = perguntas.find(x => x.id === id)
         if (!p) return
@@ -326,6 +494,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     updated.opcoes = updated.opcoes && Array.isArray(updated.opcoes) ? updated.opcoes : ["Opção 1", "Opção 2"]
                 } else if (value === 'escala') {
                     updated.opcoes = updated.opcoes?.min ? updated.opcoes : { min: 1, max: 5, labelMin: "Muito Insatisfeito", labelMax: "Muito Satisfeito" }
+                } else if (value === 'grade_multipla_escolha') {
+                    updated.opcoes = { linhas: ['Linha 1', 'Linha 2'], colunas: ['Coluna 1', 'Coluna 2', 'Coluna 3'] }
                 } else {
                     updated.opcoes = null
                 }
@@ -362,21 +532,36 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             toast.error("Informe o título do formulário")
             return
         }
-        const validPerguntas = perguntas.filter(p => p.titulo.trim() !== '')
-        if (validPerguntas.length === 0) {
+        const validPerguntas = perguntas.filter(p => p.tipo === 'titulo' || p.tipo === 'secao' || p.titulo.trim() !== '')
+        if (validPerguntas.filter(p => p.tipo !== 'titulo' && p.tipo !== 'secao').length === 0) {
             toast.error("Adicione pelo menos uma pergunta")
             return
         }
 
         setLoading(true)
+
+        let finalBannerUrl: string | null = existingBannerUrl || null
+
+        if (bannerFile) {
+            const fileName = `${Date.now()}_${bannerFile.name}`
+            const { error: uploadError } = await supabase.storage.from('form-banners').upload(fileName, bannerFile, { upsert: true })
+            if (uploadError) {
+                toast.error("Erro ao fazer upload do banner: " + uploadError.message)
+                setLoading(false)
+                return
+            }
+            const { data: urlData } = supabase.storage.from('form-banners').getPublicUrl(fileName)
+            finalBannerUrl = urlData.publicUrl
+        }
+
         if (editMode && initialData?.id) {
-            // UPDATE existing form
             const { error: updateError } = await supabase.from('formularios').update({
                 titulo,
                 descricao,
                 data_prazo: localDatetimeInputToIso(dataPrazo),
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,
+                banner_url: finalBannerUrl,
             }).eq('id', initialData.id)
 
             if (updateError) {
@@ -385,11 +570,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 return
             }
 
-            // IMPORTANT: don't blindly delete-and-reinsert perguntas.
-            // formulario_respostas_itens.pergunta_id has ON DELETE CASCADE,
-            // so wiping perguntas wipes all answer items for this form.
-            // Instead: UPDATE existing perguntas in place, INSERT new ones,
-            // and DELETE only the perguntas that were actually removed.
             const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
 
             const { data: existingPerguntas } = await supabase
@@ -410,7 +590,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     ordem: i + 1,
                 }
                 if (p.id && isUuid(p.id) && existingIds.has(p.id)) {
-                    // Existing pergunta -> UPDATE (preserves itens via FK)
                     const { error: upErr } = await supabase
                         .from('formulario_perguntas')
                         .update(payload)
@@ -422,7 +601,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     }
                     keptIds.push(p.id)
                 } else {
-                    // New pergunta -> INSERT
                     const { error: insErr } = await supabase
                         .from('formulario_perguntas')
                         .insert({ formulario_id: initialData.id!, ...payload })
@@ -434,7 +612,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 }
             }
 
-            // Delete only the perguntas that the user removed in the UI
             const toDelete = Array.from(existingIds).filter(id => !keptIds.includes(id))
             if (toDelete.length > 0) {
                 await supabase.from('formulario_perguntas').delete().in('id', toDelete)
@@ -442,7 +619,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
             toast.success("Formulário atualizado com sucesso!")
         } else {
-            // CREATE new form (or copy)
             const { data: formData, error: formError } = await supabase.from('formularios').insert({
                 titulo,
                 descricao,
@@ -452,6 +628,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 data_inicio: status === 'ativo' ? new Date().toISOString() : null,
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,
+                banner_url: finalBannerUrl,
             }).select().single()
 
             if (formError || !formData) {
@@ -506,8 +683,40 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 </div>
 
                 <div className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                    {/* Form metadata */}
                     <div className="space-y-4">
+                        {/* Banner upload */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Banner do Formulário (Opcional)</label>
+                            <input
+                                ref={bannerInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleBannerSelect}
+                            />
+                            {bannerPreview ? (
+                                <div className="relative rounded-xl overflow-hidden">
+                                    <img src={bannerPreview} alt="Banner preview" className="w-full h-32 object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={removeBanner}
+                                        className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white rounded-full p-1 transition-colors"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => bannerInputRef.current?.click()}
+                                    className="w-full h-24 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-violet-300 dark:hover:border-violet-600 hover:text-violet-500 transition-colors"
+                                >
+                                    <ImagePlus className="h-6 w-6" />
+                                    <span className="text-xs font-medium">Clique para adicionar uma imagem de banner</span>
+                                </button>
+                            )}
+                        </div>
+
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Título</label>
                             <Input
@@ -566,7 +775,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             )}
                         </div>
 
-                        {/* Tipo do formulário e Página de Destino */}
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Tipo do Formulário</label>
@@ -589,7 +797,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         </div>
                     </div>
 
-                    {/* Questions builder */}
                     <div className="space-y-3">
                         <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Perguntas</label>
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -618,6 +825,22 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         >
                             <Plus className="w-4 h-4 mr-2" /> Adicionar Pergunta
                         </Button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={addTitulo}
+                                className="w-full rounded-xl h-9 border-dashed border-violet-100 dark:border-violet-900 text-violet-500 dark:text-violet-500 text-xs font-bold hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                            >
+                                <Heading1 className="w-3.5 h-3.5 mr-1.5" /> Adicionar Título
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={addSecao}
+                                className="w-full rounded-xl h-9 border-dashed border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800"
+                            >
+                                <Columns className="w-3.5 h-3.5 mr-1.5" /> Nova Seção
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
