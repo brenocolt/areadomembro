@@ -1,13 +1,16 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3 } from "lucide-react"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
 export function FormResponsesDashboard({ formularioId }: { formularioId: string }) {
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [respostas, setRespostas] = useState<any[]>([])
+    const now = new Date()
+    const [filtroMes, setFiltroMes] = useState<{ mes: number; ano: number }>({ mes: now.getMonth() + 1, ano: now.getFullYear() })
     const [colaboradores, setColaboradores] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
@@ -62,6 +65,30 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         )
     }
 
+    // Meses disponíveis: todos que têm respostas + mês atual
+    const mesesDisponiveis = useMemo(() => {
+        const seen = new Set<string>()
+        const n = new Date()
+        seen.add(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`)
+        for (const r of respostas) {
+            const d = new Date(r.enviado_em)
+            seen.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+        }
+        return Array.from(seen)
+            .sort((a, b) => b.localeCompare(a))
+            .map(key => {
+                const [ano, mes] = key.split('-').map(Number)
+                return { key, mes, ano, label: `${MESES_CURTOS[mes - 1]}/${ano}` }
+            })
+    }, [respostas])
+
+    // Respostas do mês selecionado
+    const monthFilteredRespostas = useMemo(() =>
+        respostas.filter(r => {
+            const d = new Date(r.enviado_em)
+            return d.getFullYear() === filtroMes.ano && d.getMonth() + 1 === filtroMes.mes
+        }), [respostas, filtroMes])
+
     // Filter questions to display.
     // Quando filterAnswerValue está ativo, mostra TODAS as perguntas dos respondentes
     // que bateram — o usuário quer ver o contexto completo, não só a pergunta filtrada.
@@ -69,10 +96,10 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         ? perguntas.filter(p => p.id === filterPerguntaId)
         : perguntas
 
-    // Filter responses by answer value.
+    // Filter responses by answer value (aplicado sobre o filtro de mês).
     // Para perguntas do tipo colaborador_*, o valor salvo é UUID — resolve para nome antes de comparar.
     const displayRespostas = (filterAnswerValue.trim() && filterPerguntaId)
-        ? respostas.filter(r => {
+        ? monthFilteredRespostas.filter(r => {
             const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === filterPerguntaId)
             if (!item) return false
             const pergunta = perguntas.find(p => p.id === filterPerguntaId)
@@ -88,7 +115,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             }
             return rawVal.toString().toLowerCase().includes(filterAnswerValue.toLowerCase().trim())
         })
-        : respostas
+        : monthFilteredRespostas
 
     // Group responses
     let groups: Record<string, { label: string; respostas: any[] }> = {}
@@ -135,13 +162,36 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
     return (
         <div className="p-6 space-y-4">
+            {/* Month filter bar */}
+            <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                <Calendar className="h-4 w-4 text-violet-500 shrink-0" />
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mês:</span>
+                <div className="flex flex-wrap gap-1.5">
+                    {mesesDisponiveis.map(m => {
+                        const isSelected = m.mes === filtroMes.mes && m.ano === filtroMes.ano
+                        return (
+                            <button
+                                key={m.key}
+                                onClick={() => setFiltroMes({ mes: m.mes, ano: m.ano })}
+                                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${isSelected ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-violet-100 dark:hover:bg-violet-500/10 hover:text-violet-700'}`}
+                            >
+                                {m.label}
+                            </button>
+                        )
+                    })}
+                </div>
+                <span className="text-xs text-slate-400 ml-auto">
+                    {monthFilteredRespostas.length} resposta{monthFilteredRespostas.length !== 1 ? 's' : ''} em {MESES[filtroMes.mes - 1]}/{filtroMes.ano}
+                </span>
+            </div>
+
             {/* Controls bar */}
             <div className="flex flex-wrap items-center gap-3 mb-2">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
                     <Users className="h-4 w-4" />
-                    {displayRespostas.length !== respostas.length
-                        ? <>{displayRespostas.length} <span className="font-normal text-slate-400">de {respostas.length} resposta{respostas.length !== 1 ? 's' : ''}</span></>
-                        : <>{respostas.length} resposta{respostas.length !== 1 ? 's' : ''} no total</>
+                    {displayRespostas.length !== monthFilteredRespostas.length
+                        ? <>{displayRespostas.length} <span className="font-normal text-slate-400">de {monthFilteredRespostas.length} resposta{monthFilteredRespostas.length !== 1 ? 's' : ''}</span></>
+                        : <>{monthFilteredRespostas.length} resposta{monthFilteredRespostas.length !== 1 ? 's' : ''} neste mês</>
                     }
                 </div>
 
@@ -458,7 +508,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             {/* ── Participação ─────────────────────────────────────────── */}
             {(() => {
                 const respondentesMap: Record<string, { nome: string; count: number }> = {}
-                respostas.forEach(r => {
+                monthFilteredRespostas.forEach(r => {
                     const id = r.colaborador_id || 'anon'
                     const nome = r.colaboradores?.nome || 'Anônimo'
                     if (!respondentesMap[id]) respondentesMap[id] = { nome, count: 0 }
@@ -474,7 +524,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <Users className="h-4 w-4 text-violet-500" />
-                            Participação — {respondentes.length} de {colaboradores.length} membros responderam
+                            Participação em {MESES[filtroMes.mes - 1]}/{filtroMes.ano} — {respondentes.length} de {colaboradores.length} membros responderam
                         </h3>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

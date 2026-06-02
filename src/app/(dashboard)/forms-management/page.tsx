@@ -92,33 +92,47 @@ export default function FormsManagementPage() {
         return rows.length
     }
 
-    // Sinaliza colaboradores que não responderam um formulário encerrado.
-    // Idempotente: pula quem já está como PENDENTE para o mesmo formulário.
+    // Sinaliza colaboradores que não responderam um formulário encerrado no mês atual.
+    // Idempotente: pula quem já está como PENDENTE com a mesma descrição (inclui Mês/Ano).
     const prePontuarNaoRespondentes = async (form: { id: string, titulo: string, tipo_formulario?: string | null }) => {
+        const now = new Date()
+        const mes = now.getMonth() + 1
+        const ano = now.getFullYear()
+        const MESES_NOMES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+        const mesLabel = `${MESES_NOMES[mes - 1]}/${ano}`
+        const pad = (n: number) => String(n).padStart(2, '0')
+        const firstDay = `${ano}-${pad(mes)}-01`
+        const lastDayDate = new Date(ano, mes, 0).getDate()
+        const lastDay = `${ano}-${pad(mes)}-${pad(lastDayDate)}T23:59:59.999Z`
+
         const { data: allColabs } = await supabase.from('colaboradores').select('id')
         const { data: respondentes } = await supabase
             .from('formulario_respostas')
             .select('colaborador_id')
             .eq('formulario_id', form.id)
+            .gte('enviado_em', firstDay)
+            .lte('enviado_em', lastDay)
 
         const respondidos = new Set((respondentes || []).map((r: any) => r.colaborador_id))
         const naoResponderam = (allColabs || []).filter((c: any) => !respondidos.has(c.id))
         if (naoResponderam.length === 0) return 0
 
+        const tipo = form.tipo_formulario || 'formulário'
+        const descricao = `Não envio do ${tipo}: ${form.titulo} - ${mesLabel}`
+
         const { data: existing } = await supabase
             .from('pontos_pre_pontuacao')
             .select('colaborador_id')
-            .eq('formulario_id', form.id)
+            .eq('descricao', descricao)
             .eq('status', 'PENDENTE')
         const jaCadastrados = new Set((existing || []).map((e: any) => e.colaborador_id))
 
-        const tipo = form.tipo_formulario || 'formulário'
         const rows = naoResponderam
             .filter((c: any) => !jaCadastrados.has(c.id))
             .map((c: any) => ({
                 colaborador_id: c.id,
                 formulario_id: form.id,
-                descricao: `Não envio do ${tipo}: ${form.titulo}`,
+                descricao,
                 origem: 'auto',
                 status: 'PENDENTE',
             }))
