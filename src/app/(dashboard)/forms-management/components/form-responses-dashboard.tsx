@@ -52,18 +52,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
 
-    if (loading) {
-        return <div className="p-8 text-center text-slate-400 text-sm">Carregando respostas...</div>
-    }
-
-    if (respostas.length === 0) {
-        return (
-            <div className="p-8 text-center text-slate-400">
-                <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="font-medium text-sm">Nenhuma resposta recebida ainda</p>
-            </div>
-        )
-    }
+    // ── Hooks: devem ficar ANTES de qualquer early return ─────────────────────
 
     // Meses disponíveis: todos que têm respostas + mês atual
     const mesesDisponiveis = useMemo(() => {
@@ -88,6 +77,21 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             const d = new Date(r.enviado_em)
             return d.getFullYear() === filtroMes.ano && d.getMonth() + 1 === filtroMes.mes
         }), [respostas, filtroMes])
+
+    // ── Early returns (depois de todos os hooks) ───────────────────────────────
+
+    if (loading) {
+        return <div className="p-8 text-center text-slate-400 text-sm">Carregando respostas...</div>
+    }
+
+    if (respostas.length === 0) {
+        return (
+            <div className="p-8 text-center text-slate-400">
+                <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p className="font-medium text-sm">Nenhuma resposta recebida ainda</p>
+            </div>
+        )
+    }
 
     // Filter questions to display.
     // Quando filterAnswerValue está ativo, mostra TODAS as perguntas dos respondentes

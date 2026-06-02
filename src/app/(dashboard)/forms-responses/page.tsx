@@ -20,8 +20,28 @@ export default function FormsResponsesPage() {
     const [npsViewMode, setNpsViewMode] = useState<'dashboard' | 'lista'>('dashboard')
     const [searchAvaliado, setSearchAvaliado] = useState("")
     const [allColaboradores, setAllColaboradores] = useState<any[]>([])
+    const nowDate = new Date()
+    const [npsFilterMes, setNpsFilterMes] = useState<{ mes: number; ano: number }>({ mes: nowDate.getMonth() + 1, ano: nowDate.getFullYear() })
 
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+    const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+    // Meses disponíveis no NPS (usa campos mes/ano da avaliação) + mês atual
+    const npsMesesDisponiveis = (() => {
+        const seen = new Map<string, { mes: number; ano: number }>()
+        const n = new Date()
+        const curKey = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
+        seen.set(curKey, { mes: n.getMonth() + 1, ano: n.getFullYear() })
+        for (const r of npsRespostas) {
+            if (r.mes && r.ano) {
+                const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`
+                seen.set(key, { mes: Number(r.mes), ano: Number(r.ano) })
+            }
+        }
+        return Array.from(seen.entries())
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([key, { mes, ano }]) => ({ key, mes, ano, label: `${MESES_CURTOS[mes - 1]}/${ano}` }))
+    })()
 
     useEffect(() => {
         async function fetchForms() {
@@ -87,8 +107,11 @@ export default function FormsResponsesPage() {
 
     const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 
-    // Filter NPS by type and by evaluated name
-    const filteredNpsRespostas = npsRespostas.filter(r => {
+    // Filter NPS: primeiro por mês, depois por tipo e nome do avaliado
+    const monthFilteredNps = npsRespostas.filter(r =>
+        Number(r.mes) === npsFilterMes.mes && Number(r.ano) === npsFilterMes.ano
+    )
+    const filteredNpsRespostas = monthFilteredNps.filter(r => {
         if (npsFilterTipo !== 'todos' && r.tipo_avaliacao !== npsFilterTipo) return false
         if (searchAvaliado.trim() !== '') {
             const nome = r.colaboradores?.nome || ''
@@ -446,9 +469,9 @@ export default function FormsResponsesPage() {
                                             .map(([, d]) => ({ nome: d.nome, avg: d.sum / d.count, count: d.count }))
                                             .sort((a, b) => b.avg - a.avg).slice(0, 3)
 
-                                        // ── Participação NPS ─────────────────────────────────
+                                        // ── Participação NPS (escopo do mês selecionado) ────────
                                         const npsAvaliadores = new Map<string, { nome: string, count: number }>()
-                                        npsRespostas.forEach(r => {
+                                        monthFilteredNps.forEach(r => {
                                             if (!r.avaliador_id) return
                                             const nome = usuariosMap[r.avaliador_id] || 'Desconhecido'
                                             npsAvaliadores.set(r.avaliador_id, {
@@ -462,10 +485,28 @@ export default function FormsResponsesPage() {
 
                                         return (
                                             <>
+                                                {/* Month filter pills */}
+                                                <div className="flex flex-wrap items-center gap-2 pb-3 mb-4 border-b border-slate-100 dark:border-slate-800/60">
+                                                    <Calendar className="h-4 w-4 text-violet-500 shrink-0" />
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mês:</span>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {npsMesesDisponiveis.map(m => {
+                                                            const isSelected = m.mes === npsFilterMes.mes && m.ano === npsFilterMes.ano
+                                                            return (
+                                                                <button key={m.key} onClick={() => setNpsFilterMes({ mes: m.mes, ano: m.ano })}
+                                                                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${isSelected ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-violet-100 dark:hover:bg-violet-500/10 hover:text-violet-700'}`}>
+                                                                    {m.label}
+                                                                </button>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                    <span className="text-xs text-slate-400 ml-auto">{monthFilteredNps.length} aval. em {MESES[npsFilterMes.mes - 1]}/{npsFilterMes.ano}</span>
+                                                </div>
+
                                                 <div className="flex flex-wrap items-center gap-3 mb-6">
                                                     <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
                                                         <Users className="h-4 w-4" />
-                                                        {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} no total
+                                                        {filteredNpsRespostas.length} avaliação{filteredNpsRespostas.length !== 1 ? 'ões' : ''} em {MESES[npsFilterMes.mes - 1]}/{npsFilterMes.ano}
                                                     </div>
 
                                                     <div className="relative w-56">
@@ -630,7 +671,7 @@ export default function FormsResponsesPage() {
                                                         <div className="col-span-1 sm:col-span-3 bg-white dark:bg-[#0F172A] p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                                             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                                                                 <Users className="h-4 w-4 text-violet-500" />
-                                                                Participação — {npsRespondentesArr.length} de {allColaboradores.length} membros submeteram avaliações
+                                                                Participação em {MESES[npsFilterMes.mes - 1]}/{npsFilterMes.ano} — {npsRespondentesArr.length} de {allColaboradores.length} submeteram
                                                             </h3>
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                                 <div>
