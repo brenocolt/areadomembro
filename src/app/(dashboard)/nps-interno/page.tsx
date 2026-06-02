@@ -251,12 +251,13 @@ export default function NPSInternoPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm border-separate border-spacing-0">
                                     <thead>
-                                        <tr className="border-b border-slate-100 dark:border-slate-800 text-left">
-                                            <th className="py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider">Mês</th>
+                                        <tr className="text-left">
+                                            <th className="sticky left-0 z-10 bg-white dark:bg-[#0F172A] py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider border-b border-slate-100 dark:border-slate-800">Mês</th>
+                                            <th className="py-3 px-3 text-xs font-bold uppercase text-violet-500 tracking-wider whitespace-nowrap border-b border-slate-100 dark:border-slate-800">Média NPS</th>
                                             {metrics.map(m => (
-                                                <th key={m.id} className="py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider whitespace-nowrap">{m.titulo}</th>
+                                                <th key={m.id} className="py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider whitespace-nowrap border-b border-slate-100 dark:border-slate-800">{m.titulo}</th>
                                             ))}
                                         </tr>
                                     </thead>
@@ -266,18 +267,27 @@ export default function NPSInternoPage() {
                                             .slice(0, 12)
                                             .map(([key, evs]) => {
                                                 const [ano, mes] = key.split('-').map(Number)
+                                                // Média NPS do mês = média de todas as métricas de todas as avaliações
+                                                const monthVals: number[] = []
+                                                evs.forEach(e => metrics.forEach(m => {
+                                                    const v = e.scores[m.id]
+                                                    if (v !== undefined && !isNaN(v)) monthVals.push(v)
+                                                }))
+                                                const monthAvg = avgOf(monthVals)
+                                                const monthAvgColor = monthAvg === null ? 'text-slate-400' : monthAvg >= 4.5 ? 'text-emerald-500' : monthAvg >= 3.5 ? 'text-amber-500' : 'text-rose-500'
                                                 return (
-                                                    <tr key={key} className="border-b border-slate-50 dark:border-slate-800/50">
-                                                        <td className="py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                                                    <tr key={key} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
+                                                        <td className="sticky left-0 z-10 bg-white dark:bg-[#0F172A] py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap border-b border-slate-50 dark:border-slate-800/50">
                                                             {MESES[mes - 1]}/{ano}
                                                             <span className="text-slate-400 font-normal ml-1.5">({evs.length} aval.)</span>
                                                         </td>
+                                                        <td className={`py-3 px-3 font-extrabold ${monthAvgColor} border-b border-slate-50 dark:border-slate-800/50`}>{monthAvg === null ? '—' : monthAvg.toFixed(1)}</td>
                                                         {metrics.map(m => {
                                                             const vals = evs.map(e => e.scores[m.id]).filter(v => v !== undefined && !isNaN(v))
                                                             const a = avgOf(vals)
                                                             const display = a === null ? '—' : a.toFixed(1)
                                                             const color = a === null ? 'text-slate-400' : a >= 4.5 ? 'text-emerald-500' : a >= 3.5 ? 'text-amber-500' : 'text-rose-500'
-                                                            return <td key={m.id} className={`py-3 px-3 font-bold ${color}`}>{display}</td>
+                                                            return <td key={m.id} className={`py-3 px-3 font-bold ${color} border-b border-slate-50 dark:border-slate-800/50`}>{display}</td>
                                                         })}
                                                     </tr>
                                                 )

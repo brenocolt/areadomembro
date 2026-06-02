@@ -358,7 +358,7 @@ export default function FormulariosPage() {
                                                     <SelectValue placeholder="Selecione um colaborador" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
-                                                    {colaboradores.filter(c => c.id !== colaborador?.id).map(c => (
+                                                    {colaboradores.filter(c => c.id !== colaborador?.id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => (
                                                         <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -367,7 +367,7 @@ export default function FormulariosPage() {
 
                                         {p.tipo === 'colaborador_multiplo' && (
                                             <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">
-                                                {colaboradores.filter(c => c.id !== colaborador?.id).map(c => {
+                                                {colaboradores.filter(c => c.id !== colaborador?.id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => {
                                                     const current = respostas[p.id] || []
                                                     const isChecked = current.includes(c.id)
                                                     return (

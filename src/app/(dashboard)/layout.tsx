@@ -11,7 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <AuthProvider>
             <SidebarProvider>
                 <AppSidebar />
-                <main className="flex-1 flex flex-col min-h-screen bg-slate-50/50 dark:bg-[#0B1120] transition-colors duration-300 ease-in-out">
+                <main className="flex-1 min-w-0 flex flex-col min-h-screen bg-slate-50/50 dark:bg-[#0B1120] transition-colors duration-300 ease-in-out">
                     <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b bg-background/80 backdrop-blur-md px-4 sticky top-0 z-10 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
                         <div className="flex items-center gap-2">
                             <SidebarTrigger className="-ml-1" />
