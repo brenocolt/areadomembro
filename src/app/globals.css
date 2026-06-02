@@ -51,6 +51,27 @@
   --radius-3xl: calc(var(--radius) + 12px);
 }
 
+/*
+ * Identidade visual Produtiva Júnior — azul-celeste da marca.
+ * Sobrescrevemos a escala "violet" do Tailwind para o azul da marca,
+ * de modo que todas as classes violet-* já usadas no sistema passem a
+ * renderizar no tom da empresa, sem alterar nenhuma lógica/funcionalidade.
+ * Cor-âncora do logo (~#74B9D4) posicionada em torno de 400/500.
+ */
+@theme {
+  --color-violet-50: #eef8fc;
+  --color-violet-100: #d6edf6;
+  --color-violet-200: #b3deee;
+  --color-violet-300: #88cce2;
+  --color-violet-400: #74b9d4;
+  --color-violet-500: #4ba3c7;
+  --color-violet-600: #3a87ad;
+  --color-violet-700: #2f6c8c;
+  --color-violet-800: #2b5871;
+  --color-violet-900: #28495d;
+  --color-violet-950: #172f3e;
+}
+
 :root {
   --radius: 0.75rem;
   /* 12px as requested */
