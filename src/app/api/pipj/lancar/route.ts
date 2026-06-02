@@ -116,21 +116,37 @@ export async function POST(req: NextRequest) {
 
     const businessDays = getBusinessDaysInMonth(ano, mes)
 
-    // Fetch latest NPS per user
+    // Fetch all NPS evaluations to compute the average of the most recent month per collaborator
     const { data: avaliacoesNps } = await supabaseAdmin
       .from('avaliacoes_nps')
-      .select('colaborador_id, nps_geral')
+      .select('colaborador_id, nps_geral, ano, mes')
       .order('ano', { ascending: false })
       .order('mes', { ascending: false })
 
-    const npsMap = new Map<string, number>()
+    // Group by (colaborador_id) → most recent (ano, mes) bucket → all nps_geral values in that bucket
+    const npsGroupMap = new Map<string, { ano: number, mes: number, vals: number[] }>()
     if (avaliacoesNps) {
-        // Keep only the first one (most recent) for each colab
         for (const nps of avaliacoesNps) {
-            if (!npsMap.has(nps.colaborador_id)) {
-                npsMap.set(nps.colaborador_id, Number(nps.nps_geral))
+            const id = nps.colaborador_id
+            const val = Number(nps.nps_geral)
+            if (isNaN(val)) continue
+            const existing = npsGroupMap.get(id)
+            if (!existing) {
+                // First seen = most recent month (rows are sorted desc)
+                npsGroupMap.set(id, { ano: Number(nps.ano), mes: Number(nps.mes), vals: [val] })
+            } else if (Number(nps.ano) === existing.ano && Number(nps.mes) === existing.mes) {
+                // Same most-recent month → accumulate for averaging
+                existing.vals.push(val)
             }
+            // Older month → skip
         }
+    }
+
+    // Build final npsMap with the average of all evaluations in the most recent month
+    const npsMap = new Map<string, number>()
+    for (const [id, group] of npsGroupMap.entries()) {
+        const avg = group.vals.reduce((a, b) => a + b, 0) / group.vals.length
+        npsMap.set(id, avg)
     }
 
     const detalhes: any[] = []
