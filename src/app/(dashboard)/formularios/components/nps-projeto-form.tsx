@@ -199,12 +199,35 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
 
     // Fetch data
     useEffect(() => {
+        // Recarrega a lista de projetos ativos do banco e ordena alfabeticamente.
+        const loadProjetos = async () => {
+            const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
+            if (p) {
+                const sorted = [...p].sort((a, b) => a.nome.localeCompare(b.nome))
+                setProjetos(sorted)
+            }
+        }
+
         const fetchData = async () => {
             try {
-                const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
-                if (p) {
-                    const sorted = p.sort((a, b) => a.nome.localeCompare(b.nome))
-                    setProjetos(sorted)
+                // Mostra imediatamente a lista atual (resposta rápida).
+                await loadProjetos()
+
+                // Sincroniza com o Monday e recarrega a lista ao concluir, para
+                // refletir projetos recém-adicionados sem precisar dar reload.
+                // Throttle compartilhado por navegador (mesma chave da página /nps-projeto).
+                const lastSync = localStorage.getItem('last_monday_sync')
+                const now = Date.now()
+                const SYNC_INTERVAL = 10 * 60 * 1000 // 10 minutos
+                if (!lastSync || now - parseInt(lastSync) > SYNC_INTERVAL) {
+                    localStorage.setItem('last_monday_sync', now.toString())
+                    fetch('/api/monday/projects')
+                        .then(res => res.json())
+                        .then(async (data) => {
+                            console.log('Monday background sync result:', data)
+                            await loadProjetos()
+                        })
+                        .catch(err => console.warn('Monday background sync failed:', err))
                 }
             } catch (error) {
                 console.error('Error fetching projects:', error)

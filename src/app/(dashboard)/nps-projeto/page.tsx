@@ -206,6 +206,15 @@ export default function NPSProjetoPage() {
 
     // Fetch data
     useEffect(() => {
+        // Recarrega a lista de projetos ativos do banco e ordena alfabeticamente.
+        const loadProjetos = async () => {
+            const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
+            if (p) {
+                const sorted = [...p].sort((a, b) => a.nome.localeCompare(b.nome))
+                setProjetos(sorted)
+            }
+        }
+
         const fetchData = async () => {
             try {
                 const { data: configData } = await supabase
@@ -213,27 +222,30 @@ export default function NPSProjetoPage() {
                     .select('valor')
                     .eq('chave', 'nps_projeto_ativo')
                     .single();
-                
+
                 if (configData && (configData.valor === false || configData.valor === 'false')) {
                     setIsFormClosed(true)
                 }
 
-                // Sync projects from Monday (once a day per user, non-blocking)
+                // Mostra imediatamente a lista atual (resposta rápida).
+                await loadProjetos()
+
+                // Sincroniza com o Monday e, ao concluir, RECARREGA a lista para
+                // refletir projetos recém-adicionados/atualizados sem precisar dar reload.
+                // Throttle por navegador para evitar excesso de chamadas à API do Monday.
                 const lastSync = localStorage.getItem('last_monday_sync')
-                const now = new Date().getTime()
-                const oneDay = 24 * 60 * 60 * 1000
-                if (!lastSync || now - parseInt(lastSync) > oneDay) {
+                const now = Date.now()
+                const SYNC_INTERVAL = 10 * 60 * 1000 // 10 minutos
+                if (!lastSync || now - parseInt(lastSync) > SYNC_INTERVAL) {
                     localStorage.setItem('last_monday_sync', now.toString())
                     fetch('/api/monday/projects')
                         .then(res => res.json())
-                        .then(data => console.log('Monday background sync result:', data))
+                        .then(async (data) => {
+                            console.log('Monday background sync result:', data)
+                            // Atualiza o dropdown com os projetos sincronizados.
+                            await loadProjetos()
+                        })
                         .catch(err => console.warn('Monday background sync failed:', err))
-                }
-
-                const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
-                if (p) {
-                    const sorted = p.sort((a, b) => a.nome.localeCompare(b.nome))
-                    setProjetos(sorted)
                 }
             } catch (error) {
                 console.error('Error fetching data:', error)
