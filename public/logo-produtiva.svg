@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 440" fill="none" role="img" aria-label="Produtiva Júnior">
+  <g stroke="#74B9D4" stroke-width="48" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M50 410 V272" />
+    <path d="M120 410 V192" />
+    <path d="M195 410 V62" stroke-width="52" />
+    <path d="M195 62 H300 C366 62 366 216 300 216 H195" stroke-width="52" />
+  </g>
+</svg>

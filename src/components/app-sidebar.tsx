@@ -128,8 +128,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/">
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                    <span className="font-bold text-lg font-display">P</span>
+                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <img src="/logo-produtiva.svg" alt="Produtiva Júnior" className="size-7 object-contain" />
                                 </div>
                                 <div className="flex flex-col gap-0.5 leading-none">
                                     <span className="font-semibold font-display">Produtiva Júnior</span>
