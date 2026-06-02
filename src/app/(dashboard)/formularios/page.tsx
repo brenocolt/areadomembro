@@ -42,10 +42,18 @@ export default function FormulariosPage() {
         if (formsData) setForms(formsData)
 
         if (colaborador?.id) {
+            const now = new Date()
+            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
+
+            // Busca apenas respostas do mês atual — respostas de meses anteriores
+            // não devem marcar o formulário como "já respondido" no novo mês.
             const { data: rData } = await supabase
                 .from('formulario_respostas')
                 .select('formulario_id, enviado_em')
                 .eq('colaborador_id', colaborador.id)
+                .gte('enviado_em', firstDayOfMonth)
+                .lte('enviado_em', lastDayOfMonth)
                 .order('enviado_em', { ascending: false })
             if (rData) setRespostasFeitas(rData)
 
@@ -57,10 +65,6 @@ export default function FormulariosPage() {
             if (configData) {
                 setNpsAberto(configData.valor === true || configData.valor === 'true');
             }
-
-            const now = new Date()
-            const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-            const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString()
 
             const { data: npsData, count } = await supabase
                 .from('nps_projeto_submissoes')
