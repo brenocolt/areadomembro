@@ -13,6 +13,7 @@ import {
     CalendarDays,
     FileQuestion,
     Crown,
+    Star,
     LogOut,
     Briefcase,
 } from "lucide-react"
@@ -41,6 +42,7 @@ const memberItems = [
     { title: "Perfil", url: "/profile", icon: User },
     { title: "Performance", url: "/performance", icon: TrendingUp },
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
+    { title: "NPS Interno", url: "/nps-interno", icon: Star },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
     { title: "Meus PDIs", url: "/pdis", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },

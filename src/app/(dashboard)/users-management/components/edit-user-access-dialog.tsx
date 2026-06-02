@@ -17,6 +17,7 @@ const ALL_PAGES = [
     { label: "Perfil", path: "/profile" },
     { label: "Performance", path: "/performance" },
     { label: "NPS Gerente", path: "/nps-gerente" },
+    { label: "NPS Interno", path: "/nps-interno" },
     { label: "NPS Projeto", path: "/nps-projeto" },
     { label: "Carteira PIPJ", path: "/wallet" },
     { label: "Meus PDIs", path: "/pdis" },
