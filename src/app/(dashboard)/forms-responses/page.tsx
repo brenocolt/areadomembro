@@ -26,16 +26,19 @@ export default function FormsResponsesPage() {
     const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
     const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-    // Meses disponíveis no NPS (usa campos mes/ano da avaliação) + mês atual
+    // Meses disponíveis no NPS — agrupados pela DATA DE ENVIO (created_at),
+    // ou seja, pelo mês em que a avaliação foi respondida, independente do
+    // mês de referência (mes/ano) escolhido no formulário. + mês atual.
     const npsMesesDisponiveis = (() => {
         const seen = new Map<string, { mes: number; ano: number }>()
         const n = new Date()
         const curKey = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
         seen.set(curKey, { mes: n.getMonth() + 1, ano: n.getFullYear() })
         for (const r of npsRespostas) {
-            if (r.mes && r.ano) {
-                const key = `${r.ano}-${String(r.mes).padStart(2, '0')}`
-                seen.set(key, { mes: Number(r.mes), ano: Number(r.ano) })
+            if (r.created_at) {
+                const d = new Date(r.created_at)
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                seen.set(key, { mes: d.getMonth() + 1, ano: d.getFullYear() })
             }
         }
         return Array.from(seen.entries())
@@ -107,10 +110,14 @@ export default function FormsResponsesPage() {
 
     const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 
-    // Filter NPS: primeiro por mês, depois por tipo e nome do avaliado
-    const monthFilteredNps = npsRespostas.filter(r =>
-        Number(r.mes) === npsFilterMes.mes && Number(r.ano) === npsFilterMes.ano
-    )
+    // Filter NPS: primeiro pelo mês em que a avaliação foi ENVIADA (created_at),
+    // depois por tipo e nome do avaliado. Quem respondeu em junho fica em junho,
+    // independente do mês de referência (mes/ano) preenchido no formulário.
+    const monthFilteredNps = npsRespostas.filter(r => {
+        if (!r.created_at) return false
+        const d = new Date(r.created_at)
+        return (d.getMonth() + 1) === npsFilterMes.mes && d.getFullYear() === npsFilterMes.ano
+    })
     const filteredNpsRespostas = monthFilteredNps.filter(r => {
         if (npsFilterTipo !== 'todos' && r.tipo_avaliacao !== npsFilterTipo) return false
         if (searchAvaliado.trim() !== '') {
