@@ -446,7 +446,7 @@ export default function FormsResponsesPage() {
                                             }
                                         })
 
-                                        const calcNps = (data: any) => data.total === 0 ? 0 : (data.sum / data.total).toFixed(1);
+                                        const calcNps = (data: any) => data.total === 0 ? 0 : (data.sum / data.total).toFixed(2);
                                         const npsConsultores = Number(calcNps(npsGeralData.consultores));
                                         const npsGerentes = Number(calcNps(npsGeralData.gerentes));
                                         const npsEmpresa = Number(calcNps(npsGeralData.empresa));
@@ -549,21 +549,21 @@ export default function FormsResponsesPage() {
                                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral Empresa</h3>
                                                             <div className="flex items-end gap-3">
-                                                                <span className={`text-4xl font-black ${npsEmpresa >= 4.5 ? 'text-emerald-500' : npsEmpresa >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsEmpresa.toFixed(1)}</span>
+                                                                <span className={`text-4xl font-black ${npsEmpresa >= 4.5 ? 'text-emerald-500' : npsEmpresa >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsEmpresa.toFixed(2)}</span>
                                                                 <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.empresa.total} avaliações)</span>
                                                             </div>
                                                         </div>
                                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Consultores</h3>
                                                             <div className="flex items-end gap-3">
-                                                                <span className={`text-4xl font-black ${npsConsultores >= 4.5 ? 'text-emerald-500' : npsConsultores >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsConsultores.toFixed(1)}</span>
+                                                                <span className={`text-4xl font-black ${npsConsultores >= 4.5 ? 'text-emerald-500' : npsConsultores >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsConsultores.toFixed(2)}</span>
                                                                 <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.consultores.total} avaliações)</span>
                                                             </div>
                                                         </div>
                                                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                                             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Gerentes</h3>
                                                             <div className="flex items-end gap-3">
-                                                                <span className={`text-4xl font-black ${npsGerentes >= 4.5 ? 'text-emerald-500' : npsGerentes >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsGerentes.toFixed(1)}</span>
+                                                                <span className={`text-4xl font-black ${npsGerentes >= 4.5 ? 'text-emerald-500' : npsGerentes >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{npsGerentes.toFixed(2)}</span>
                                                                 <span className="text-sm font-medium text-slate-400 mb-1">/5 ({npsGeralData.gerentes.total} avaliações)</span>
                                                             </div>
                                                         </div>
@@ -630,7 +630,7 @@ export default function FormsResponsesPage() {
                                                                                 <span className={`text-xs font-black w-5 shrink-0 ${i === 0 ? 'text-amber-500' : i === 1 ? 'text-slate-400' : 'text-amber-700'}`}>#{i + 1}</span>
                                                                                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
                                                                             </div>
-                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(1)}</span>
+                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(2)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -650,7 +650,7 @@ export default function FormsResponsesPage() {
                                                                                 <span className={`text-xs font-black w-5 shrink-0 ${i === 0 ? 'text-violet-500' : i === 1 ? 'text-slate-400' : 'text-violet-700'}`}>#{i + 1}</span>
                                                                                 <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
                                                                             </div>
-                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(1)}</span>
+                                                                            <span className={`text-sm font-black shrink-0 ${c.avg >= 4.5 ? 'text-emerald-500' : c.avg >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{c.avg.toFixed(2)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -661,13 +661,13 @@ export default function FormsResponsesPage() {
                                                         {npsFilterTipo !== 'gerente' && consultoresAbaixoMedia.length > 0 && (
                                                             <div className="col-span-1 bg-rose-50 dark:bg-rose-500/5 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
                                                                 <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                                                    <TrendingDown className="h-3.5 w-3.5" />Abaixo da Média ({npsConsultores.toFixed(1)})
+                                                                    <TrendingDown className="h-3.5 w-3.5" />Abaixo da Média ({npsConsultores.toFixed(2)})
                                                                 </h3>
                                                                 <div className="space-y-2 max-h-40 overflow-y-auto">
                                                                     {consultoresAbaixoMedia.map((c, i) => (
                                                                         <div key={i} className="flex items-center justify-between gap-2">
                                                                             <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
-                                                                            <span className="text-sm font-black text-rose-500 shrink-0">{c.avg.toFixed(1)}</span>
+                                                                            <span className="text-sm font-black text-rose-500 shrink-0">{c.avg.toFixed(2)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
