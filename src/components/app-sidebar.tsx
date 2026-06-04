@@ -14,6 +14,7 @@ import {
     FileQuestion,
     Crown,
     Star,
+    Sparkles,
     LogOut,
     Briefcase,
 } from "lucide-react"
@@ -43,6 +44,7 @@ const memberItems = [
     { title: "Performance", url: "/performance", icon: TrendingUp },
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
     { title: "NPS Interno", url: "/nps-interno", icon: Star },
+    { title: "Agente de Feedback", url: "/feedback-agente", icon: Sparkles },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
     { title: "Meus PDIs", url: "/pdis", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
