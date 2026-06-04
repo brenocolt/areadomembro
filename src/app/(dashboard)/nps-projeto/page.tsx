@@ -379,6 +379,11 @@ export default function NPSProjetoPage() {
                     colaborador_id: g.gerente_id,
                     avaliador_id: colaborador.id,
                     mes, ano,
+                    // Carimba o momento do envio. Como o upsert ATUALIZA a linha
+                    // existente (mesmo avaliador/avaliado/mês de referência), sem
+                    // isto o created_at ficaria preso na 1ª submissão e a avaliação
+                    // reenviada em outro mês não apareceria no mês em que foi feita.
+                    created_at: new Date().toISOString(),
                     comunicacao: parseFloat(g.comunicacao),
                     suporte: parseFloat(g.suporte),
                     relacionamento: parseFloat(g.relacionamento),
@@ -406,6 +411,9 @@ export default function NPSProjetoPage() {
                         colaborador_id: c.consultor_id,
                         avaliador_id: colaborador.id,
                         mes, ano,
+                        // Carimba o momento do envio (ver comentário acima): garante
+                        // que reenvios apareçam no mês em que foram efetivamente feitos.
+                        created_at: new Date().toISOString(),
                         comunicacao: parseFloat(c.comunicacao),
                         dedicacao: parseFloat(c.dedicacao),
                         confianca: parseFloat(c.confianca),
