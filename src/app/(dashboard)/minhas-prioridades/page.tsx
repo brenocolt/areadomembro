@@ -2,7 +2,7 @@
 
 import React from "react"
 import "./prioridades.css"
-import { Icon } from "./components/icon"
+import { Icon } from "./components/icons"
 import { Painel, Hoje, Lista, Quadro, Matriz, Concluidas } from "./components/views"
 import { TaskEditor } from "./components/task-editor"
 import { CategoryManager } from "./components/category-manager"

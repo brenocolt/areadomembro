@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { Icon } from "./icon"
+import { Icon } from "./icons"
 import * as D from "./lib"
 import type { Task } from "./lib"
 import { useCats } from "./categories-context"
