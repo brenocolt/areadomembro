@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 // Rótulos amigáveis das métricas de NPS
