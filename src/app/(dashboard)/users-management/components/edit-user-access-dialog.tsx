@@ -14,11 +14,13 @@ import { useSession } from "next-auth/react"
 
 const ALL_PAGES = [
     { label: "Início", path: "/" },
+    { label: "Minhas Atividades", path: "/minhas-prioridades" },
     { label: "Perfil", path: "/profile" },
     { label: "Performance", path: "/performance" },
     { label: "NPS Gerente", path: "/nps-gerente" },
     { label: "NPS Interno", path: "/nps-interno" },
     { label: "Agente de Feedback", path: "/feedback-agente" },
+    { label: "Assistente Pessoal", path: "/assistente-pessoal" },
     { label: "NPS Projeto", path: "/nps-projeto" },
     { label: "Carteira PIPJ", path: "/wallet" },
     { label: "Meus PDIs", path: "/pdis" },
@@ -28,6 +30,7 @@ const ALL_PAGES = [
     { label: "Gestão de PDIs", path: "/pdis-management" },
     { label: "Gestão de Formulários", path: "/forms-management" },
     { label: "Gestão de Pontos", path: "/points-management" },
+    { label: "Pontuar Membros", path: "/pontuar-membros" },
     { label: "Gestão de Milhas", path: "/miles-management" },
     { label: "Gestão de PIPJ", path: "/pipj-management" },
     { label: "Gestão de Usuários", path: "/users-management" },

@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6'
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-3-haiku-20240307'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 // Rótulos amigáveis das métricas do NPS Externo/Projeto
@@ -51,13 +51,15 @@ function addMetric(bucket: MonthBucket, label: string, valor: number) {
 function bucketsToObject(map: Map<string, MonthBucket>) {
     return Array.from(map.values())
         .sort((a, b) => a.key.localeCompare(b.key))
+        .slice(-6) // apenas os 6 meses mais recentes
         .map(b => ({
             mes: b.label,
             avaliacoes: b.n,
             metricas: Object.fromEntries(
-                Object.entries(b.metricas).map(([k, v]) => [k, Number((v.soma / v.n).toFixed(2))])
+                Object.entries(b.metricas).map(([k, v]) => [k, Number((v.soma / v.n).toFixed(1))])
             ),
-            comentarios: b.feedbacks.filter(Boolean),
+            // máx 3 comentários por mês, cada um até 180 chars
+            comentarios: b.feedbacks.filter(Boolean).slice(0, 3).map(c => c.slice(0, 180)),
         }))
 }
 
@@ -81,7 +83,7 @@ async function gatherEvaluations(targetId: string) {
             externoTotal++
             const labels = r.tipo_avaliacao === 'gerente' ? LABELS_GERENTE : LABELS_CONSULTOR
             for (const [field, label] of Object.entries(labels)) {
-                if (r[field] != null) addMetric(b, label, Number(r[field]))
+                if ((r as any)[field] != null) addMetric(b, label, Number((r as any)[field]))
             }
             if (r.feedback_texto && String(r.feedback_texto).trim()) b.feedbacks.push(String(r.feedback_texto).trim())
         }
@@ -173,22 +175,21 @@ export async function POST(request: Request) {
 
         const semDados = dados.npsExterno.total === 0 && dados.npsInterno.total === 0
 
-        const systemPrompt = `Você é o "Agente de Feedback" da Produtiva Júnior, um analista de desenvolvimento de pessoas. Sua função é analisar as avaliações de NPS que um colaborador RECEBEU e produzir um feedback construtivo, honesto e acionável, em português do Brasil.
+        const systemPrompt = `Você é o Agente de Feedback da Produtiva Júnior. Analise as avaliações recebidas e produza feedback construtivo em português.
 
-Diretrizes:
-- Analise TANTO as notas (escala 1 a 5) QUANTO os comentários em texto das avaliações.
-- Estruture a resposta em seções claras com títulos em markdown:
-  1. "## Visão geral" — resumo curto do desempenho.
-  2. "## Pontos fortes" — o que se destaca (com as métricas/notas que sustentam).
-  3. "## Pontos de melhoria" — DÊ ÊNFASE AQUI; seja específico e prático, citando notas e trechos de comentários quando houver.
-  4. "## Evolução ao longo dos meses" — compare meses consecutivos e destaque o que MELHOROU ou PIOROU. Ex.: "No mês anterior a Comunicação era um ponto fraco (3,2), mas neste mês melhorou (4,1)". Só afirme evolução quando houver dados de mais de um mês.
-  5. "## Recomendações" — 3 a 5 ações concretas.
-- Seja respeitoso e motivador, mas não esconda os pontos de melhoria.
-- Use as notas com 1 casa decimal. Não invente dados que não estão no JSON.
-- Quando o usuário fizer perguntas de acompanhamento, responda com base nos mesmos dados.
+CONTEXTO IMPORTANTE: estas avaliações são INTERNAS — feitas por OUTROS MEMBROS da própria empresa (colegas do mesmo núcleo e/ou pessoas que atuaram nos mesmos projetos, incluindo gerentes). NÃO são avaliações de clientes externos. Nunca se refira a "clientes", "consumidores" ou "público externo": trate sempre como feedback de colegas de trabalho e da equipe interna.
 
-Dados do colaborador avaliado (nome: ${alvo?.nome || 'Desconhecido'}, cargo: ${alvo?.cargo_atual || '—'}):
-${semDados ? 'NÃO há avaliações registradas para este colaborador.' : JSON.stringify(dados, null, 2)}`
+Estrutura obrigatória (markdown):
+## Visão geral — resumo curto.
+## Pontos fortes — métricas e notas que sustentam.
+## Pontos de melhoria — ÊNFASE; cite notas e comentários. Seja específico e prático.
+## Evolução — compare meses consecutivos. Só afirme evolução com dados de 2+ meses.
+## Recomendações — 3 a 5 ações concretas.
+
+Regras: notas com 1 decimal; não invente dados; responda perguntas de acompanhamento com os mesmos dados.
+
+Colaborador: ${alvo?.nome || 'Desconhecido'} | Cargo: ${alvo?.cargo_atual || '—'}
+${semDados ? 'Sem avaliações registradas.' : JSON.stringify(dados)}`
 
         const anthropic = new Anthropic({ apiKey })
 
@@ -201,7 +202,7 @@ ${semDados ? 'NÃO há avaliações registradas para este colaborador.' : JSON.s
 
         const resp = await anthropic.messages.create({
             model: MODEL,
-            max_tokens: 2000,
+            max_tokens: 3000,
             system: systemPrompt,
             messages: convo,
         })

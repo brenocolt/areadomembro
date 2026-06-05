@@ -1,0 +1,542 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap');
+
+/* ============================================================
+   Minhas Prioridades — escopo .prio-app (não colide com o global)
+   Design tokens fiéis ao DS (celeste = violet-*, slate neutros)
+   ============================================================ */
+
+.prio-app {
+  /* semantic */
+  --bg: #F8FAFC;
+  --fg: #0F172A;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --primary: #001a41;
+  --primary-fg: #FFFFFF;
+  --muted: #F1F5F9;
+  --muted-fg: #64748B;
+  --accent: #00D1FF;
+  --border: #E2E8F0;
+  --ring: rgba(75,163,199,.30);
+
+  /* celeste (violet-* override) */
+  --c50:#eef8fc; --c100:#d6edf6; --c200:#b3deee; --c300:#88cce2;
+  --c400:#74b9d4; --c500:#4ba3c7; --c600:#3a87ad; --c700:#2f6c8c;
+  --c800:#2b5871; --c900:#28495d; --c950:#172f3e;
+
+  /* slate */
+  --s50:#f8fafc; --s100:#f1f5f9; --s200:#e2e8f0; --s300:#cbd5e1;
+  --s400:#94a3b8; --s500:#64748b; --s600:#475569; --s700:#334155;
+  --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+
+  /* status / semáforo */
+  --emerald:#10b981; --emerald-soft:rgba(16,185,129,.12);
+  --amber:#f59e0b;   --amber-soft:rgba(245,158,11,.14);
+  --rose:#f43f5e;    --rose-soft:rgba(244,63,94,.12);
+
+  /* surfaces */
+  --surface-soft: var(--s50);
+  --surface-soft-2: var(--s100);
+  --line-soft: var(--s100);
+  --chip-bg: var(--c50);
+  --text-1: var(--s900);
+  --text-2: var(--s600);
+  --text-3: var(--s500);
+  --text-4: var(--s400);
+
+  --shadow-sm: 0 1px 2px rgba(15,23,42,.05);
+  --shadow-card: 0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+  --shadow-lift: 0 12px 28px -12px rgba(15,23,42,.22), 0 4px 10px -6px rgba(15,23,42,.12);
+  --shadow-pop: 0 24px 60px -20px rgba(2,18,42,.45);
+
+  --r-sm:8px; --r-md:10px; --r-lg:12px; --r-xl:16px; --r-2xl:20px; --r-3xl:24px;
+}
+
+.dark .prio-app {
+  --bg:#0B1120;
+  --fg:#F8FAFC;
+  --card:#0F172A;
+  --popover:#0F172A;
+  --muted:#1E293B;
+  --muted-fg:#94A3B8;
+  --border:#1E293B;
+  --ring:rgba(0,209,255,.35);
+
+  --surface-soft: rgba(30,41,59,.5);
+  --surface-soft-2: rgba(30,41,59,.7);
+  --line-soft: rgba(30,41,59,.7);
+  --chip-bg: rgba(75,163,199,.14);
+  --text-1:#F8FAFC;
+  --text-2:#CBD5E1;
+  --text-3:#94A3B8;
+  --text-4:#64748B;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,.4);
+  --shadow-lift: 0 14px 30px -14px rgba(0,0,0,.6);
+  --shadow-pop: 0 30px 70px -20px rgba(0,0,0,.7);
+}
+
+/* ============================================================
+   APP SHELL — painel contido (card de duas colunas)
+   ============================================================ */
+.prio-app {
+  display:flex;
+  height:100%;
+  overflow:hidden;
+  background: var(--card);
+  border:1px solid var(--border);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-card);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text-1);
+}
+.prio-app *, .prio-app *::before, .prio-app *::after { box-sizing: border-box; }
+.prio-app .font-display { font-family: 'Outfit', sans-serif; }
+
+/* ---------- sidebar secundária da feature ---------- */
+.prio-app .sidebar {
+  width: 236px; flex: 0 0 236px;
+  background: var(--surface-soft);
+  border-right: 1px solid var(--border);
+  display:flex; flex-direction:column;
+  padding: 18px 14px;
+  transition: width .28s cubic-bezier(.4,0,.2,1), flex-basis .28s cubic-bezier(.4,0,.2,1), padding .28s;
+  position: relative; z-index: 2;
+}
+.dark .prio-app .sidebar { background: rgba(15,23,42,.5); }
+.prio-app .sidebar.collapsed { width:0; flex-basis:0; padding:18px 0; overflow:hidden; border-right-color:transparent; }
+
+.prio-app .feat-head { display:flex; align-items:center; gap:11px; padding:4px 8px 2px; }
+.prio-app .feat-head .fh-chip { width:38px; height:38px; flex:0 0 38px; border-radius:var(--r-lg); background:var(--chip-bg); color:var(--c500); display:flex; align-items:center; justify-content:center; }
+.dark .prio-app .feat-head .fh-chip { color:var(--c300); }
+.prio-app .feat-head .fh-t { font-family:'Outfit'; font-weight:700; font-size:15px; color:var(--text-1); line-height:1.1; white-space:nowrap; }
+.prio-app .feat-head .fh-s { font-size:11px; color:var(--text-3); margin-top:2px; white-space:nowrap; }
+
+.prio-app .nav { display:flex; flex-direction:column; gap:3px; margin-top:22px; overflow-y:auto; }
+.prio-app .nav-label {
+  font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color: var(--text-4); padding: 4px 10px; margin-top:14px;
+  white-space:nowrap; overflow:hidden;
+}
+.prio-app .sidebar.collapsed .nav-label { opacity:0; height:6px; margin:0; padding:0; }
+.prio-app .nav-item {
+  display:flex; align-items:center; gap:11px;
+  padding: 9px 11px; border-radius: var(--r-lg);
+  background:none; border:none; cursor:pointer; width:100%;
+  color: var(--text-2); font-size:13.5px; font-weight:500;
+  white-space:nowrap; transition: background .15s, color .15s;
+  position:relative; font-family:inherit;
+}
+.prio-app .nav-item:hover { background: var(--surface-soft-2); color: var(--text-1); }
+.prio-app .nav-item.active { background: var(--chip-bg); color: var(--c600); font-weight:600; }
+.dark .prio-app .nav-item.active { color: var(--c300); }
+.prio-app .nav-item .ico { flex:0 0 18px; display:flex; }
+.prio-app .nav-item .lbl { overflow:hidden; }
+.prio-app .sidebar.collapsed .nav-item { justify-content:center; padding:9px; }
+.prio-app .sidebar.collapsed .nav-item .lbl { opacity:0; width:0; }
+.prio-app .nav-item .count {
+  margin-left:auto; font-size:11px; font-weight:700; font-family:'Outfit';
+  background: var(--surface-soft-2); color: var(--text-3);
+  padding: 1px 8px; border-radius:999px;
+}
+.dark .prio-app .nav-item .count { background: rgba(148,163,184,.18); }
+.prio-app .nav-item.active .count { background: var(--c500); color:#fff; }
+.prio-app .sidebar.collapsed .nav-item .count { display:none; }
+
+.prio-app .sidebar-foot { margin-top:auto; padding-top:14px; border-top:1px solid var(--border); }
+
+/* ---------- main ---------- */
+.prio-app .main { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+
+.prio-app .topbar {
+  display:flex; align-items:center; gap:16px;
+  padding: 16px 24px 14px; border-bottom:1px solid var(--border);
+}
+.prio-app .topbar-title { display:flex; align-items:center; gap:13px; min-width:0; }
+.prio-app .icon-chip {
+  width:46px; height:46px; flex:0 0 46px; border-radius:var(--r-xl);
+  background: var(--chip-bg); display:flex; align-items:center; justify-content:center;
+  color: var(--c500);
+}
+.dark .prio-app .icon-chip { color: var(--c300); }
+.prio-app .topbar-title h1 { margin:0; font-family:'Outfit'; font-weight:700; font-size:21px; color:var(--text-1); letter-spacing:-.01em; }
+.prio-app .topbar-title p { margin:2px 0 0; font-size:13px; color:var(--text-3); }
+.prio-app .topbar-actions { margin-left:auto; display:flex; align-items:center; gap:10px; }
+
+.prio-app .collapse-btn {
+  width:38px; height:38px; border-radius:var(--r-md); border:1px solid var(--border);
+  background:var(--card); color:var(--text-3); display:flex; align-items:center; justify-content:center;
+  cursor:pointer; transition:.15s; flex:0 0 38px;
+}
+.prio-app .collapse-btn:hover { color:var(--c500); border-color:var(--c300); }
+
+.prio-app .content { flex:1; overflow-y:auto; padding: 24px 24px 48px; }
+.prio-app .content-inner { max-width: 1180px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
+
+.prio-app .filterbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.prio-app .search {
+  display:flex; align-items:center; gap:8px; height:40px; padding:0 13px;
+  background: var(--surface-soft); border:1px solid var(--border); border-radius:var(--r-xl);
+  color:var(--text-3); min-width:200px;
+}
+.prio-app .search input { border:none; background:none; outline:none; color:var(--text-1); font-size:13.5px; width:100%; font-family:inherit; }
+.prio-app .search input::placeholder { color:var(--text-4); }
+
+/* ============================================================ PRIMITIVES */
+.prio-app .card {
+  background: var(--card); border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-card); border:1px solid transparent; padding:20px;
+}
+.prio-app .card.bordered { border-color: var(--border); box-shadow: var(--shadow-sm); }
+
+.prio-app .btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  height:40px; padding:0 16px; border-radius:var(--r-xl);
+  font-size:13.5px; font-weight:600; cursor:pointer; border:1px solid transparent;
+  transition: background .15s, box-shadow .15s, transform .12s, border-color .15s, color .15s;
+  white-space:nowrap; font-family:inherit;
+}
+.prio-app .btn:active { transform: translateY(1px); }
+.prio-app .btn-primary { background: var(--c500); color:#fff; box-shadow: 0 6px 16px -8px rgba(75,163,199,.9); }
+.prio-app .btn-primary:hover { background: var(--c600); }
+.prio-app .btn-outline { background: var(--card); color: var(--text-2); border-color: var(--border); }
+.prio-app .btn-outline:hover { border-color: var(--c300); color:var(--c600); }
+.prio-app .btn-ghost { background:transparent; color:var(--text-3); }
+.prio-app .btn-ghost:hover { background: var(--surface-soft); color:var(--text-1); }
+.prio-app .btn-sm { height:34px; padding:0 12px; font-size:12.5px; border-radius:var(--r-lg); }
+.prio-app .btn-danger { background: var(--rose-soft); color:var(--rose); }
+.prio-app .btn-danger:hover { background: var(--rose); color:#fff; }
+
+.prio-app .icon-btn {
+  width:40px; height:40px; flex:0 0 40px; border-radius:var(--r-md);
+  border:1px solid var(--border); background:var(--card); color:var(--text-3);
+  display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s;
+}
+.prio-app .icon-btn:hover { color:var(--c500); border-color:var(--c300); }
+.prio-app .icon-btn.bare { border:none; background:none; }
+.prio-app .icon-btn.bare:hover { background: var(--surface-soft); }
+
+.prio-app .pill {
+  display:inline-flex; align-items:center; gap:6px;
+  padding: 5px 12px; border-radius:999px; font-size:12px; font-weight:600;
+  background: var(--surface-soft-2); color: var(--text-3); border:1px solid transparent;
+  cursor:pointer; transition:.15s; white-space:nowrap; font-family:inherit;
+}
+.prio-app .pill:hover { color:var(--text-1); }
+.prio-app .pill.active { background: var(--c500); color:#fff; }
+.prio-app .pill .dot { width:8px; height:8px; border-radius:999px; flex:0 0 8px; }
+
+.prio-app .tag {
+  display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+  padding: 2px 9px; border-radius:999px; font-size:11px; font-weight:600;
+}
+.prio-app .tag .dot { width:6px; height:6px; border-radius:999px; flex:0 0 6px; }
+
+.prio-app .prio {
+  display:inline-flex; align-items:center; gap:4px; white-space:nowrap;
+  padding:2px 8px; border-radius:var(--r-sm); font-size:10.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.04em;
+}
+.prio-app .prio.alta { background: var(--rose-soft); color: var(--rose); }
+.prio-app .prio.media { background: var(--amber-soft); color: var(--amber); }
+.prio-app .prio.baixa { background: var(--surface-soft-2); color: var(--text-3); }
+
+.prio-app .meta { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--text-3); font-weight:500; }
+.prio-app .meta.overdue { color: var(--rose); font-weight:600; }
+.prio-app .meta.today { color: var(--amber); font-weight:600; }
+
+.prio-app .field-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-4); margin-bottom:7px; display:block; }
+.prio-app .input, .prio-app .textarea, .prio-app .select {
+  width:100%; background: var(--surface-soft); border:1px solid var(--border);
+  border-radius: var(--r-xl); padding: 0 13px; height:44px; color:var(--text-1);
+  font-size:14px; outline:none; transition: border-color .15s, box-shadow .15s; font-family:inherit;
+}
+.prio-app .textarea { height:auto; padding:11px 13px; resize:vertical; min-height:80px; line-height:1.5; }
+.prio-app .input:focus, .prio-app .textarea:focus, .prio-app .select:focus { border-color: var(--c400); box-shadow: 0 0 0 3px var(--ring); }
+.prio-app .input::placeholder, .prio-app .textarea::placeholder { color: var(--text-4); }
+.prio-app .select { appearance:none; cursor:pointer; background-image:none; }
+
+.prio-app .check {
+  width:22px; height:22px; flex:0 0 22px; border-radius:7px;
+  border:2px solid var(--s300); background:transparent; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  transition: background .18s, border-color .18s, transform .18s;
+}
+.dark .prio-app .check { border-color: var(--s600); }
+.prio-app .check:hover { border-color: var(--c400); }
+.prio-app .check.done { background: var(--emerald); border-color: var(--emerald); }
+.prio-app .check svg { opacity:0; transform:scale(.4); transition: opacity .18s, transform .25s cubic-bezier(.34,1.56,.64,1); }
+.prio-app .check.done svg { opacity:1; transform:scale(1); }
+
+/* ============================================================ TASK CARD */
+.prio-app .task {
+  background: var(--card); border:1px solid var(--border); border-radius: var(--r-xl);
+  padding: 13px 14px; display:flex; gap:12px; align-items:flex-start;
+  box-shadow: var(--shadow-sm); cursor:pointer;
+  transition: box-shadow .18s, transform .14s, border-color .18s, opacity .25s;
+}
+.prio-app .task:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); border-color: var(--c200); }
+.prio-app .task.dragging { opacity:.45; }
+.prio-app .task.is-done .task-title { text-decoration: line-through; color: var(--text-4); }
+.prio-app .task.is-done { opacity:.72; }
+.prio-app .task-body { flex:1; min-width:0; }
+.prio-app .task-top { display:flex; align-items:flex-start; gap:8px; }
+.prio-app .task-title { font-size:14px; font-weight:600; color:var(--text-1); line-height:1.35; word-break:break-word; }
+.prio-app .task-note-1 { font-size:12.5px; color:var(--text-3); margin-top:3px; line-height:1.4; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.prio-app .task-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
+.prio-app .task-grip { color: var(--text-4); cursor:grab; display:flex; padding-top:2px; opacity:.5; transition:.15s; }
+.prio-app .task:hover .task-grip { opacity:1; }
+.prio-app .task-grip:active { cursor:grabbing; }
+.prio-app .subprog { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; color:var(--text-3); font-weight:600; }
+.prio-app .subbar { width:46px; height:5px; border-radius:999px; background: var(--surface-soft-2); overflow:hidden; }
+.prio-app .subbar > i { display:block; height:100%; background: var(--c500); border-radius:999px; transition: width .3s; }
+.prio-app .task.compact { padding:12px; flex-direction:column; gap:9px; }
+.prio-app .task.compact .task-row1 { display:flex; align-items:flex-start; gap:9px; width:100%; }
+
+/* ============================================================ LAYOUTS */
+.prio-app .grid-stats { display:grid; grid-template-columns: repeat(4,1fr); gap:16px; }
+.prio-app .stat { display:flex; flex-direction:column; gap:8px; }
+.prio-app .stat .lab { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-4); display:flex; align-items:center; gap:6px; }
+.prio-app .stat .val { font-family:'Outfit'; font-weight:700; font-size:34px; line-height:1; color:var(--text-1); }
+.prio-app .stat .sub { font-size:12px; color:var(--text-3); }
+
+.prio-app .dash-grid { display:grid; grid-template-columns: 1.6fr 1fr; gap:22px; align-items:start; }
+.prio-app .section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
+.prio-app .section-head h2 { margin:0; font-family:'Outfit'; font-weight:700; font-size:16px; color:var(--text-1); }
+.prio-app .section-head .hint { font-size:12px; color:var(--text-3); }
+
+.prio-app .stack { display:flex; flex-direction:column; gap:10px; }
+
+.prio-app .kanban { display:grid; grid-template-columns: repeat(3,1fr); gap:16px; align-items:start; }
+.prio-app .kcol {
+  background: var(--surface-soft); border-radius: var(--r-2xl); padding:14px;
+  display:flex; flex-direction:column; gap:11px; min-height:200px;
+  border:2px dashed transparent; transition: border-color .15s, background .15s;
+}
+.dark .prio-app .kcol { background: rgba(30,41,59,.4); }
+.prio-app .kcol.over { border-color: var(--c400); background: var(--chip-bg); }
+.prio-app .kcol-head { display:flex; align-items:center; gap:8px; padding: 2px 4px; }
+.prio-app .kcol-head .kdot { width:9px; height:9px; border-radius:999px; }
+.prio-app .kcol-head .ktitle { font-family:'Outfit'; font-weight:700; font-size:13.5px; color:var(--text-1); }
+.prio-app .kcol-head .kcount { margin-left:auto; font-size:11.5px; font-weight:700; font-family:'Outfit'; color:var(--text-3); background:var(--card); padding:1px 9px; border-radius:999px; }
+.prio-app .kcards { display:flex; flex-direction:column; gap:10px; min-height:40px; }
+
+.prio-app .matrix { display:grid; grid-template-columns: repeat(2,1fr); grid-auto-rows: minmax(220px,auto); gap:16px; }
+.prio-app .quad {
+  border-radius: var(--r-2xl); padding:16px; display:flex; flex-direction:column; gap:12px;
+  border:2px dashed transparent; transition: border-color .15s, background .15s; position:relative;
+}
+.prio-app .quad.over { border-color: currentColor; }
+.prio-app .quad-head { display:flex; align-items:flex-start; gap:11px; }
+.prio-app .quad-head .qn { font-family:'Outfit'; font-weight:700; font-size:14.5px; line-height:1.1; }
+.prio-app .quad-head .qd { font-size:11.5px; color:var(--text-3); margin-top:2px; }
+.prio-app .quad-head .qbadge { width:36px; height:36px; flex:0 0 36px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; }
+.prio-app .quad-cards { display:flex; flex-direction:column; gap:9px; flex:1; }
+.prio-app .quad-head .kcount { margin-left:auto; font-size:11.5px; font-weight:700; font-family:'Outfit'; color:var(--text-3); padding:1px 9px; border-radius:999px; }
+.prio-app .q1 { background: var(--rose-soft); } .prio-app .q1 .qbadge { background:var(--rose); color:#fff; } .prio-app .q1 .qn { color:var(--rose); }
+.prio-app .q2 { background: var(--chip-bg); } .prio-app .q2 .qbadge { background:var(--c500); color:#fff; } .prio-app .q2 .qn { color:var(--c600); }
+.dark .prio-app .q2 .qn { color: var(--c300); }
+.prio-app .q3 { background: var(--amber-soft); } .prio-app .q3 .qbadge { background:var(--amber); color:#fff; } .prio-app .q3 .qn { color:var(--amber); }
+.prio-app .q4 { background: var(--surface-soft-2); } .prio-app .q4 .qbadge { background:var(--s400); color:#fff; } .prio-app .q4 .qn { color:var(--text-2); }
+
+.prio-app .group-head { display:flex; align-items:center; gap:9px; margin: 6px 0 12px; }
+.prio-app .group-head .gicon { width:30px; height:30px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; }
+.prio-app .group-head h2 { margin:0; font-family:'Outfit'; font-weight:700; font-size:15px; color:var(--text-1); }
+.prio-app .group-head .gcount { font-size:11.5px; font-weight:700; font-family:'Outfit'; color:var(--text-3); background:var(--surface-soft-2); padding:1px 9px; border-radius:999px; }
+
+.prio-app .progress-ring { position:relative; width:96px; height:96px; flex:0 0 96px; }
+.prio-app .progress-ring svg { transform: rotate(-90deg); }
+.prio-app .progress-ring .ring-num { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.prio-app .progress-ring .ring-num b { font-family:'Outfit'; font-weight:800; font-size:24px; color:var(--text-1); line-height:1; }
+.prio-app .progress-ring .ring-num span { font-size:10px; color:var(--text-3); margin-top:2px; }
+
+.prio-app .mini-ring { width:38px; height:38px; flex:0 0 38px; position:relative; }
+.prio-app .mini-ring svg { transform: rotate(-90deg); }
+.prio-app .mini-ring .mn { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Outfit'; font-weight:700; font-size:11px; color:var(--text-1); }
+
+.prio-app .distrib { display:flex; flex-direction:column; gap:11px; }
+.prio-app .distrib-row { display:flex; align-items:center; gap:10px; }
+.prio-app .distrib-row .dl { font-size:12.5px; color:var(--text-2); width:104px; display:flex; align-items:center; gap:7px; font-weight:500; }
+.prio-app .distrib-row .dbar { flex:1; height:9px; border-radius:999px; background:var(--surface-soft-2); overflow:hidden; }
+.prio-app .distrib-row .dbar > i { display:block; height:100%; border-radius:999px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+.prio-app .distrib-row .dn { font-family:'Outfit'; font-weight:700; font-size:13px; color:var(--text-1); width:26px; text-align:right; }
+
+.prio-app .empty { text-align:center; padding: 38px 20px; max-width:380px; margin:0 auto; }
+.prio-app .empty .ecircle { width:60px; height:60px; border-radius:999px; background:var(--surface-soft-2); color:var(--text-4); display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+.prio-app .empty h3 { font-family:'Outfit'; font-weight:700; font-size:15px; color:var(--text-1); margin:0 0 6px; }
+.prio-app .empty p { font-size:13px; color:var(--text-3); margin:0; line-height:1.5; }
+
+/* ============================================================ MODAL */
+.prio-overlay {
+  position:fixed; inset:0; background: rgba(2,12,28,.46); backdrop-filter: blur(3px);
+  display:flex; align-items:flex-start; justify-content:center; padding: 5vh 20px; z-index:120;
+  animation: prio-fade .2s ease;
+}
+.prio-modal {
+  background: var(--card); border-radius: var(--r-3xl); width:100%; max-width:560px;
+  box-shadow: var(--shadow-pop); max-height:90vh; display:flex; flex-direction:column;
+  animation: prio-pop-in .26s cubic-bezier(.34,1.3,.5,1); overflow:hidden;
+  border:1px solid var(--border); font-family:'Inter', system-ui, sans-serif; color:var(--text-1);
+}
+.prio-modal .modal-head { display:flex; align-items:center; gap:12px; padding: 20px 22px 0; }
+.prio-modal .modal-head h2 { margin:0; font-family:'Outfit'; font-weight:700; font-size:18px; color:var(--text-1); flex:1; }
+.prio-modal .modal-body { padding: 18px 22px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+.prio-modal .modal-foot { padding: 14px 22px; border-top:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+.prio-modal .field-row { display:flex; gap:14px; }
+.prio-modal .field-row > div { flex:1; min-width:0; }
+
+.prio-modal .title-input {
+  width:100%; background: var(--surface-soft); outline:none; resize:none;
+  font-family:'Outfit'; font-weight:700; font-size:18px; color:var(--text-1); line-height:1.4;
+  border:1px solid var(--border); border-radius: var(--r-xl);
+  padding: 11px 14px; transition: border-color .15s, box-shadow .15s;
+  min-height: 52px;
+}
+.prio-modal .title-input:focus { border-color: var(--c400); box-shadow: 0 0 0 3px var(--ring); }
+.prio-modal .title-input::placeholder { color:var(--text-4); }
+
+.prio-modal .toggle-card {
+  display:flex; align-items:center; gap:11px; padding:12px 14px; border-radius:var(--r-xl);
+  border:1px solid var(--border); cursor:pointer; background:var(--surface-soft); transition:.15s; flex:1; font-family:inherit;
+}
+.prio-modal .toggle-card .ti { width:32px; height:32px; border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; background:var(--card); color:var(--text-3); flex:0 0 32px; }
+.prio-modal .toggle-card .tt { font-size:13px; font-weight:600; color:var(--text-1); text-align:left; }
+.prio-modal .toggle-card .ts { font-size:11px; color:var(--text-3); text-align:left; }
+.prio-modal .toggle-card .knob { margin-left:auto; width:38px; height:22px; border-radius:999px; background:var(--s300); position:relative; transition:.2s; flex:0 0 38px; }
+.dark .prio-modal .toggle-card .knob { background:var(--s700); }
+.prio-modal .toggle-card .knob::after { content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:999px; background:#fff; transition:.2s cubic-bezier(.34,1.56,.64,1); box-shadow:0 1px 3px rgba(0,0,0,.2); }
+.prio-modal .toggle-card.on { border-color: var(--c400); background: var(--chip-bg); }
+.prio-modal .toggle-card.on .ti { background: var(--c500); color:#fff; }
+.prio-modal .toggle-card.on .knob { background: var(--c500); }
+.prio-modal .toggle-card.on .knob::after { left:18px; }
+.prio-modal .toggle-card.on.urg { border-color: color-mix(in srgb,var(--rose) 50%, transparent); background: var(--rose-soft); }
+.prio-modal .toggle-card.on.urg .ti, .prio-modal .toggle-card.on.urg .knob { background: var(--rose); }
+
+.prio-modal .sub-list { display:flex; flex-direction:column; gap:6px; }
+.prio-modal .sub-item { display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:var(--r-md); background:var(--surface-soft); }
+.prio-modal .sub-item .scheck { width:18px; height:18px; flex:0 0 18px; border-radius:5px; border:2px solid var(--s300); cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; background:none; }
+.dark .prio-modal .sub-item .scheck { border-color: var(--s600); }
+.prio-modal .sub-item .scheck.done { background: var(--emerald); border-color: var(--emerald); }
+.prio-modal .sub-item input { flex:1; border:none; background:none; outline:none; color:var(--text-1); font-size:13px; font-family:inherit; }
+.prio-modal .sub-item.done input { text-decoration:line-through; color:var(--text-4); }
+.prio-modal .sub-item .srm { color:var(--text-4); cursor:pointer; display:flex; opacity:0; transition:.15s; }
+.prio-modal .sub-item:hover .srm { opacity:1; }
+.prio-modal .add-sub { display:flex; align-items:center; gap:8px; padding:7px 9px; color:var(--text-3); font-size:13px; cursor:pointer; border-radius:var(--r-md); border:1px dashed var(--border); background:none; width:100%; transition:.15s; font-family:inherit; }
+.prio-modal .add-sub:hover { color:var(--c500); border-color:var(--c300); }
+
+.prio-modal .seg { display:flex; gap:6px; }
+.prio-modal .seg button {
+  flex:1; padding:8px 6px; border-radius:var(--r-md); border:1px solid var(--border);
+  background:var(--surface-soft); color:var(--text-3); font-size:12.5px; font-weight:600; cursor:pointer; transition:.15s; font-family:inherit;
+}
+.prio-modal .seg button:hover { color:var(--text-1); }
+.prio-modal .seg button.sel { color:#fff; }
+.prio-modal .seg button.sel.p-alta { background:var(--rose); border-color:var(--rose); }
+.prio-modal .seg button.sel.p-media { background:var(--amber); border-color:var(--amber); }
+.prio-modal .seg button.sel.p-baixa { background:var(--s400); border-color:var(--s400); }
+.prio-modal .seg button.sel.st { background:var(--c500); border-color:var(--c500); }
+.prio-modal .icon-chip { width:40px; height:40px; flex:0 0 40px; border-radius:var(--r-xl); display:flex; align-items:center; justify-content:center; }
+.prio-modal .icon-btn { width:40px; height:40px; flex:0 0 40px; border-radius:var(--r-md); border:none; background:none; color:var(--text-3); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s; }
+.prio-modal .icon-btn:hover { background: var(--surface-soft); }
+.prio-modal .btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  height:40px; padding:0 16px; border-radius:var(--r-xl);
+  font-size:13.5px; font-weight:600; cursor:pointer; border:1px solid transparent;
+  transition: background .15s, border-color .15s, color .15s; white-space:nowrap; font-family:inherit;
+}
+.prio-modal .btn-primary { background: var(--c500); color:#fff; }
+.prio-modal .btn-primary:hover { background: var(--c600); }
+.prio-modal .btn-outline { background: var(--card); color: var(--text-2); border-color: var(--border); }
+.prio-modal .btn-outline:hover { border-color: var(--c300); color:var(--c600); }
+.prio-modal .btn-danger { background: var(--rose-soft); color:var(--rose); }
+.prio-modal .btn-danger:hover { background: var(--rose); color:#fff; }
+.prio-modal .btn-sm { height:34px; padding:0 12px; font-size:12.5px; border-radius:var(--r-lg); }
+.prio-modal .field-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-4); margin-bottom:7px; display:block; }
+.prio-modal .input, .prio-modal .textarea, .prio-modal .select {
+  width:100%; background: var(--surface-soft); border:1px solid var(--border);
+  border-radius: var(--r-xl); padding: 0 13px; height:44px; color:var(--text-1);
+  font-size:14px; outline:none; transition: border-color .15s, box-shadow .15s; font-family:inherit;
+}
+.prio-modal .textarea { height:auto; padding:11px 13px; resize:vertical; min-height:80px; line-height:1.5; }
+.prio-modal .input:focus, .prio-modal .textarea:focus, .prio-modal .select:focus { border-color: var(--c400); box-shadow: 0 0 0 3px var(--ring); }
+.prio-modal .select { appearance:none; cursor:pointer; }
+
+/* sort dropdown */
+.prio-app .sortmenu { position:relative; }
+.prio-app .sortpop {
+  position:absolute; right:0; top:46px; background:var(--popover); border:1px solid var(--border);
+  border-radius:var(--r-xl); box-shadow:var(--shadow-lift); padding:6px; z-index:30; min-width:180px;
+  display:flex; flex-direction:column; gap:2px;
+}
+.prio-app .sortpop button { text-align:left; padding:9px 11px; border-radius:var(--r-md); border:none; background:none; color:var(--text-2); font-size:13px; cursor:pointer; display:flex; align-items:center; gap:9px; font-family:inherit; }
+.prio-app .sortpop button:hover { background:var(--surface-soft); color:var(--text-1); }
+.prio-app .sortpop button.sel { color:var(--c600); font-weight:600; }
+.dark .prio-app .sortpop button.sel { color:var(--c300); }
+
+/* confetti (global — anexado ao body) */
+#prio-confetti-layer { position:fixed; inset:0; pointer-events:none; z-index:200; overflow:hidden; }
+#prio-confetti-layer .confetti { position:absolute; width:9px; height:9px; border-radius:2px; will-change:transform,opacity; }
+
+@keyframes prio-fade { from{opacity:0} to{opacity:1} }
+@keyframes prio-pop-in { from{opacity:0; transform: translateY(10px) scale(.97)} to{opacity:1; transform:none} }
+@keyframes prio-fade-up { from{transform:translateY(7px)} to{transform:none} }
+.prio-app .fade-up { animation: prio-fade-up .35s ease; }
+
+@media (max-width: 980px) {
+  .prio-app .grid-stats { grid-template-columns: repeat(2,1fr); }
+  .prio-app .dash-grid { grid-template-columns: 1fr; }
+  .prio-app .kanban { grid-template-columns: 1fr; }
+  .prio-app .matrix { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile: sidebar vira drawer ── */
+@media (max-width: 768px) {
+  /* sidebar flutua sobre o conteúdo como drawer */
+  .prio-app .sidebar {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-lift);
+    /* quando colapsada fica fora da tela (sem afetar layout) */
+    transform: translateX(0);
+    transition: transform .28s cubic-bezier(.4,0,.2,1), width .28s cubic-bezier(.4,0,.2,1);
+  }
+  .prio-app .sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 236px; /* mantém largura para a animação funcionar */
+    flex-basis: 236px;
+  }
+
+  /* main sempre ocupa 100% no mobile */
+  .prio-app .main { width: 100%; }
+
+  /* topbar mais compacta */
+  .prio-app .topbar { padding: 12px 14px 10px; gap: 10px; }
+  .prio-app .topbar-title h1 { font-size: 17px; }
+  .prio-app .topbar-title p { display: none; }
+  .prio-app .icon-chip { width: 36px; height: 36px; }
+  .prio-app .search { min-width: 0; flex: 1; }
+
+  /* conteúdo com padding menor */
+  .prio-app .content { padding: 16px 14px 48px; }
+
+  /* grid de stats 2 colunas no mobile */
+  .prio-app .grid-stats { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .prio-app .stat .val { font-size: 26px; }
+}
+
+/* Backdrop para fechar a sidebar no mobile */
+.prio-sidebar-backdrop {
+  display: none;
+}
+@media (max-width: 768px) {
+  .prio-sidebar-backdrop {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: rgba(2,12,28,.45);
+    backdrop-filter: blur(2px);
+    animation: prio-fade .2s ease;
+  }
+}

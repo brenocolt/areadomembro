@@ -15,6 +15,9 @@ import {
     Crown,
     Star,
     Sparkles,
+    ListChecks,
+    Bot,
+    UserPlus,
     LogOut,
     Briefcase,
 } from "lucide-react"
@@ -40,11 +43,13 @@ import { useSession, signOut } from "next-auth/react"
 
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
+    { title: "Minhas Atividades", url: "/minhas-prioridades", icon: ListChecks },
     { title: "Perfil", url: "/profile", icon: User },
     { title: "Performance", url: "/performance", icon: TrendingUp },
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
     { title: "NPS Interno", url: "/nps-interno", icon: Star },
     { title: "Agente de Feedback", url: "/feedback-agente", icon: Sparkles },
+    { title: "Assistente Pessoal", url: "/assistente-pessoal", icon: Bot },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
     { title: "Meus PDIs", url: "/pdis", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
@@ -56,6 +61,7 @@ const managementItems = [
     { title: "Gestão de PDIs", url: "/pdis-management", icon: Target },
     { title: "Gestão de Formulários", url: "/forms-management", icon: FileQuestion },
     { title: "Gestão de Pontos", url: "/points-management", icon: ClipboardList },
+    { title: "Pontuar Membros", url: "/pontuar-membros", icon: UserPlus },
     { title: "Gestão de Milhas", url: "/miles-management", icon: Ticket },
     { title: "Gestão de PIPJ", url: "/pipj-management", icon: Wallet },
     { title: "Gestão de Usuários", url: "/users-management", icon: User },

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { ArrowDownLeft, ArrowUpRight, AlertTriangle, ChevronDown, Briefcase, TrendingUp, Award, MinusCircle, CalendarOff } from "lucide-react"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
-import { useState, useEffect } from "react"
+import { useState, useEffect, Fragment } from "react"
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
     CREDITADO: { label: 'Creditado', className: 'bg-green-50 text-green-700 border-green-200' },
@@ -112,9 +112,8 @@ export function TransactionHistory() {
                             const status = STATUS_MAP[t.status] || { label: t.status, className: '' }
                             const isExpanded = expandedId === t.id
                             return (
-                                <>
+                                <Fragment key={t.id}>
                                     <TableRow
-                                        key={t.id}
                                         className={`border-b-slate-100 dark:border-b-slate-800 ${isEntry ? 'cursor-pointer hover:bg-cyan-50/30 dark:hover:bg-cyan-900/10' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'} ${isExpanded ? 'bg-cyan-50/20 dark:bg-cyan-900/10 border-b-0' : ''}`}
                                         onClick={() => toggleExpand(t.id, isEntry)}
                                     >
@@ -147,7 +146,7 @@ export function TransactionHistory() {
                                         </TableCell>
                                     </TableRow>
                                     {isExpanded && <BreakdownRow detalhes={t.detalhes_calculo} />}
-                                </>
+                                </Fragment>
                             )
                         }) : (
                             <TableRow><TableCell colSpan={6} className="text-center text-xs text-slate-400 italic py-8">Nenhuma transação registrada</TableCell></TableRow>
