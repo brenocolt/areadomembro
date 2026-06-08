@@ -117,18 +117,18 @@ export default function FeedbackAgentePage() {
         <div className="space-y-6 max-w-3xl mx-auto w-full">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-2xl bg-violet-50 dark:bg-violet-500/10">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="p-2.5 rounded-2xl bg-violet-50 dark:bg-violet-500/10 shrink-0">
                         <Sparkles className="h-6 w-6 text-violet-500" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h1 className="text-2xl font-display font-bold text-slate-900 dark:text-white">Agente de Feedback</h1>
                         <p className="text-sm text-slate-500">Análise das avaliações recebidas (NPS Interno e Externo) com IA.</p>
                     </div>
                 </div>
                 {canChoose && colaboradores.length > 0 && (
                     <Select value={targetId} onValueChange={setTargetId}>
-                        <SelectTrigger className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-700 rounded-xl h-10 w-full sm:w-64">
+                        <SelectTrigger className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-700 rounded-xl h-10 w-full sm:w-64 shrink-0">
                             <SelectValue placeholder="Selecione o colaborador" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl max-h-72">
