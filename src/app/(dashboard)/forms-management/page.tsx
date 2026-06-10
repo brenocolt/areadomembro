@@ -287,26 +287,10 @@ export default function FormsManagementPage() {
     }
 
     const handleReenviar = async (form: any) => {
-        if (!confirm('Reenviar formulário? As respostas anteriores serão apagadas e os membros poderão responder novamente.')) return
+        if (!confirm('Reenviar formulário? Ele será reaberto para novas respostas. As respostas anteriores são MANTIDAS no histórico.')) return
         try {
-            const { data: respostas } = await supabase
-                .from('formulario_respostas')
-                .select('id')
-                .eq('formulario_id', form.id)
-
-            if (respostas && respostas.length > 0) {
-                const respostaIds = respostas.map(r => r.id)
-                await supabase
-                    .from('formulario_respostas_itens')
-                    .delete()
-                    .in('resposta_id', respostaIds)
-            }
-
-            await supabase
-                .from('formulario_respostas')
-                .delete()
-                .eq('formulario_id', form.id)
-
+            // IMPORTANTE: não apagamos as respostas anteriores — apenas reabrimos o
+            // formulário. O histórico de respostas é preservado e continua visível.
             const { error } = await supabase.from('formularios').update({
                 status: 'ativo',
                 data_inicio: new Date().toISOString(),
@@ -314,7 +298,7 @@ export default function FormsManagementPage() {
 
             if (error) throw error
 
-            toast.success('Formulário reenviado! Os membros podem responder novamente.')
+            toast.success('Formulário reaberto! As respostas anteriores foram mantidas e os membros podem responder novamente.')
             fetchForms()
         } catch (err: any) {
             toast.error('Erro ao reenviar formulário: ' + (err.message || 'Erro desconhecido'))
