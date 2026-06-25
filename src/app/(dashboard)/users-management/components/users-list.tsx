@@ -45,7 +45,8 @@ export function UsersList() {
 
     const filtered = colaboradores.filter(c =>
         c.nome.toLowerCase().includes(search.toLowerCase()) ||
-        c.email_corporativo?.toLowerCase().includes(search.toLowerCase())
+        c.email_corporativo?.toLowerCase().includes(search.toLowerCase()) ||
+        c.cpf?.toLowerCase().includes(search.toLowerCase())
     )
 
     const handleDelete = async () => {
@@ -88,6 +89,7 @@ export function UsersList() {
                         <TableHeader className="bg-slate-50/50 dark:bg-slate-900/20">
                             <TableRow className="border-b-slate-100 dark:border-white/5 hover:bg-transparent">
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Nome</TableHead>
+                                <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">CPF</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Cargo & Núcleo</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Contatos</TableHead>
                                 <TableHead className="py-3 px-6 text-xs font-bold uppercase tracking-wider text-slate-500">Milhas</TableHead>
@@ -98,11 +100,11 @@ export function UsersList() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">Carregando colaboradores...</TableCell>
+                                    <TableCell colSpan={7} className="text-center py-8 text-slate-400">Carregando colaboradores...</TableCell>
                                 </TableRow>
                             ) : filtered.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-8 text-slate-400">Nenhum colaborador encontrado</TableCell>
+                                    <TableCell colSpan={7} className="text-center py-8 text-slate-400">Nenhum colaborador encontrado</TableCell>
                                 </TableRow>
                             ) : (
                                 filtered.map((c) => (
@@ -117,6 +119,9 @@ export function UsersList() {
                                                     <p className="text-xs text-slate-500 truncate">Matrícula: {c.matricula}</p>
                                                 </div>
                                             </div>
+                                        </TableCell>
+                                        <TableCell className="py-3 px-6">
+                                            <span className="text-sm font-mono text-slate-700 dark:text-slate-300">{c.cpf || '—'}</span>
                                         </TableCell>
                                         <TableCell className="py-3 px-6">
                                             <p className="text-sm font-medium">{c.cargo_atual}</p>
