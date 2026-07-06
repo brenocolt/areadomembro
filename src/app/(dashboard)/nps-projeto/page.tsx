@@ -206,9 +206,9 @@ export default function NPSProjetoPage() {
 
     // Fetch data
     useEffect(() => {
-        // Recarrega a lista de projetos ativos do banco e ordena alfabeticamente.
+        // Recarrega a lista de projetos do banco (todos os status) e ordena alfabeticamente.
         const loadProjetos = async () => {
-            const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
+            const { data: p } = await supabase.from('projetos').select('id, nome')
             if (p) {
                 const sorted = [...p].sort((a, b) => a.nome.localeCompare(b.nome))
                 setProjetos(sorted)
@@ -290,10 +290,10 @@ export default function NPSProjetoPage() {
     const gerentes = colaboradores.filter(c =>
         (c.cargo_atual?.toLowerCase().includes("gerente") && !c.cargo_atual?.toLowerCase().includes("assessor"))
         || EXTRA_GERENTE_IDS.includes(c.id)
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 
     // Already selected consultores IDs (to hide from other dropdowns)
     const selectedConsultorIds = consultoresData.map(c => c.consultor_id).filter(Boolean)

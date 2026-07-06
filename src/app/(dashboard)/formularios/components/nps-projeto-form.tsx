@@ -199,9 +199,9 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
 
     // Fetch data
     useEffect(() => {
-        // Recarrega a lista de projetos ativos do banco e ordena alfabeticamente.
+        // Recarrega a lista de projetos do banco (todos os status) e ordena alfabeticamente.
         const loadProjetos = async () => {
-            const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
+            const { data: p } = await supabase.from('projetos').select('id, nome')
             if (p) {
                 const sorted = [...p].sort((a, b) => a.nome.localeCompare(b.nome))
                 setProjetos(sorted)
@@ -242,10 +242,10 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
     // Helpers
     const gerentes = colaboradores.filter(c =>
         c.cargo_atual?.toLowerCase().includes("gerente") || c.cargo_atual?.toLowerCase().includes("assessor")
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 
     const selectedConsultorIds = consultoresData.map(c => c.consultor_id).filter(Boolean)
 
