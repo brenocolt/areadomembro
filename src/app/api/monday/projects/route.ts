@@ -6,6 +6,47 @@ const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID || ''
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
+type MondayItemsPage = { cursor?: string | null; items?: any[] }
+
+async function fetchMondayItemsPage(cursor: string | null): Promise<MondayItemsPage> {
+    const query: string = cursor
+        ? `query($cursor: String!) {
+            next_items_page(cursor: $cursor, limit: 500) {
+                cursor
+                items { id name column_values { id text } }
+            }
+        }`
+        : `{
+            boards(ids: [${MONDAY_BOARD_ID}]) {
+                items_page(limit: 500) {
+                    cursor
+                    items { id name column_values { id text } }
+                }
+            }
+        }`
+
+    const res: Response = await fetch('https://api.monday.com/v2', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': MONDAY_API_TOKEN,
+            'API-Version': '2024-10',
+        },
+        body: JSON.stringify(cursor ? { query, variables: { cursor } } : { query }),
+    })
+
+    if (!res.ok) {
+        throw new Error(`Monday API error: ${await res.text()}`)
+    }
+
+    const json: any = await res.json()
+    if (json.errors) {
+        throw new Error(`Monday GraphQL errors: ${JSON.stringify(json.errors)}`)
+    }
+
+    return (cursor ? json?.data?.next_items_page : json?.data?.boards?.[0]?.items_page) || {}
+}
+
 // items_page só retorna até 500 itens por página. Boards com mais itens
 // precisam ser paginados com o cursor retornado, senão itens além do
 // primeiro lote nunca são sincronizados.
@@ -15,45 +56,10 @@ async function fetchAllMondayItems(): Promise<any[]> {
     const MAX_PAGES = 50 // trava de segurança (até 25 mil itens)
 
     for (let page = 0; page < MAX_PAGES; page++) {
-        const query: string = cursor
-            ? `query($cursor: String!) {
-                next_items_page(cursor: $cursor, limit: 500) {
-                    cursor
-                    items { id name column_values { id text } }
-                }
-            }`
-            : `{
-                boards(ids: [${MONDAY_BOARD_ID}]) {
-                    items_page(limit: 500) {
-                        cursor
-                        items { id name column_values { id text } }
-                    }
-                }
-            }`
+        const itemsPage = await fetchMondayItemsPage(cursor)
+        allItems.push(...(itemsPage.items || []))
 
-        const res = await fetch('https://api.monday.com/v2', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': MONDAY_API_TOKEN,
-                'API-Version': '2024-10',
-            },
-            body: JSON.stringify(cursor ? { query, variables: { cursor } } : { query }),
-        })
-
-        if (!res.ok) {
-            throw new Error(`Monday API error: ${await res.text()}`)
-        }
-
-        const json = await res.json()
-        if (json.errors) {
-            throw new Error(`Monday GraphQL errors: ${JSON.stringify(json.errors)}`)
-        }
-
-        const itemsPage = cursor ? json?.data?.next_items_page : json?.data?.boards?.[0]?.items_page
-        allItems.push(...(itemsPage?.items || []))
-
-        cursor = itemsPage?.cursor || null
+        cursor = itemsPage.cursor || null
         if (!cursor) break
     }
 
