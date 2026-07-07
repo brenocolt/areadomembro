@@ -29,6 +29,10 @@ const LEVEL_BONUS: Record<string, number> = {
 const PUNISHMENT_PER_POINT = 10
 const NPS_THRESHOLD = 4
 const NPS_BONUS_PERCENT = 0.10
+// Bônus manual "NPS 10/CSAT 5" selecionado no lançamento. Calculado sobre a
+// mesma base que o bônus de NPS automático (subtotal após ausência) e somado
+// a ele — os dois bônus percentuais NUNCA compõem (um sobre o outro).
+const NPS_CSAT_BONUS_PERCENT = 0.10
 const MAX_PER_PERSON = 300
 
 // Roles that get exclusive role bonus (no level bonus)
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const overrides: Record<string, { valor_final?: number, motivo: string }> = body.overrides || {};
+    const npsCsatBonus: Record<string, boolean> = body.npsCsatBonus || {};
 
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
@@ -186,8 +191,14 @@ export async function POST(req: NextRequest) {
       // 6. NPS Bonus (+10% if NPS > 4)
       const latestNps = npsMap.get(colab.id) || 0
       const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
-      
-      let pipjCalculado = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
+
+      // 6b. Bônus manual "NPS 10/CSAT 5" selecionado no lançamento. Calculado
+      // sobre a mesma base (subtotalAposAusencia) e SOMADO ao bônus de NPS
+      // acima — nunca aplicado em cima do valor já com o outro bônus.
+      const npsCsatSelecionado = !emPlanoPunicao.has(colab.id) && !!npsCsatBonus[colab.id]
+      const bonusNpsCsat = npsCsatSelecionado ? Math.round(subtotalAposAusencia * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
+
+      let pipjCalculado = Math.round((subtotalAposAusencia + bonusNps + bonusNpsCsat) * 100) / 100
       pipjCalculado = Math.min(pipjCalculado, MAX_PER_PERSON)
 
       // Plano de punição: zera o PIPJ (override manual não pode reverter)
@@ -218,6 +229,10 @@ export async function POST(req: NextRequest) {
         desconto_ausencia: descontoAusencia,
         dias_ausencia: absenceDays,
         dias_uteis_mes: businessDays,
+        nps_score: latestNps,
+        bonus_nps: bonusNps,
+        nps_csat_selecionado: npsCsatSelecionado,
+        bonus_nps_csat: bonusNpsCsat,
         ajuste_manual: ajusteManual,
         motivo_ajuste: motivoAjuste
       }
