@@ -230,23 +230,17 @@ export default function NPSProjetoPage() {
                 // Mostra imediatamente a lista atual (resposta rápida).
                 await loadProjetos()
 
-                // Sincroniza com o Monday e, ao concluir, RECARREGA a lista para
-                // refletir projetos recém-adicionados/atualizados sem precisar dar reload.
-                // Throttle por navegador para evitar excesso de chamadas à API do Monday.
-                const lastSync = localStorage.getItem('last_monday_sync')
-                const now = Date.now()
-                const SYNC_INTERVAL = 10 * 60 * 1000 // 10 minutos
-                if (!lastSync || now - parseInt(lastSync) > SYNC_INTERVAL) {
-                    localStorage.setItem('last_monday_sync', now.toString())
-                    fetch('/api/monday/projects')
-                        .then(res => res.json())
-                        .then(async (data) => {
-                            console.log('Monday background sync result:', data)
-                            // Atualiza o dropdown com os projetos sincronizados.
-                            await loadProjetos()
-                        })
-                        .catch(err => console.warn('Monday background sync failed:', err))
-                }
+                // Sincroniza com o Monday toda vez que o formulário é aberto e,
+                // ao concluir, RECARREGA a lista para refletir projetos
+                // recém-adicionados/atualizados sem precisar dar reload.
+                fetch('/api/monday/projects')
+                    .then(res => res.json())
+                    .then(async (data) => {
+                        console.log('Monday background sync result:', data)
+                        // Atualiza o dropdown com os projetos sincronizados.
+                        await loadProjetos()
+                    })
+                    .catch(err => console.warn('Monday background sync failed:', err))
             } catch (error) {
                 console.error('Error fetching data:', error)
             } finally {
