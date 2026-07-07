@@ -36,7 +36,7 @@ export function PipjLaunchDialog() {
     const [launching, setLaunching] = useState(false)
     const [fetchingPreview, setFetchingPreview] = useState(false)
     const [previewData, setPreviewData] = useState<any>(null)
-    const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valor_final?: number, motivo: string }>>({})
+    const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valorFinal?: number, source?: 'deducao' | 'final', motivo: string }>>({})
     const [npsCsatBonus, setNpsCsatBonus] = useState<Record<string, boolean>>({})
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
     const [result, setResult] = useState<any>(null)
@@ -62,6 +62,23 @@ export function PipjLaunchDialog() {
         const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
         const total = isCsatSelected ? Math.min(d.valor_calculado + bonusCsat, MAX_PER_PERSON) : d.valor_calculado
         return { bonusCsat, total: Math.max(0, total) }
+    }
+
+    // Valor final de um colaborador, sempre recalculado a partir do valor
+    // atual (já incluindo o bônus NPS 10/CSAT 5, se marcado). Uma dedução
+    // digitada continua sendo aplicada sobre o valor com bônus mesmo que a
+    // caixa seja marcada/desmarcada depois — nunca fica "congelada" com uma
+    // base antiga.
+    const computeFinal = (d: any) => {
+        const override = overrides[d.colaborador_id]
+        const { total: valorComBonusCsat } = getValorComBonusCsat(d)
+        if (override?.source === 'final') {
+            return Math.max(0, override.valorFinal ?? valorComBonusCsat)
+        }
+        if (override?.source === 'deducao') {
+            return Math.max(0, valorComBonusCsat - (override.deducao ?? 0))
+        }
+        return valorComBonusCsat
     }
 
     const resetState = useCallback(() => {
@@ -115,17 +132,15 @@ export function PipjLaunchDialog() {
         return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
     }, [open, resetState, fetchPreview])
 
-    const handleOverrideChange = (colabId: string, field: 'deducao' | 'motivo' | 'valor_final', value: string, calculatedVal?: number) => {
+    const handleOverrideChange = (colabId: string, field: 'deducao' | 'motivo' | 'valor_final', value: string) => {
         setOverrides(prev => {
             const current = prev[colabId] || { motivo: '' }
             if (field === 'deducao') {
                 const deducao = value === '' ? undefined : Number(value);
-                const final = deducao === undefined ? undefined : Math.max(0, (calculatedVal || 0) - deducao);
-                return { ...prev, [colabId]: { ...current, deducao, valor_final: final } }
+                return { ...prev, [colabId]: { ...current, deducao, valorFinal: undefined, source: deducao === undefined ? undefined : 'deducao' } }
             } else if (field === 'valor_final') {
-                const final = value === '' ? undefined : Number(value);
-                const deducao = final === undefined ? undefined : (calculatedVal || 0) - final;
-                return { ...prev, [colabId]: { ...current, valor_final: final, deducao } }
+                const valorFinal = value === '' ? undefined : Number(value);
+                return { ...prev, [colabId]: { ...current, valorFinal, deducao: undefined, source: valorFinal === undefined ? undefined : 'final' } }
             }
             return { ...prev, [colabId]: { ...current, motivo: value } }
         })
@@ -135,10 +150,20 @@ export function PipjLaunchDialog() {
         setLaunching(true)
         setError(null)
         try {
+            // Resolve cada override para o valor final já combinado (dedução
+            // e/ou bônus NPS 10/CSAT 5 incluídos) — o backend só entende
+            // 'valor_final', então é aqui que a composição vira um número.
+            const resolvedOverrides: Record<string, { valor_final: number, motivo: string }> = {}
+            for (const d of (previewData?.detalhes ?? [])) {
+                const override = overrides[d.colaborador_id]
+                if (!override?.source) continue
+                resolvedOverrides[d.colaborador_id] = { valor_final: computeFinal(d), motivo: override.motivo }
+            }
+
             const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
+                body: JSON.stringify({ overrides: resolvedOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -268,10 +293,10 @@ export function PipjLaunchDialog() {
                                     <tbody>
                                         {[...(previewData.detalhes ?? [])].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')).map((d: any) => {
                                             const override = overrides[d.colaborador_id]
-                                            const deducao = override?.deducao ?? ''
+                                            const deducao = override?.source === 'deducao' ? (override.deducao ?? '') : ''
                                             const { bonusCsat, total: valorComBonusCsat } = getValorComBonusCsat(d)
                                             const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
-                                            const final = override?.valor_final ?? valorComBonusCsat
+                                            const final = computeFinal(d)
                                             const isChanged = final !== valorComBonusCsat
                                             const isExpanded = !!expandedRows[d.colaborador_id]
                                             
@@ -321,7 +346,7 @@ export function PipjLaunchDialog() {
                                                                 placeholder="0,00"
                                                                 value={deducao}
                                                                 disabled={!!d.detalhes_calculo?.plano_punicao}
-                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, valorComBonusCsat)}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value)}
                                                             />
                                                         </td>
                                                         <td className="p-2">
@@ -339,7 +364,7 @@ export function PipjLaunchDialog() {
                                                                 type="number"
                                                                 className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400"
                                                                 value={final}
-                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, valorComBonusCsat)}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value)}
                                                             />
                                                         </td>
                                                     </tr>
