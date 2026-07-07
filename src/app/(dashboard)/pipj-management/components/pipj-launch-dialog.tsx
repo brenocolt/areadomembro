@@ -51,34 +51,38 @@ export function PipjLaunchDialog() {
         setNpsCsatBonus(prev => ({ ...prev, [colabId]: !prev[colabId] }))
     }
 
-    // Valor calculado incluindo o bônus manual "NPS 10/CSAT 5", quando
-    // marcado. Somado ao valor base (mesma base do bônus de NPS automático),
-    // nunca aplicado em cima de outro bônus percentual.
-    const getValorComBonusCsat = (d: any) => {
-        const subtotalBase = d.detalhes_calculo?.subtotal_apos_ausencia
-        const bonusCsat = (subtotalBase != null && !d.detalhes_calculo?.plano_punicao)
-            ? Math.round(subtotalBase * NPS_CSAT_BONUS_PERCENT * 100) / 100
-            : 0
-        const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
-        const total = isCsatSelected ? Math.min(d.valor_calculado + bonusCsat, MAX_PER_PERSON) : d.valor_calculado
-        return { bonusCsat, total: Math.max(0, total) }
-    }
-
-    // Valor final de um colaborador, sempre recalculado a partir do valor
-    // atual (já incluindo o bônus NPS 10/CSAT 5, se marcado). Uma dedução
-    // digitada continua sendo aplicada sobre o valor com bônus mesmo que a
-    // caixa seja marcada/desmarcada depois — nunca fica "congelada" com uma
-    // base antiga.
-    const computeFinal = (d: any) => {
+    // Bônus manual "NPS 10/CSAT 5" e valor final de um colaborador. Usa a
+    // MESMA base que o bônus de NPS automático (subtotal_apos_ausencia) —
+    // nunca o valor "Calculado" que já inclui aquele bônus, senão os dois
+    // bônus percentuais comporiam entre si em vez de somar. Uma dedução
+    // manual reduz essa base antes do cálculo dos 10% (ex.: base R$100,
+    // dedução R$20 → bônus = 10% de R$80 = R$8, final R$88). Reativo —
+    // recalcula sempre que a dedução ou a caixa de seleção mudam, em
+    // qualquer ordem.
+    const getBonusInfo = (d: any) => {
         const override = overrides[d.colaborador_id]
-        const { total: valorComBonusCsat } = getValorComBonusCsat(d)
+        const isCsatSelected = !!npsCsatBonus[d.colaborador_id] && !d.detalhes_calculo?.plano_punicao
+        const subtotalBase = d.detalhes_calculo?.subtotal_apos_ausencia ?? d.valor_calculado
+
+        const naturalBonus = isCsatSelected ? Math.round(subtotalBase * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
+        const naturalFinal = Math.max(0, Math.min(d.valor_calculado + naturalBonus, MAX_PER_PERSON))
+
         if (override?.source === 'final') {
-            return Math.max(0, override.valorFinal ?? valorComBonusCsat)
+            // Valor Final digitado diretamente é um override absoluto — não
+            // recalcula bônus em cima dele.
+            const final = Math.max(0, override.valorFinal ?? naturalFinal)
+            return { bonusCsat: 0, final, naturalFinal }
         }
+
         if (override?.source === 'deducao') {
-            return Math.max(0, valorComBonusCsat - (override.deducao ?? 0))
+            const deducao = override.deducao ?? 0
+            const baseParaBonus = Math.max(0, subtotalBase - deducao)
+            const bonusCsat = isCsatSelected ? Math.round(baseParaBonus * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
+            const final = Math.max(0, Math.min((d.valor_calculado - deducao) + bonusCsat, MAX_PER_PERSON))
+            return { bonusCsat, final, naturalFinal }
         }
-        return valorComBonusCsat
+
+        return { bonusCsat: naturalBonus, final: naturalFinal, naturalFinal }
     }
 
     const resetState = useCallback(() => {
@@ -150,20 +154,21 @@ export function PipjLaunchDialog() {
         setLaunching(true)
         setError(null)
         try {
-            // Resolve cada override para o valor final já combinado (dedução
-            // e/ou bônus NPS 10/CSAT 5 incluídos) — o backend só entende
-            // 'valor_final', então é aqui que a composição vira um número.
-            const resolvedOverrides: Record<string, { valor_final: number, motivo: string }> = {}
-            for (const d of (previewData?.detalhes ?? [])) {
-                const override = overrides[d.colaborador_id]
-                if (!override?.source) continue
-                resolvedOverrides[d.colaborador_id] = { valor_final: computeFinal(d), motivo: override.motivo }
+            // Envia a dedução/valor final "crus" — o backend é quem calcula o
+            // bônus NPS 10/CSAT 5 sobre a base já com a dedução aplicada
+            // (fonte de verdade, evita o front e o back divergirem no cálculo).
+            const payloadOverrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = {}
+            for (const [colabId, o] of Object.entries(overrides)) {
+                if (!o.source) continue
+                payloadOverrides[colabId] = o.source === 'deducao'
+                    ? { deducao: o.deducao, motivo: o.motivo }
+                    : { valor_final: o.valorFinal, motivo: o.motivo }
             }
 
             const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides: resolvedOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
+                body: JSON.stringify({ overrides: payloadOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -294,10 +299,9 @@ export function PipjLaunchDialog() {
                                         {[...(previewData.detalhes ?? [])].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')).map((d: any) => {
                                             const override = overrides[d.colaborador_id]
                                             const deducao = override?.source === 'deducao' ? (override.deducao ?? '') : ''
-                                            const { bonusCsat, total: valorComBonusCsat } = getValorComBonusCsat(d)
+                                            const { bonusCsat, final, naturalFinal } = getBonusInfo(d)
                                             const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
-                                            const final = computeFinal(d)
-                                            const isChanged = final !== valorComBonusCsat
+                                            const isChanged = final !== naturalFinal
                                             const isExpanded = !!expandedRows[d.colaborador_id]
                                             
                                             return (

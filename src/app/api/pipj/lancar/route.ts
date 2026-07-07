@@ -72,7 +72,7 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const overrides: Record<string, { valor_final?: number, motivo: string }> = body.overrides || {};
+    const overrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = body.overrides || {};
     const npsCsatBonus: Record<string, boolean> = body.npsCsatBonus || {};
 
     const supabaseAdmin = createServerSupabaseClient()
@@ -192,29 +192,43 @@ export async function POST(req: NextRequest) {
       const latestNps = npsMap.get(colab.id) || 0
       const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
 
-      // 6b. Bônus manual "NPS 10/CSAT 5" selecionado no lançamento. Calculado
-      // sobre a mesma base (subtotalAposAusencia) e SOMADO ao bônus de NPS
-      // acima — nunca aplicado em cima do valor já com o outro bônus.
-      const npsCsatSelecionado = !emPlanoPunicao.has(colab.id) && !!npsCsatBonus[colab.id]
-      const bonusNpsCsat = npsCsatSelecionado ? Math.round(subtotalAposAusencia * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
+      // Valor "Calculado" mostrado no preview (base + bônus de NPS automático).
+      let pipjSemAjusteManual = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
+      pipjSemAjusteManual = Math.min(pipjSemAjusteManual, MAX_PER_PERSON)
 
-      let pipjCalculado = Math.round((subtotalAposAusencia + bonusNps + bonusNpsCsat) * 100) / 100
-      pipjCalculado = Math.min(pipjCalculado, MAX_PER_PERSON)
+      // 7. Ajustes manuais feitos no preview (bloqueados para plano de punição)
+      const override = emPlanoPunicao.has(colab.id) ? undefined : overrides[colab.id];
+      const npsCsatSelecionado = !emPlanoPunicao.has(colab.id) && !!npsCsatBonus[colab.id]
+      const deducaoManual = override?.deducao !== undefined ? Number(override.deducao) : 0
+
+      // 7b. Bônus manual "NPS 10/CSAT 5". Usa a MESMA base que o bônus de NPS
+      // automático (subtotalAposAusencia) — nunca o valor que já inclui o
+      // outro bônus, senão os dois bônus percentuais comporiam entre si. A
+      // dedução manual reduz essa base antes do cálculo dos 10%, então o
+      // bônus responde à dedução aplicada (ex.: base R$100, dedução R$20 →
+      // bônus = 10% de R$80 = R$8).
+      const baseParaBonusCsat = Math.max(0, subtotalAposAusencia - deducaoManual)
+      const bonusNpsCsat = npsCsatSelecionado ? Math.round(baseParaBonusCsat * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
+
+      let pipjCalculado = Math.max(0, pipjSemAjusteManual - deducaoManual) + bonusNpsCsat
+      pipjCalculado = Math.min(Math.round(pipjCalculado * 100) / 100, MAX_PER_PERSON)
 
       // Plano de punição: zera o PIPJ (override manual não pode reverter)
       if (emPlanoPunicao.has(colab.id)) pipjCalculado = 0
 
       let pipj = pipjCalculado;
 
-      // 7. Manual adjustment from preview table (bloqueado para plano de punição)
-      const override = emPlanoPunicao.has(colab.id) ? undefined : overrides[colab.id];
-      const hasOverride = override && override.valor_final !== undefined;
-      
-      if (hasOverride) {
+      // Override absoluto do valor final (digitado diretamente no preview,
+      // substitui todo o cálculo acima).
+      const hasValorFinalOverride = override && override.valor_final !== undefined;
+      if (hasValorFinalOverride) {
         pipj = Math.max(0, Number(override.valor_final));
       }
-      
-      const ajusteManual = pipj - pipjCalculado;
+
+      // Ajuste manual total = dedução aplicada + qualquer diferença extra de
+      // um override absoluto de valor final (normalmente zero, já que os
+      // dois campos são mutuamente exclusivos no preview).
+      const ajusteManual = Math.round((-deducaoManual + (pipj - pipjCalculado)) * 100) / 100;
       const motivoAjuste = override ? override.motivo : '';
 
       // Build calculation breakdown
