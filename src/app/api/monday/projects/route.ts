@@ -6,27 +6,30 @@ const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID || ''
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-export async function GET() {
-    try {
-        if (!MONDAY_API_TOKEN || !MONDAY_BOARD_ID) {
-            return NextResponse.json({ error: 'Monday API not configured' }, { status: 500 })
-        }
+// items_page só retorna até 500 itens por página. Boards com mais itens
+// precisam ser paginados com o cursor retornado, senão itens além do
+// primeiro lote nunca são sincronizados.
+async function fetchAllMondayItems(): Promise<any[]> {
+    const allItems: any[] = []
+    let cursor: string | null = null
+    const MAX_PAGES = 50 // trava de segurança (até 25 mil itens)
 
-        // Query Monday GraphQL API to get all items
-        const query = `{
-            boards(ids: [${MONDAY_BOARD_ID}]) {
-                items_page(limit: 500) {
-                    items {
-                        id
-                        name
-                        column_values {
-                            id
-                            text
-                        }
+    for (let page = 0; page < MAX_PAGES; page++) {
+        const query: string = cursor
+            ? `query($cursor: String!) {
+                next_items_page(cursor: $cursor, limit: 500) {
+                    cursor
+                    items { id name column_values { id text } }
+                }
+            }`
+            : `{
+                boards(ids: [${MONDAY_BOARD_ID}]) {
+                    items_page(limit: 500) {
+                        cursor
+                        items { id name column_values { id text } }
                     }
                 }
-            }
-        }`
+            }`
 
         const res = await fetch('https://api.monday.com/v2', {
             method: 'POST',
@@ -35,21 +38,40 @@ export async function GET() {
                 'Authorization': MONDAY_API_TOKEN,
                 'API-Version': '2024-10',
             },
-            body: JSON.stringify({ query }),
+            body: JSON.stringify(cursor ? { query, variables: { cursor } } : { query }),
         })
 
         if (!res.ok) {
-            const errText = await res.text()
-            return NextResponse.json({ error: 'Monday API error', details: errText }, { status: res.status })
+            throw new Error(`Monday API error: ${await res.text()}`)
         }
 
         const json = await res.json()
-
         if (json.errors) {
-            return NextResponse.json({ error: 'Monday GraphQL errors', details: json.errors }, { status: 400 })
+            throw new Error(`Monday GraphQL errors: ${JSON.stringify(json.errors)}`)
         }
 
-        const items = json?.data?.boards?.[0]?.items_page?.items || []
+        const itemsPage = cursor ? json?.data?.next_items_page : json?.data?.boards?.[0]?.items_page
+        allItems.push(...(itemsPage?.items || []))
+
+        cursor = itemsPage?.cursor || null
+        if (!cursor) break
+    }
+
+    return allItems
+}
+
+export async function GET() {
+    try {
+        if (!MONDAY_API_TOKEN || !MONDAY_BOARD_ID) {
+            return NextResponse.json({ error: 'Monday API not configured' }, { status: 500 })
+        }
+
+        let items: any[]
+        try {
+            items = await fetchAllMondayItems()
+        } catch (err: any) {
+            return NextResponse.json({ error: err.message }, { status: 500 })
+        }
 
         if (items.length === 0) {
             return NextResponse.json({ synced: 0, message: 'No items found on Monday board' })
