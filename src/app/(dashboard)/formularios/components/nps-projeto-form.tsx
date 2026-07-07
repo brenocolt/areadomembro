@@ -199,9 +199,9 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
 
     // Fetch data
     useEffect(() => {
-        // Recarrega a lista de projetos do banco (todos os status) e ordena alfabeticamente.
+        // Recarrega a lista de projetos ativos do banco e ordena alfabeticamente.
         const loadProjetos = async () => {
-            const { data: p } = await supabase.from('projetos').select('id, nome')
+            const { data: p } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo')
             if (p) {
                 const sorted = [...p].sort((a, b) => a.nome.localeCompare(b.nome))
                 setProjetos(sorted)
