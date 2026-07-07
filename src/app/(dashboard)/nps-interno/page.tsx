@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
+import { mesReferenciaFromDate } from "@/lib/nps-period"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { MessageSquare, Zap, Award, FolderKanban, Star, TrendingUp } from "lucide-react"
@@ -102,8 +103,8 @@ export default function NPSInternoPage() {
                     if (it && !isNaN(v)) scores[ep.id] = v
                 }
 
-                const d = new Date(r.enviado_em)
-                evals.push({ ano: d.getFullYear(), mes: d.getMonth() + 1, scores })
+                const { mes, ano } = mesReferenciaFromDate(r.enviado_em)
+                evals.push({ ano, mes, scores })
             }
 
             setEvaluations(evals)

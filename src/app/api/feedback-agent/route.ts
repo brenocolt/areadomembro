@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
+import { mesReferenciaFromDate } from '@/lib/nps-period'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -77,7 +78,7 @@ async function gatherEvaluations(targetId: string) {
         for (const r of data || []) {
             // mês de referência da avaliação; cai para created_at se faltar
             let mes = Number(r.mes), ano = Number(r.ano)
-            if (!mes || !ano) { const d = new Date(r.created_at); mes = d.getMonth() + 1; ano = d.getFullYear() }
+            if (!mes || !ano) { const ref = mesReferenciaFromDate(r.created_at); mes = ref.mes; ano = ref.ano }
             const b = ensureBucket(externoMap, ano, mes)
             b.n++
             externoTotal++
@@ -117,8 +118,8 @@ async function gatherEvaluations(targetId: string) {
                     const items = (r as any).formulario_respostas_itens || []
                     const avaliadoItem = items.find((it: any) => it.pergunta_id === avaliadoPergunta.id)
                     if (!avaliadoItem || avaliadoItem.valor !== targetId) continue
-                    const d = new Date(r.enviado_em)
-                    const b = ensureBucket(internoMap, d.getFullYear(), d.getMonth() + 1)
+                    const ref = mesReferenciaFromDate(r.enviado_em)
+                    const b = ensureBucket(internoMap, ref.ano, ref.mes)
                     b.n++
                     internoTotal++
                     for (const ep of escalaPerguntas) {

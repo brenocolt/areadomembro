@@ -165,10 +165,15 @@ export default function NPSProjetoPage() {
     const [submitting, setSubmitting] = useState(false)
     const [done, setDone] = useState(false)
 
+    // Mês de referência é sempre o mês imediatamente anterior ao mês atual
+    const now = new Date()
+    const previousMonthNumber = now.getMonth() === 0 ? 12 : now.getMonth()
+    const previousMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
+
     // Identificação
     const [projetoId, setProjetoId] = useState("")
-    const [mesRef, setMesRef] = useState("")
-    const [anoRef, setAnoRef] = useState(new Date().getFullYear().toString())
+    const [mesRef, setMesRef] = useState(previousMonthNumber.toString())
+    const [anoRef, setAnoRef] = useState(previousMonthYear.toString())
 
     // NPS Gerente data
     const [gerenteData, setGerenteData] = useState<GerenteData>(emptyGerenteData())
@@ -460,7 +465,7 @@ export default function NPSProjetoPage() {
                 <p className="text-slate-500 dark:text-slate-400">
                     Suas avaliações foram registradas com sucesso e já estão vinculadas aos perfis dos avaliados.
                 </p>
-                <Button onClick={() => { setDone(false); setStep(0); setGerenteData(emptyGerenteData()); setConsultoresData([emptyConsultorData()]); setProjetoId(""); setMesRef("") }}
+                <Button onClick={() => { setDone(false); setStep(0); setGerenteData(emptyGerenteData()); setConsultoresData([emptyConsultorData()]); setProjetoId(""); setMesRef(previousMonthNumber.toString()); setAnoRef(previousMonthYear.toString()) }}
                     className="rounded-xl font-bold h-11 px-8 bg-violet-600 hover:bg-violet-700 text-white">
                     Preencher outro NPS
                 </Button>
@@ -524,7 +529,7 @@ export default function NPSProjetoPage() {
                                         <SelectValue placeholder="Mês" />
                                     </SelectTrigger>
                                     <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
-                                        {MESES.map((m, i) => <SelectItem key={i} value={(i + 1).toString()}>{m}</SelectItem>)}
+                                        <SelectItem value={previousMonthNumber.toString()}>{MESES[previousMonthNumber - 1]}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
