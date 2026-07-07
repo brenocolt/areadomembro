@@ -213,22 +213,16 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
                 // Mostra imediatamente a lista atual (resposta rápida).
                 await loadProjetos()
 
-                // Sincroniza com o Monday e recarrega a lista ao concluir, para
-                // refletir projetos recém-adicionados sem precisar dar reload.
-                // Throttle compartilhado por navegador (mesma chave da página /nps-projeto).
-                const lastSync = localStorage.getItem('last_monday_sync')
-                const now = Date.now()
-                const SYNC_INTERVAL = 10 * 60 * 1000 // 10 minutos
-                if (!lastSync || now - parseInt(lastSync) > SYNC_INTERVAL) {
-                    localStorage.setItem('last_monday_sync', now.toString())
-                    fetch('/api/monday/projects')
-                        .then(res => res.json())
-                        .then(async (data) => {
-                            console.log('Monday background sync result:', data)
-                            await loadProjetos()
-                        })
-                        .catch(err => console.warn('Monday background sync failed:', err))
-                }
+                // Sincroniza com o Monday toda vez que o formulário é aberto e
+                // recarrega a lista ao concluir, para refletir projetos
+                // recém-adicionados sem precisar dar reload.
+                fetch('/api/monday/projects')
+                    .then(res => res.json())
+                    .then(async (data) => {
+                        console.log('Monday background sync result:', data)
+                        await loadProjetos()
+                    })
+                    .catch(err => console.warn('Monday background sync failed:', err))
             } catch (error) {
                 console.error('Error fetching projects:', error)
             }
@@ -242,10 +236,10 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
     // Helpers
     const gerentes = colaboradores.filter(c =>
         c.cargo_atual?.toLowerCase().includes("gerente") || c.cargo_atual?.toLowerCase().includes("assessor")
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id
-    )
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 
     const selectedConsultorIds = consultoresData.map(c => c.consultor_id).filter(Boolean)
 
