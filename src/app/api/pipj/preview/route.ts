@@ -204,6 +204,7 @@ export async function GET(req: NextRequest) {
         dias_uteis_mes: businessDays,
         nps_score: latestNps,
         bonus_nps: bonusNps,
+        subtotal_apos_ausencia: subtotalAposAusencia,
         plano_punicao: planoPunicaoAtivo,
       }
 

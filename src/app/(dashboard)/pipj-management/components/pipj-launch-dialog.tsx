@@ -20,6 +20,12 @@ function getYearOptions() {
     return [current - 1, current, current + 1]
 }
 
+// Mesmo percentual usado no backend (/api/pipj/lancar) para o bônus manual
+// "NPS 10/CSAT 5". É somado ao bônus de NPS automático — nunca aplicado em
+// cima dele — por isso ambos usam a mesma base (subtotal_apos_ausencia).
+const NPS_CSAT_BONUS_PERCENT = 0.10
+const MAX_PER_PERSON = 300
+
 export function PipjLaunchDialog() {
     const now = new Date()
     const [open, setOpen] = useState(false)
@@ -31,6 +37,7 @@ export function PipjLaunchDialog() {
     const [fetchingPreview, setFetchingPreview] = useState(false)
     const [previewData, setPreviewData] = useState<any>(null)
     const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valor_final?: number, motivo: string }>>({})
+    const [npsCsatBonus, setNpsCsatBonus] = useState<Record<string, boolean>>({})
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
@@ -38,6 +45,23 @@ export function PipjLaunchDialog() {
 
     const toggleRow = (colabId: string) => {
         setExpandedRows(prev => ({ ...prev, [colabId]: !prev[colabId] }))
+    }
+
+    const toggleNpsCsat = (colabId: string) => {
+        setNpsCsatBonus(prev => ({ ...prev, [colabId]: !prev[colabId] }))
+    }
+
+    // Valor calculado incluindo o bônus manual "NPS 10/CSAT 5", quando
+    // marcado. Somado ao valor base (mesma base do bônus de NPS automático),
+    // nunca aplicado em cima de outro bônus percentual.
+    const getValorComBonusCsat = (d: any) => {
+        const subtotalBase = d.detalhes_calculo?.subtotal_apos_ausencia
+        const bonusCsat = (subtotalBase != null && !d.detalhes_calculo?.plano_punicao)
+            ? Math.round(subtotalBase * NPS_CSAT_BONUS_PERCENT * 100) / 100
+            : 0
+        const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
+        const total = isCsatSelected ? Math.min(d.valor_calculado + bonusCsat, MAX_PER_PERSON) : d.valor_calculado
+        return { bonusCsat, total: Math.max(0, total) }
     }
 
     const resetState = useCallback(() => {
@@ -48,6 +72,7 @@ export function PipjLaunchDialog() {
         setError(null)
         setPreviewData(null)
         setOverrides({})
+        setNpsCsatBonus({})
         if (intervalRef.current) clearInterval(intervalRef.current)
     }, [])
 
@@ -113,7 +138,7 @@ export function PipjLaunchDialog() {
             const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides, mes: selectedMes, ano: selectedAno })
+                body: JSON.stringify({ overrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -234,6 +259,7 @@ export function PipjLaunchDialog() {
                                         <tr>
                                             <th className="text-left p-3 font-bold">Colaborador</th>
                                             <th className="text-right p-3 font-bold">Calculado</th>
+                                            <th className="text-center p-3 font-bold">NPS 10/CSAT 5</th>
                                             <th className="text-right p-3 font-bold">Dedução (R$)</th>
                                             <th className="text-left p-3 font-bold w-40">Descrição / Motivo</th>
                                             <th className="text-right p-3 font-bold">Valor Final (R$)</th>
@@ -243,8 +269,10 @@ export function PipjLaunchDialog() {
                                         {[...(previewData.detalhes ?? [])].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')).map((d: any) => {
                                             const override = overrides[d.colaborador_id]
                                             const deducao = override?.deducao ?? ''
-                                            const final = override?.valor_final ?? Math.max(0, d.valor_calculado)
-                                            const isChanged = final !== Math.max(0, d.valor_calculado)
+                                            const { bonusCsat, total: valorComBonusCsat } = getValorComBonusCsat(d)
+                                            const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
+                                            const final = override?.valor_final ?? valorComBonusCsat
+                                            const isChanged = final !== valorComBonusCsat
                                             const isExpanded = !!expandedRows[d.colaborador_id]
                                             
                                             return (
@@ -270,6 +298,22 @@ export function PipjLaunchDialog() {
                                                                 : `R$ ${Number(d.valor_calculado).toFixed(2).replace('.', ',')}`
                                                             }
                                                         </td>
+                                                        <td className="p-2 text-center">
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="h-4 w-4 accent-emerald-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                                                    checked={isCsatSelected}
+                                                                    disabled={!!d.detalhes_calculo?.plano_punicao}
+                                                                    onChange={() => toggleNpsCsat(d.colaborador_id)}
+                                                                />
+                                                                {isCsatSelected && (
+                                                                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                                                                        +R$ {bonusCsat.toFixed(2).replace('.', ',')}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                         <td className="p-2">
                                                             <Input
                                                                 type="number"
@@ -277,7 +321,7 @@ export function PipjLaunchDialog() {
                                                                 placeholder="0,00"
                                                                 value={deducao}
                                                                 disabled={!!d.detalhes_calculo?.plano_punicao}
-                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, d.valor_calculado)}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'deducao', e.target.value, valorComBonusCsat)}
                                                             />
                                                         </td>
                                                         <td className="p-2">
@@ -291,17 +335,17 @@ export function PipjLaunchDialog() {
                                                             />
                                                         </td>
                                                         <td className="p-2">
-                                                            <Input 
-                                                                type="number" 
-                                                                className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400" 
+                                                            <Input
+                                                                type="number"
+                                                                className="h-8 text-right text-xs font-bold text-emerald-600 dark:text-emerald-400"
                                                                 value={final}
-                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, d.valor_calculado)}
+                                                                onChange={(e) => handleOverrideChange(d.colaborador_id, 'valor_final', e.target.value, valorComBonusCsat)}
                                                             />
                                                         </td>
                                                     </tr>
                                                     {isExpanded && d.detalhes_calculo && (
                                                         <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800">
-                                                            <td colSpan={5} className="p-4 text-xs text-slate-600 dark:text-slate-400">
+                                                            <td colSpan={6} className="p-4 text-xs text-slate-600 dark:text-slate-400">
                                                                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                                                                     <div>
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Base Cargo</span>
@@ -327,6 +371,12 @@ export function PipjLaunchDialog() {
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Ausência ({d.detalhes_calculo.dias_ausencia || 0}d)</span>
                                                                         <span className="text-red-500">- R$ {Number(d.detalhes_calculo.desconto_ausencia || 0).toFixed(2).replace('.', ',')}</span>
                                                                     </div>
+                                                                    {isCsatSelected && (
+                                                                        <div>
+                                                                            <span className="block text-[10px] font-bold text-slate-400 uppercase">NPS 10/CSAT 5</span>
+                                                                            <span className="text-emerald-600 dark:text-emerald-400">+ R$ {bonusCsat.toFixed(2).replace('.', ',')}</span>
+                                                                        </div>
+                                                                    )}
                                                                     {d.detalhes_calculo.plano_punicao && (
                                                                         <div className="col-span-2 sm:col-span-6 mt-1">
                                                                             <span className="inline-flex items-center gap-1 bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-400 text-[10px] font-bold px-2 py-1 rounded-full">
