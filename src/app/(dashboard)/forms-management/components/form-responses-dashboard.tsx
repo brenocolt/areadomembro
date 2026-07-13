@@ -271,7 +271,28 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     })()}
                     {perguntas.map((p, idx) => {
                         const itemResponses = displayRespostas.flatMap(r =>
-                            (r.formulario_respostas_itens || []).filter((it: any) => it.pergunta_id === p.id)
+                            (r.formulario_respostas_itens || [])
+                                .filter((it: any) => it.pergunta_id === p.id)
+                                .map((it: any) => ({ ...it, _autor: r.colaboradores?.nome || 'Anônimo' }))
+                        )
+
+                        // Tooltip com os respondentes de uma opção (aparece no hover da barra)
+                        const VotersTooltip = ({ nomes }: { nomes: string[] }) => (
+                            <div className="absolute left-0 top-full mt-1.5 z-20 hidden group-hover:block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-3 min-w-[200px] max-w-[280px]">
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                    {nomes.length} resposta{nomes.length !== 1 ? 's' : ''}
+                                </p>
+                                <div className="max-h-40 overflow-y-auto space-y-1">
+                                    {nomes.map((nome, i) => (
+                                        <div key={i} className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
+                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 font-bold text-[9px] shrink-0">
+                                                {nome.charAt(0).toUpperCase()}
+                                            </span>
+                                            <span className="truncate">{nome}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )
                         
                         if (itemResponses.length === 0) {
@@ -286,9 +307,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         if (p.tipo === 'escala') {
                             const values = itemResponses.map(it => Number(it.valor)).filter(v => !isNaN(v))
                             const avg = values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '0.0'
-                            
+
                             const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
-                            values.forEach(v => { if (dist[v as keyof typeof dist] !== undefined) dist[v as keyof typeof dist]++ })
+                            const votersByValue: Record<number, string[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] }
+                            itemResponses.forEach(it => {
+                                const v = Number(it.valor)
+                                if (dist[v as keyof typeof dist] !== undefined) {
+                                    dist[v as keyof typeof dist]++
+                                    votersByValue[v].push(it._autor)
+                                }
+                            })
                             
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
@@ -303,12 +331,13 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 const count = dist[v as keyof typeof dist]
                                                 const pct = values.length > 0 ? (count / values.length) * 100 : 0
                                                 return (
-                                                    <div key={v} className="flex items-center gap-3">
+                                                    <div key={v} className={`group relative flex items-center gap-3 ${count > 0 ? 'cursor-default' : ''}`}>
                                                         <span className="text-xs font-bold w-4 text-slate-500">{v}</span>
                                                         <div className="flex-1 h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                             <div className={`h-full ${v >= 4 ? 'bg-emerald-500' : v === 3 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${pct}%` }}></div>
                                                         </div>
                                                         <span className="text-xs text-slate-400 w-8 text-right">{count}</span>
+                                                        {count > 0 && <VotersTooltip nomes={votersByValue[v]} />}
                                                     </div>
                                                 )
                                             })}
@@ -320,18 +349,21 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         
                         if (p.tipo === 'selecao_unica' || p.tipo === 'selecao_multipla') {
                             const counts: Record<string, number> = {}
+                            const voters: Record<string, string[]> = {}
                             itemResponses.forEach(it => {
                                 if (p.tipo === 'selecao_unica' && it.valor) {
                                     counts[it.valor] = (counts[it.valor] || 0) + 1
+                                    ;(voters[it.valor] = voters[it.valor] || []).push(it._autor)
                                 } else if (p.tipo === 'selecao_multipla' && it.valores) {
                                     (it.valores as string[]).forEach(v => {
                                         counts[v] = (counts[v] || 0) + 1
+                                        ;(voters[v] = voters[v] || []).push(it._autor)
                                     })
                                 }
                             })
-                            
+
                             const totalAnswers = itemResponses.length
-                            
+
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                     <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
@@ -339,14 +371,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                         {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([option, count]) => {
                                             const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
                                             return (
-                                                <div key={option} className="flex flex-col gap-1">
+                                                <div key={option} className="group relative flex flex-col gap-1 cursor-default">
                                                     <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                                                         <span>{option}</span>
                                                         <span>{count} ({pct.toFixed(1)}%)</span>
                                                     </div>
                                                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-violet-500" style={{ width: `${pct}%` }}></div>
+                                                        <div className="h-full bg-violet-500 group-hover:bg-violet-600 transition-colors" style={{ width: `${pct}%` }}></div>
                                                     </div>
+                                                    <VotersTooltip nomes={voters[option] || []} />
                                                 </div>
                                             )
                                         })}
@@ -357,18 +390,21 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                         if (p.tipo === 'colaborador_unico' || p.tipo === 'colaborador_multiplo') {
                             const counts: Record<string, number> = {}
+                            const voters: Record<string, string[]> = {}
                             itemResponses.forEach(it => {
                                 if (p.tipo === 'colaborador_unico' && it.valor) {
                                     counts[it.valor] = (counts[it.valor] || 0) + 1
+                                    ;(voters[it.valor] = voters[it.valor] || []).push(it._autor)
                                 } else if (p.tipo === 'colaborador_multiplo' && it.valores) {
                                     (it.valores as string[]).forEach(v => {
                                         counts[v] = (counts[v] || 0) + 1
+                                        ;(voters[v] = voters[v] || []).push(it._autor)
                                     })
                                 }
                             })
-                            
+
                             const totalAnswers = itemResponses.length
-                            
+
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                     <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
@@ -377,14 +413,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                             const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
                                             const name = getColabName(colabId)
                                             return (
-                                                <div key={colabId} className="flex flex-col gap-1">
+                                                <div key={colabId} className="group relative flex flex-col gap-1 cursor-default">
                                                     <div className="flex justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
                                                         <span>{name}</span>
                                                         <span>{count} ({pct.toFixed(1)}%)</span>
                                                     </div>
                                                     <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                        <div className="h-full bg-violet-500" style={{ width: `${pct}%` }}></div>
+                                                        <div className="h-full bg-violet-500 group-hover:bg-violet-600 transition-colors" style={{ width: `${pct}%` }}></div>
                                                     </div>
+                                                    <VotersTooltip nomes={voters[colabId] || []} />
                                                 </div>
                                             )
                                         })}
