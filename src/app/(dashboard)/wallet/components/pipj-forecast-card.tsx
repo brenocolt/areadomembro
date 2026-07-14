@@ -10,9 +10,9 @@ import { useState, useEffect } from "react"
 const FIXED_VALUES: Record<string, number> = {
     'Consultor': 100,
     'Assessor': 100,
-    'Gerente': 175,
-    'Closer': 175,
-    'Diretor': 200,
+    'Gerente': 150,
+    'Closer': 150,
+    'Diretor': 250,
     'SDR': 100,
 }
 

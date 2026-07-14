@@ -31,6 +31,7 @@ export function PipjLaunchDialog() {
     const [open, setOpen] = useState(false)
     const [selectedMes, setSelectedMes] = useState(now.getMonth() + 1)
     const [selectedAno, setSelectedAno] = useState(now.getFullYear())
+    const [mesSemLucro, setMesSemLucro] = useState(false)
     const [countdown, setCountdown] = useState(5)
     const [canConfirm, setCanConfirm] = useState(false)
     const [launching, setLaunching] = useState(false)
@@ -101,7 +102,7 @@ export function PipjLaunchDialog() {
         setFetchingPreview(true)
         setError(null)
         try {
-            const res = await fetch(`/api/pipj/preview?mes=${selectedMes}&ano=${selectedAno}`)
+            const res = await fetch(`/api/pipj/preview?mes=${selectedMes}&ano=${selectedAno}&mesSemLucro=${mesSemLucro}`)
             const data = await res.json()
             if (!res.ok) {
                 setError(data.error || 'Erro ao carregar prévia.')
@@ -124,7 +125,7 @@ export function PipjLaunchDialog() {
         } finally {
             setFetchingPreview(false)
         }
-    }, [selectedMes, selectedAno])
+    }, [selectedMes, selectedAno, mesSemLucro])
 
     useEffect(() => {
         if (open) {
@@ -168,7 +169,7 @@ export function PipjLaunchDialog() {
             const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides: payloadOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno })
+                body: JSON.stringify({ overrides: payloadOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno, mesSemLucro })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -232,6 +233,15 @@ export function PipjLaunchDialog() {
                                     Calcular
                                 </Button>
                             )}
+                            <label className="flex items-center gap-1.5 ml-1 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="h-3.5 w-3.5 accent-amber-500 cursor-pointer"
+                                    checked={mesSemLucro}
+                                    onChange={(e) => { setMesSemLucro(e.target.checked); resetState(); }}
+                                />
+                                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Mês sem lucro</span>
+                            </label>
                         </div>
                     )}
                 </DialogHeader>
@@ -270,10 +280,28 @@ export function PipjLaunchDialog() {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                <Button size="sm" variant="outline" className="h-8 text-xs ml-auto" onClick={() => { resetState(); fetchPreview() }}>
+                                <label className="flex items-center gap-1.5 ml-auto cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5 accent-amber-500 cursor-pointer"
+                                        checked={mesSemLucro}
+                                        onChange={(e) => { setMesSemLucro(e.target.checked); resetState(); }}
+                                    />
+                                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Mês sem lucro</span>
+                                </label>
+                                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => { resetState(); fetchPreview() }}>
                                     Recalcular
                                 </Button>
                             </div>
+
+                            {mesSemLucro && (
+                                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                                        <strong>Mês sem lucro ativo:</strong> o valor base do cargo foi reduzido em 30% e o adicional por projeto passou de R$15 para R$10 para todos os colaboradores.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-start gap-3">
                                 <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
