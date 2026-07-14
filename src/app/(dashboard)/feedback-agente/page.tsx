@@ -65,6 +65,11 @@ export default function FeedbackAgentePage() {
         })
     }, [canChoose])
 
+    // Sem seletor (usuário comum), o alvo é sempre o próprio colaborador.
+    useEffect(() => {
+        if (colaboradorId && !targetId) setTargetId(colaboradorId)
+    }, [colaboradorId, targetId])
+
     const callAgent = useCallback(async (convo: Msg[]): Promise<Msg> => {
         const res = await fetch("/api/feedback-agent", {
             method: "POST",
