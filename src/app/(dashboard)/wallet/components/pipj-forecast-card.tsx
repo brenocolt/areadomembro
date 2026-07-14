@@ -10,17 +10,27 @@ import { useState, useEffect } from "react"
 const FIXED_VALUES: Record<string, number> = {
     'Consultor': 100,
     'Assessor': 100,
-    'Gerente': 150,
+    'SDR': 100,
     'Closer': 150,
     'Diretor': 250,
-    'SDR': 100,
+    'Gerente de Projetos': 150,
+    'Gerente de Inovação': 150,
+    'Gerente de Operações': 150,
+    'Gerente de CS': 150,
+    'Gerente de Gente': 150,
+    'Gerente Institucional': 150,
 }
 
 const VARIABLE_PER_PROJECT: Record<string, number> = {
     'Consultor': 15,
     'Assessor': 15,
     'SDR': 15,
-    'Gerente': 5,
+    'Gerente de Projetos': 5,
+    'Gerente de Inovação': 15,
+    'Gerente de Operações': 15,
+    'Gerente de CS': 15,
+    'Gerente de Gente': 15,
+    'Gerente Institucional': 15,
 }
 
 const LEVEL_BONUS: Record<string, number> = {
@@ -33,7 +43,11 @@ const LEVEL_BONUS: Record<string, number> = {
 
 const PUNISHMENT_PER_POINT = 10
 const MAX_PER_PERSON = 300
-const EXCLUSIVE_ROLES = ['Diretor', 'Closer', 'Gerente']
+const EXCLUSIVE_ROLES = [
+    'Diretor', 'Closer',
+    'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
+    'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
+]
 const NPS_THRESHOLD = 4
 const NPS_BONUS_PERCENT = 0.10
 

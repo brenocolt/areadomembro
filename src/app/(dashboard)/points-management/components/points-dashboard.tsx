@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import {
     PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
     BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -37,7 +38,7 @@ export function PointsDashboard() {
             setLoading(true)
 
             // 1 & 2: Colaboradores stats
-            const { data: cols } = await supabase.from('colaboradores').select('nucleo_atual, pontos_negativos').eq('status', 'Ativo')
+            const { data: cols } = await supabase.from('colaboradores').select('nucleo_atual, pontos_negativos').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA)
 
             if (cols) {
                 // Pie data

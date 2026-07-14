@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Crown } from "lucide-react"
 
 export function PipjTopHolders() {
@@ -16,6 +17,7 @@ export function PipjTopHolders() {
                 .from('colaboradores')
                 .select('nome, saldo_pipj, cargo_atual')
                 .eq('status', 'Ativo')
+                .neq('cargo_atual', CARGO_FANTASMA)
                 .order('saldo_pipj', { ascending: false })
                 .limit(10)
 

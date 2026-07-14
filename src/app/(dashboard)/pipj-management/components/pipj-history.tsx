@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import {
     ArrowUpRight, ArrowDownLeft, Clock, Banknote, Check, X,
     Loader2, Search, ArrowUpDown
@@ -217,12 +218,12 @@ export function PipjHistory() {
 
             const { data } = await supabase
                 .from('transacoes_pipj')
-                .select('*, colaboradores(nome, status)')
+                .select('*, colaboradores(nome, status, cargo_atual)')
                 .order('data', { ascending: false })
                 .limit(40)
 
             if (data) {
-                const ativos = (data as any[]).filter(t => t.colaboradores?.status !== 'Desligado')
+                const ativos = (data as any[]).filter(t => t.colaboradores?.status !== 'Desligado' && t.colaboradores?.cargo_atual !== CARGO_FANTASMA)
                 setTransactions(ativos.slice(0, 20))
             }
             setLoading(false)
@@ -317,11 +318,11 @@ export function SaquePendingRequestsList() {
             setLoading(true)
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores(nome, status)')
+                .select('*, colaboradores(nome, status, cargo_atual)')
                 .eq('tipo', 'saque_pipj')
                 .eq('status', 'PENDENTE')
                 .order('data_solicitacao', { ascending: true })
-            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado'))
+            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado' && s.colaboradores?.cargo_atual !== CARGO_FANTASMA))
             setLoading(false)
         }
         fetchData()
@@ -546,11 +547,11 @@ export function SaqueHistoryList() {
             setLoading(true)
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores(nome, status)')
+                .select('*, colaboradores(nome, status, cargo_atual)')
                 .eq('tipo', 'saque_pipj')
                 .neq('status', 'PENDENTE')
                 .order('data_solicitacao', { ascending: false })
-            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado'))
+            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado' && s.colaboradores?.cargo_atual !== CARGO_FANTASMA))
             setLoading(false)
         }
         fetchData()

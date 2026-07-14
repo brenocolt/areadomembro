@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Wallet, TrendingDown, ArrowDownCircle, ShieldAlert } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 const LIMITE_MENSAL = 4000
@@ -21,7 +22,7 @@ export function PipjStats() {
             const now = new Date()
 
             const [colabsRes, saidasRes, aprovadosRes] = await Promise.all([
-                supabase.from('colaboradores').select('saldo_pipj').eq('status', 'Ativo'),
+                supabase.from('colaboradores').select('saldo_pipj').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
                 supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'SAIDA'),
                 supabase
                     .from('solicitacoes_saque')

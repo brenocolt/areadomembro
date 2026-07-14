@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
+import { CARGO_FANTASMA } from '@/lib/cargos'
 
 export async function POST(request: Request) {
     try {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
             // Get the user's current balance
             const { data: colab, error: colabError } = await supabase
                 .from('colaboradores')
-                .select('saldo_pipj, status')
+                .select('saldo_pipj, status, cargo_atual')
                 .eq('id', saqueReq.colaborador_id)
                 .single()
 
@@ -74,6 +75,10 @@ export async function POST(request: Request) {
 
             if (colab.status === 'Desligado') {
                 return NextResponse.json({ error: 'Colaborador está desligado — saques/resgates não podem ser aprovados enquanto isso.' }, { status: 400 })
+            }
+
+            if (colab.cargo_atual === CARGO_FANTASMA) {
+                return NextResponse.json({ error: 'Conta administrativa não recebe/movimenta PIPJ.' }, { status: 400 })
             }
 
             const currentBalance = Number(colab.saldo_pipj || 0)

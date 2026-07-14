@@ -206,7 +206,7 @@ export function PipjLaunchDialog() {
                     Lançar PIPJ
                 </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogContent className="sm:max-w-[1100px] w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
                 <DialogHeader className="shrink-0">
                     <DialogTitle className="font-display text-xl flex items-center gap-2">
                         <Zap className="h-5 w-5 text-emerald-500" />
@@ -324,16 +324,17 @@ export function PipjLaunchDialog() {
                             </div>
 
                             <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                                <table className="w-full text-xs">
+                              <div className="overflow-x-auto">
+                                <table className="w-full min-w-[920px] text-xs">
                                     <thead className="bg-slate-50 dark:bg-slate-800/50">
                                         <tr>
-                                            <th className="text-left p-3 font-bold">Colaborador</th>
-                                            <th className="text-right p-3 font-bold">Calculado</th>
-                                            <th className="text-center p-3 font-bold">NPS 10/CSAT 5</th>
-                                            <th className="text-center p-3 font-bold">Reconhecimento</th>
-                                            <th className="text-right p-3 font-bold">Dedução (R$)</th>
-                                            <th className="text-left p-3 font-bold w-40">Descrição / Motivo</th>
-                                            <th className="text-right p-3 font-bold">Valor Final (R$)</th>
+                                            <th className="text-left p-3 font-bold whitespace-nowrap">Colaborador</th>
+                                            <th className="text-right p-3 font-bold whitespace-nowrap">Calculado</th>
+                                            <th className="text-center p-3 font-bold whitespace-nowrap">NPS 10/CSAT 5</th>
+                                            <th className="text-center p-3 font-bold whitespace-nowrap">Reconhecimento</th>
+                                            <th className="text-right p-3 font-bold whitespace-nowrap w-28">Dedução (R$)</th>
+                                            <th className="text-left p-3 font-bold w-48">Descrição / Motivo</th>
+                                            <th className="text-right p-3 font-bold whitespace-nowrap w-32">Valor Final (R$)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -486,6 +487,7 @@ export function PipjLaunchDialog() {
                                         })}
                                     </tbody>
                                 </table>
+                              </div>
                             </div>
 
                             {!canConfirm && (

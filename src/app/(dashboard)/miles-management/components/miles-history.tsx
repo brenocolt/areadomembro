@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Calendar, Filter, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -22,7 +23,7 @@ export function MilesHistory() {
             // 1. Fetch exchanges
             const { data: exchanges } = await supabase
                 .from('milhas_trocas')
-                .select('*, colaboradores!inner(nome, status, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, status, cargo_atual, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .neq('status', 'PENDENTE')
                 .order('data_troca', { ascending: false })
                 .limit(20)
@@ -30,7 +31,7 @@ export function MilesHistory() {
             // 2. Fetch additions
             const { data: additions } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores!inner(nome, status, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, status, cargo_atual, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('tipo', 'adicao_milhas')
                 .neq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
@@ -38,9 +39,10 @@ export function MilesHistory() {
 
             const combined = []
 
-            // Membros desligados saem das telas de gestão.
+            // Membros desligados e contas fantasma saem das telas de gestão.
+            const isCirculando = (c: any) => c?.status !== 'Desligado' && c?.cargo_atual !== CARGO_FANTASMA
             if (exchanges) {
-                combined.push(...exchanges.filter(o => o.colaboradores?.status !== 'Desligado').map(o => {
+                combined.push(...exchanges.filter(o => isCirculando(o.colaboradores)).map(o => {
                     const milhasSaldo = o.colaboradores?.milhas_saldo
                     const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
                     return {
@@ -58,7 +60,7 @@ export function MilesHistory() {
             }
 
             if (additions) {
-                combined.push(...additions.filter(o => o.colaboradores?.status !== 'Desligado').map(o => {
+                combined.push(...additions.filter(o => isCirculando(o.colaboradores)).map(o => {
                     const milhasSaldo = o.colaboradores?.milhas_saldo
                     const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
                     return {

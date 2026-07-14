@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Check, X, ShoppingBag, LayoutGrid, List } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function ExchangeRequests() {
@@ -14,11 +15,12 @@ export function ExchangeRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('milhas_trocas')
-                .select('*, colaboradores!inner(nome, cargo_atual, telefone, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, cargo_atual, telefone, status, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(10)
-            if (data) setRequests(data.map(r => {
+            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado' && r.colaboradores?.cargo_atual !== CARGO_FANTASMA)
+            if (data) setRequests(ativos.map(r => {
                 const milhasSaldo = r.colaboradores?.milhas_saldo
                 // Supabase might return an array or an object depending on the relationship
                 const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
@@ -60,9 +62,13 @@ export function ExchangeRequests() {
     }
 
     const handleAccept = async (req: any) => {
-        const { data: colabData } = await supabase.from('colaboradores').select('status').eq('id', req.colaborador_id).single();
+        const { data: colabData } = await supabase.from('colaboradores').select('status, cargo_atual').eq('id', req.colaborador_id).single();
         if (colabData?.status === 'Desligado') {
             alert('Este colaborador está desligado — resgates não podem ser aprovados enquanto isso.');
+            return;
+        }
+        if (colabData?.cargo_atual === CARGO_FANTASMA) {
+            alert('Conta administrativa não recebe/movimenta milhas.');
             return;
         }
 

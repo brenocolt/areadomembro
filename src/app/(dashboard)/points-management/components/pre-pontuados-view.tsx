@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -32,8 +33,8 @@ export function PrePontuadosView() {
             .from('pontos_pre_pontuacao')
             .select('*, colaboradores(nome, cargo_atual, status), formularios(titulo, tipo_formulario)')
             .order('created_at', { ascending: false })
-        // Membros desligados saem das telas de gestão.
-        if (!error && data) setItems((data as any[]).filter(i => i.colaboradores?.status !== 'Desligado') as any)
+        // Membros desligados e contas fantasma saem das telas de gestão.
+        if (!error && data) setItems((data as any[]).filter(i => i.colaboradores?.status !== 'Desligado' && i.colaboradores?.cargo_atual !== CARGO_FANTASMA) as any)
         setLoading(false)
     }
 

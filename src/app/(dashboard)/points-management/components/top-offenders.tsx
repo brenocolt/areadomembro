@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { TrendingUp } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function TopOffenders() {
@@ -16,6 +17,7 @@ export function TopOffenders() {
                 .from('colaboradores')
                 .select('id, nome, cargo_atual, pontos_negativos, users!inner(id)')
                 .eq('status', 'Ativo')
+                .neq('cargo_atual', CARGO_FANTASMA)
                 .gt('pontos_negativos', 0)
                 .order('pontos_negativos', { ascending: false })
                 .limit(5)
