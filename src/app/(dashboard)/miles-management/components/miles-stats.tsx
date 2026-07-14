@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Clock, Plane } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function MilesStats() {
@@ -15,26 +16,26 @@ export function MilesStats() {
             // Milhas de trocas aprovadas (membros desligados saem das telas de gestão)
             const { data: approved } = await supabase
                 .from('milhas_trocas')
-                .select('milhas_gastas, colaboradores!inner(status)')
+                .select('milhas_gastas, colaboradores!inner(status, cargo_atual)')
                 .eq('status', 'APROVADA')
             const total = (approved || [])
-                .filter((t: any) => t.colaboradores?.status !== 'Desligado')
+                .filter((t: any) => t.colaboradores?.status !== 'Desligado' && t.colaboradores?.cargo_atual !== CARGO_FANTASMA)
                 .reduce((sum, t) => sum + (t.milhas_gastas || 0), 0)
             setTotalMiles(total)
 
             // Solicitações pendentes (trocas e adições)
             const { data: trocasPendentes } = await supabase
                 .from('milhas_trocas')
-                .select('id, colaboradores!inner(status)')
+                .select('id, colaboradores!inner(status, cargo_atual)')
                 .eq('status', 'PENDENTE')
             const { data: adicoesPendentes } = await supabase
                 .from('solicitacoes_saque')
-                .select('id, colaboradores!inner(status)')
+                .select('id, colaboradores!inner(status, cargo_atual)')
                 .eq('tipo', 'adicao_milhas')
                 .eq('status', 'PENDENTE')
 
-            const trocasCount = (trocasPendentes || []).filter((t: any) => t.colaboradores?.status !== 'Desligado').length
-            const adicoesCount = (adicoesPendentes || []).filter((a: any) => a.colaboradores?.status !== 'Desligado').length
+            const trocasCount = (trocasPendentes || []).filter((t: any) => t.colaboradores?.status !== 'Desligado' && t.colaboradores?.cargo_atual !== CARGO_FANTASMA).length
+            const adicoesCount = (adicoesPendentes || []).filter((a: any) => a.colaboradores?.status !== 'Desligado' && a.colaboradores?.cargo_atual !== CARGO_FANTASMA).length
 
             setPendingRequests(trocasCount + adicoesCount)
             setLoading(false)

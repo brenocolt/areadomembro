@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { toast } from "sonner"
 import { Search, Wallet, Pencil, Check, X, Loader2 } from "lucide-react"
 
@@ -31,6 +32,7 @@ export function PipjSaldos() {
             .from('colaboradores')
             .select('id, nome, cargo_atual, nivel_consultor, saldo_pipj, status')
             .eq('status', 'Ativo')
+            .neq('cargo_atual', CARGO_FANTASMA)
             .order('nome', { ascending: true })
         if (data) setColabs(data)
         setLoading(false)

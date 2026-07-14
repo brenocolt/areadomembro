@@ -18,6 +18,7 @@ import { useState, useTransition } from 'react';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { CARGOS_AUTOCADASTRO } from '@/lib/cargos';
 
 const formSchema = z.object({
     nome: z.string().min(3, { message: 'Informe seu nome completo' }),
@@ -132,7 +133,16 @@ export function SignupForm() {
                             )} />
                             <FormField control={form.control} name="cargo" render={({ field }) => (
                                 <FormItem><FormLabel className="text-slate-300">Cargo Atual</FormLabel><FormControl>
-                                    <Input placeholder="Ex: Consultor" {...field} className={inputCls} />
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger className="bg-slate-900/50 border-slate-700 text-white">
+                                            <SelectValue placeholder="Selecione o cargo" />
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-slate-700 text-white">
+                                            {CARGOS_AUTOCADASTRO.map(c => (
+                                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </FormControl><FormMessage /></FormItem>
                             )} />
                             <FormField control={form.control} name="senha" render={({ field }) => (

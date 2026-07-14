@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { Trophy } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function TopRedeemers() {
@@ -21,7 +22,7 @@ export function TopRedeemers() {
                 .limit(30)
 
             if (data) {
-                const ativos = data.filter((d: any) => d.colaboradores?.status !== 'Desligado')
+                const ativos = data.filter((d: any) => d.colaboradores?.status !== 'Desligado' && d.colaboradores?.cargo_atual !== CARGO_FANTASMA)
                 setTopUsers(ativos.slice(0, 5))
             }
         }

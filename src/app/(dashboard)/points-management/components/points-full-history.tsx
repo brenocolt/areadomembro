@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { toast } from "sonner"
 import {
     Search, History, TrendingUp, TrendingDown,
@@ -38,7 +39,7 @@ export function PointsFullHistory() {
         const [additionsRes, removalsRes] = await Promise.all([
             supabase
                 .from('ocorrencias')
-                .select('id, colaborador_id, motivo, pontuacao, data, cargo_na_epoca, colaboradores(nome, status)')
+                .select('id, colaborador_id, motivo, pontuacao, data, cargo_na_epoca, colaboradores(nome, status, cargo_atual)')
                 .order('data', { ascending: false }),
             supabase
                 .from('solicitacoes_remocao')
@@ -47,9 +48,9 @@ export function PointsFullHistory() {
                 .order('created_at', { ascending: false }),
         ])
 
-        // Membros desligados saem das telas de gestão.
-        const additionsAtivos = (additionsRes.data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado')
-        const removalsAtivos = (removalsRes.data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+        // Membros desligados e contas fantasma saem das telas de gestão.
+        const additionsAtivos = (additionsRes.data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado' && o.colaboradores?.cargo_atual !== CARGO_FANTASMA)
+        const removalsAtivos = (removalsRes.data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado' && r.colaboradores?.cargo_atual !== CARGO_FANTASMA)
 
         const additions: HistoryEntry[] = additionsAtivos.map((o: any) => ({
             id: o.id,
