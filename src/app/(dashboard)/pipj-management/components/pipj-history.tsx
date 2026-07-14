@@ -217,11 +217,14 @@ export function PipjHistory() {
 
             const { data } = await supabase
                 .from('transacoes_pipj')
-                .select('*, colaboradores(nome)')
+                .select('*, colaboradores(nome, status)')
                 .order('data', { ascending: false })
-                .limit(20)
+                .limit(40)
 
-            if (data) setTransactions(data)
+            if (data) {
+                const ativos = (data as any[]).filter(t => t.colaboradores?.status !== 'Desligado')
+                setTransactions(ativos.slice(0, 20))
+            }
             setLoading(false)
         }
 
@@ -314,11 +317,11 @@ export function SaquePendingRequestsList() {
             setLoading(true)
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores(nome)')
+                .select('*, colaboradores(nome, status)')
                 .eq('tipo', 'saque_pipj')
                 .eq('status', 'PENDENTE')
                 .order('data_solicitacao', { ascending: true })
-            if (data) setSaques(data)
+            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado'))
             setLoading(false)
         }
         fetchData()
@@ -543,11 +546,11 @@ export function SaqueHistoryList() {
             setLoading(true)
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores(nome)')
+                .select('*, colaboradores(nome, status)')
                 .eq('tipo', 'saque_pipj')
                 .neq('status', 'PENDENTE')
                 .order('data_solicitacao', { ascending: false })
-            if (data) setSaques(data)
+            if (data) setSaques((data as any[]).filter(s => s.colaboradores?.status !== 'Desligado'))
             setLoading(false)
         }
         fetchData()

@@ -84,10 +84,12 @@ export async function GET(req: NextRequest) {
     const ano = url.searchParams.get('ano') ? parseInt(url.searchParams.get('ano')!) : now.getFullYear()
     const mesSemLucro = url.searchParams.get('mesSemLucro') === 'true'
 
-    // Fetch active colaboradores sorted alphabetically
+    // Fetch active colaboradores sorted alphabetically (desligados não
+    // recebem PIPJ nos lançamentos)
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
       .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .eq('status', 'Ativo')
       .order('nome', { ascending: true })
 
     if (colabError || !colaboradores) {

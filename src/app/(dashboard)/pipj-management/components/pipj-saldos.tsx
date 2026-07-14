@@ -14,6 +14,7 @@ interface ColabSaldo {
     cargo_atual: string
     nivel_consultor: string
     saldo_pipj: number
+    status?: string
 }
 
 export function PipjSaldos() {
@@ -28,7 +29,8 @@ export function PipjSaldos() {
         setLoading(true)
         const { data } = await supabase
             .from('colaboradores')
-            .select('id, nome, cargo_atual, nivel_consultor, saldo_pipj')
+            .select('id, nome, cargo_atual, nivel_consultor, saldo_pipj, status')
+            .eq('status', 'Ativo')
             .order('nome', { ascending: true })
         if (data) setColabs(data)
         setLoading(false)

@@ -5,19 +5,22 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Pencil, Trash2, Shield, Mail } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Search, Pencil, UserX, UserCheck, Shield, Mail } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
-import { deleteUserCompletely } from "@/lib/admin-actions"
+import { desligarMembro, reativarMembro } from "@/lib/admin-actions"
 import { EditUserAccessDialog } from "./edit-user-access-dialog"
 
-// We will also use `deleteUserCompletely` from another server action, or we can just use supabase client if RLS is relaxed. But for `users` we might need service_role.
+type PendingAction = { id: string, name: string, type: 'desligar' | 'reativar' }
 
 export function UsersList() {
     const [colaboradores, setColaboradores] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState("")
-    const [userToDelete, setUserToDelete] = useState<{ id: string, name: string } | null>(null)
+    const [tab, setTab] = useState<'ativos' | 'desligados'>('ativos')
+    const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
+    const [processing, setProcessing] = useState(false)
     const [userToEdit, setUserToEdit] = useState<any | null>(null)
 
     useEffect(() => {
@@ -43,45 +46,67 @@ export function UsersList() {
         }
     }, [])
 
-    const filtered = colaboradores.filter(c =>
+    const byTab = colaboradores.filter(c => tab === 'desligados' ? c.status === 'Desligado' : c.status !== 'Desligado')
+
+    const filtered = byTab.filter(c =>
         c.nome.toLowerCase().includes(search.toLowerCase()) ||
         c.email_corporativo?.toLowerCase().includes(search.toLowerCase()) ||
         c.cpf?.toLowerCase().includes(search.toLowerCase())
     )
 
-    const handleDelete = async () => {
-        if (!userToDelete) return;
+    const desligadosCount = colaboradores.filter(c => c.status === 'Desligado').length
+
+    const handleConfirmAction = async () => {
+        if (!pendingAction) return;
+        setProcessing(true)
         try {
-            const { success, error } = await deleteUserCompletely(userToDelete.id)
+            const { success, error } = pendingAction.type === 'desligar'
+                ? await desligarMembro(pendingAction.id)
+                : await reativarMembro(pendingAction.id)
+
             if (success) {
-                setColaboradores(prev => prev.filter(c => c.id !== userToDelete.id))
+                const novoStatus = pendingAction.type === 'desligar' ? 'Desligado' : 'Ativo'
+                setColaboradores(prev => prev.map(c => c.id === pendingAction.id ? { ...c, status: novoStatus } : c))
             } else {
-                alert("Erro ao excluir: " + error)
+                alert("Erro: " + error)
             }
         } catch (e: any) {
             alert("Erro fatal: " + e.message)
         }
-        setUserToDelete(null)
+        setProcessing(false)
+        setPendingAction(null)
     }
 
     return (
         <Card className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-none text-slate-900 dark:text-white rounded-3xl h-full shadow-lg overflow-hidden">
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
-                <div className="flex items-center gap-3">
-                    <div className="bg-primary/10 p-2 rounded-xl border border-primary/20">
-                        <Shield className="h-5 w-5 text-primary" />
+            <CardHeader className="flex flex-col gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-primary/10 p-2 rounded-xl border border-primary/20">
+                            <Shield className="h-5 w-5 text-primary" />
+                        </div>
+                        <CardTitle className="text-base font-bold">
+                            {tab === 'desligados' ? 'Membros Desligados' : 'Colaboradores Ativos'}
+                        </CardTitle>
                     </div>
-                    <CardTitle className="text-base font-bold">Colaboradores Ativos</CardTitle>
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                            placeholder="Buscar colaboradores..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="pl-9 bg-slate-50 dark:bg-slate-900 border-none h-9 text-sm rounded-xl focus-visible:ring-1 focus-visible:ring-primary"
+                        />
+                    </div>
                 </div>
-                <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input
-                        placeholder="Buscar colaboradores..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="pl-9 bg-slate-50 dark:bg-slate-900 border-none h-9 text-sm rounded-xl focus-visible:ring-1 focus-visible:ring-primary"
-                    />
-                </div>
+                <Tabs value={tab} onValueChange={(v) => setTab(v as 'ativos' | 'desligados')}>
+                    <TabsList>
+                        <TabsTrigger value="ativos">Ativos</TabsTrigger>
+                        <TabsTrigger value="desligados">
+                            Desligados {desligadosCount > 0 && `(${desligadosCount})`}
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
             </CardHeader>
             <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -104,7 +129,9 @@ export function UsersList() {
                                 </TableRow>
                             ) : filtered.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8 text-slate-400">Nenhum colaborador encontrado</TableCell>
+                                    <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                                        {tab === 'desligados' ? 'Nenhum membro desligado' : 'Nenhum colaborador encontrado'}
+                                    </TableCell>
                                 </TableRow>
                             ) : (
                                 filtered.map((c) => (
@@ -148,9 +175,15 @@ export function UsersList() {
                                                 <Button onClick={() => setUserToEdit(c)} size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg">
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>
-                                                <Button onClick={() => setUserToDelete({ id: c.id, name: c.nome })} size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg">
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                {tab === 'desligados' ? (
+                                                    <Button onClick={() => setPendingAction({ id: c.id, name: c.nome, type: 'reativar' })} size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg">
+                                                        <UserCheck className="h-4 w-4" />
+                                                    </Button>
+                                                ) : (
+                                                    <Button onClick={() => setPendingAction({ id: c.id, name: c.nome, type: 'desligar' })} size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg">
+                                                        <UserX className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -161,23 +194,37 @@ export function UsersList() {
                 </div>
             </CardContent>
 
-            {/* DELETE USER CONFIRMATION DIALOG */}
-            <Dialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
-                <DialogContent className="sm:max-w-[400px] bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800">
+            {/* DESLIGAR / REATIVAR CONFIRMATION DIALOG */}
+            <Dialog open={!!pendingAction} onOpenChange={(open) => !open && setPendingAction(null)}>
+                <DialogContent className="sm:max-w-[420px] bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800">
                     <DialogHeader>
-                        <DialogTitle className="text-slate-900 dark:text-white">Excluir Usuário</DialogTitle>
+                        <DialogTitle className="text-slate-900 dark:text-white">
+                            {pendingAction?.type === 'reativar' ? 'Reativar Membro' : 'Desligar Membro'}
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="py-4">
-                        <p className="text-sm border-l-4 border-rose-500 pl-4 py-1 text-slate-500 dark:text-slate-400">
-                            Tem certeza que deseja <strong>EXCLUIR</strong> o(a) colaborador(a) <span className="font-bold text-slate-900 dark:text-white">{userToDelete?.name}</span>? Essa ação é permanente e vai remover o acesso desta pessoa.
-                        </p>
+                        {pendingAction?.type === 'reativar' ? (
+                            <p className="text-sm border-l-4 border-emerald-500 pl-4 py-1 text-slate-500 dark:text-slate-400">
+                                Tem certeza que deseja <strong>REATIVAR</strong> <span className="font-bold text-slate-900 dark:text-white">{pendingAction?.name}</span>? A conta volta a ter acesso ao portal e os saldos de milhas, pontos e PIPJ voltam a circular normalmente.
+                            </p>
+                        ) : (
+                            <p className="text-sm border-l-4 border-rose-500 pl-4 py-1 text-slate-500 dark:text-slate-400">
+                                Tem certeza que deseja <strong>DESLIGAR</strong> <span className="font-bold text-slate-900 dark:text-white">{pendingAction?.name}</span>? O acesso ao portal é bloqueado imediatamente. As milhas, pontos e PIPJ ficam retidos (fora de circulação), mas continuam vinculados à conta e podem ser recuperados reativando o membro depois.
+                            </p>
+                        )}
                     </div>
                     <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setUserToDelete(null)} className="dark:border-white/10 dark:text-slate-300">
+                        <Button variant="outline" onClick={() => setPendingAction(null)} className="dark:border-white/10 dark:text-slate-300">
                             Cancelar
                         </Button>
-                        <Button variant="destructive" onClick={handleDelete} className="bg-rose-500 hover:bg-rose-600 text-white border-none">
-                            Sim, Excluir
+                        <Button
+                            onClick={handleConfirmAction}
+                            disabled={processing}
+                            className={pendingAction?.type === 'reativar'
+                                ? "bg-emerald-500 hover:bg-emerald-600 text-white border-none"
+                                : "bg-rose-500 hover:bg-rose-600 text-white border-none"}
+                        >
+                            {processing ? 'Processando...' : pendingAction?.type === 'reativar' ? 'Sim, Reativar' : 'Sim, Desligar'}
                         </Button>
                     </div>
                 </DialogContent>
@@ -193,12 +240,12 @@ export function UsersList() {
                     onSave={(updatedData, newRole) => {
                         setColaboradores(prev => prev.map(c => {
                             if (c.id !== userToEdit.id) return c
-                            
+
                             // Handle milhas_saldo update specifically
-                            const updatedMilhasSaldo = updatedData.saldo_milhas !== undefined 
-                                ? [{ saldo_disponivel: updatedData.saldo_milhas }] 
+                            const updatedMilhasSaldo = updatedData.saldo_milhas !== undefined
+                                ? [{ saldo_disponivel: updatedData.saldo_milhas }]
                                 : c.milhas_saldo;
-                            
+
                             // Remove saldo_milhas from updatedData to not pollute c
                             const { saldo_milhas, ...restUpdatedData } = updatedData;
 

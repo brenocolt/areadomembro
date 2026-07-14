@@ -43,7 +43,7 @@ export function AddPointsDialog() {
 
         async function fetchData() {
             const [colabRes, motivoRes] = await Promise.all([
-                supabase.from('colaboradores').select('id, nome, nucleo_atual, cargo_atual, users!inner(id)'),
+                supabase.from('colaboradores').select('id, nome, nucleo_atual, cargo_atual, users!inner(id)').eq('status', 'Ativo'),
                 supabase.from('pontos_motivos_punicao').select('*').eq('disponivel', true).order('pontos').order('titulo'),
             ])
 

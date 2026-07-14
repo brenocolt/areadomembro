@@ -187,6 +187,34 @@ export async function approveAccountRequest(id: string) {
     return { success: true };
 }
 
+export async function desligarMembro(colaboradorId: string) {
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase
+        .from('colaboradores')
+        .update({ status: 'Desligado', desligado_em: new Date().toISOString() })
+        .eq('id', colaboradorId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+    return { success: true };
+}
+
+export async function reativarMembro(colaboradorId: string) {
+    const supabase = createServerSupabaseClient();
+
+    const { error } = await supabase
+        .from('colaboradores')
+        .update({ status: 'Ativo', desligado_em: null })
+        .eq('id', colaboradorId);
+
+    if (error) {
+        return { success: false, error: error.message };
+    }
+    return { success: true };
+}
+
 export async function deleteUserCompletely(colaboradorId: string) {
     const supabase = createServerSupabaseClient();
 

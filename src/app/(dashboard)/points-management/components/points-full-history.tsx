@@ -38,16 +38,20 @@ export function PointsFullHistory() {
         const [additionsRes, removalsRes] = await Promise.all([
             supabase
                 .from('ocorrencias')
-                .select('id, colaborador_id, motivo, pontuacao, data, cargo_na_epoca, colaboradores(nome)')
+                .select('id, colaborador_id, motivo, pontuacao, data, cargo_na_epoca, colaboradores(nome, status)')
                 .order('data', { ascending: false }),
             supabase
                 .from('solicitacoes_remocao')
-                .select('id, colaborador_id, motivo, pontos_solicitados, created_at, colaboradores(nome, cargo_atual)')
+                .select('id, colaborador_id, motivo, pontos_solicitados, created_at, colaboradores(nome, cargo_atual, status)')
                 .eq('status', 'APROVADA')
                 .order('created_at', { ascending: false }),
         ])
 
-        const additions: HistoryEntry[] = (additionsRes.data || []).map((o: any) => ({
+        // Membros desligados saem das telas de gestão.
+        const additionsAtivos = (additionsRes.data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado')
+        const removalsAtivos = (removalsRes.data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+
+        const additions: HistoryEntry[] = additionsAtivos.map((o: any) => ({
             id: o.id,
             type: 'addition',
             colaborador_id: o.colaborador_id,
@@ -59,7 +63,7 @@ export function PointsFullHistory() {
             cargo: o.cargo_na_epoca || '',
         }))
 
-        const removals: HistoryEntry[] = (removalsRes.data || []).map((r: any) => ({
+        const removals: HistoryEntry[] = removalsAtivos.map((r: any) => ({
             id: r.id,
             type: 'removal',
             colaborador_id: r.colaborador_id,
