@@ -24,6 +24,9 @@ function getYearOptions() {
 // "NPS 10/CSAT 5". É somado ao bônus de NPS automático — nunca aplicado em
 // cima dele — por isso ambos usam a mesma base (subtotal_apos_ausencia).
 const NPS_CSAT_BONUS_PERCENT = 0.10
+// Bônus manual "Reconhecimento": valor FIXO, somado por fora — nunca entra
+// na base dos bônus percentuais de NPS/CSAT, nem é limitado pelo teto.
+const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
 
 export function PipjLaunchDialog() {
@@ -39,6 +42,7 @@ export function PipjLaunchDialog() {
     const [previewData, setPreviewData] = useState<any>(null)
     const [overrides, setOverrides] = useState<Record<string, { deducao?: number, valorFinal?: number, source?: 'deducao' | 'final', motivo: string }>>({})
     const [npsCsatBonus, setNpsCsatBonus] = useState<Record<string, boolean>>({})
+    const [reconhecimentoBonus, setReconhecimentoBonus] = useState<Record<string, boolean>>({})
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
     const [result, setResult] = useState<any>(null)
     const [error, setError] = useState<string | null>(null)
@@ -52,6 +56,10 @@ export function PipjLaunchDialog() {
         setNpsCsatBonus(prev => ({ ...prev, [colabId]: !prev[colabId] }))
     }
 
+    const toggleReconhecimento = (colabId: string) => {
+        setReconhecimentoBonus(prev => ({ ...prev, [colabId]: !prev[colabId] }))
+    }
+
     // Bônus manual "NPS 10/CSAT 5" e valor final de um colaborador. Usa a
     // MESMA base que o bônus de NPS automático (subtotal_apos_ausencia) —
     // nunca o valor "Calculado" que já inclui aquele bônus, senão os dois
@@ -62,28 +70,31 @@ export function PipjLaunchDialog() {
     // qualquer ordem.
     const getBonusInfo = (d: any) => {
         const override = overrides[d.colaborador_id]
-        const isCsatSelected = !!npsCsatBonus[d.colaborador_id] && !d.detalhes_calculo?.plano_punicao
+        const isPunido = !!d.detalhes_calculo?.plano_punicao
+        const isCsatSelected = !!npsCsatBonus[d.colaborador_id] && !isPunido
+        const isReconhecimentoSelected = !!reconhecimentoBonus[d.colaborador_id] && !isPunido
         const subtotalBase = d.detalhes_calculo?.subtotal_apos_ausencia ?? d.valor_calculado
+        const bonusReconhecimento = isReconhecimentoSelected ? RECONHECIMENTO_BONUS_VALOR : 0
 
         const naturalBonus = isCsatSelected ? Math.round(subtotalBase * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
-        const naturalFinal = Math.max(0, Math.min(d.valor_calculado + naturalBonus, MAX_PER_PERSON))
+        const naturalFinal = Math.max(0, Math.min(d.valor_calculado + naturalBonus, MAX_PER_PERSON) + bonusReconhecimento)
 
         if (override?.source === 'final') {
             // Valor Final digitado diretamente é um override absoluto — não
             // recalcula bônus em cima dele.
             const final = Math.max(0, override.valorFinal ?? naturalFinal)
-            return { bonusCsat: 0, final, naturalFinal }
+            return { bonusCsat: 0, bonusReconhecimento, final, naturalFinal }
         }
 
         if (override?.source === 'deducao') {
             const deducao = override.deducao ?? 0
             const baseParaBonus = Math.max(0, subtotalBase - deducao)
             const bonusCsat = isCsatSelected ? Math.round(baseParaBonus * NPS_CSAT_BONUS_PERCENT * 100) / 100 : 0
-            const final = Math.max(0, Math.min((d.valor_calculado - deducao) + bonusCsat, MAX_PER_PERSON))
-            return { bonusCsat, final, naturalFinal }
+            const final = Math.max(0, Math.min((d.valor_calculado - deducao) + bonusCsat, MAX_PER_PERSON) + bonusReconhecimento)
+            return { bonusCsat, bonusReconhecimento, final, naturalFinal }
         }
 
-        return { bonusCsat: naturalBonus, final: naturalFinal, naturalFinal }
+        return { bonusCsat: naturalBonus, bonusReconhecimento, final: naturalFinal, naturalFinal }
     }
 
     const resetState = useCallback(() => {
@@ -95,6 +106,7 @@ export function PipjLaunchDialog() {
         setPreviewData(null)
         setOverrides({})
         setNpsCsatBonus({})
+        setReconhecimentoBonus({})
         if (intervalRef.current) clearInterval(intervalRef.current)
     }, [])
 
@@ -169,7 +181,7 @@ export function PipjLaunchDialog() {
             const res = await fetch('/api/pipj/lancar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ overrides: payloadOverrides, npsCsatBonus, mes: selectedMes, ano: selectedAno, mesSemLucro })
+                body: JSON.stringify({ overrides: payloadOverrides, npsCsatBonus, reconhecimentoBonus, mes: selectedMes, ano: selectedAno, mesSemLucro })
             })
             const data = await res.json()
             if (!res.ok) {
@@ -318,6 +330,7 @@ export function PipjLaunchDialog() {
                                             <th className="text-left p-3 font-bold">Colaborador</th>
                                             <th className="text-right p-3 font-bold">Calculado</th>
                                             <th className="text-center p-3 font-bold">NPS 10/CSAT 5</th>
+                                            <th className="text-center p-3 font-bold">Reconhecimento</th>
                                             <th className="text-right p-3 font-bold">Dedução (R$)</th>
                                             <th className="text-left p-3 font-bold w-40">Descrição / Motivo</th>
                                             <th className="text-right p-3 font-bold">Valor Final (R$)</th>
@@ -327,8 +340,9 @@ export function PipjLaunchDialog() {
                                         {[...(previewData.detalhes ?? [])].sort((a: any, b: any) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt-BR')).map((d: any) => {
                                             const override = overrides[d.colaborador_id]
                                             const deducao = override?.source === 'deducao' ? (override.deducao ?? '') : ''
-                                            const { bonusCsat, final, naturalFinal } = getBonusInfo(d)
+                                            const { bonusCsat, bonusReconhecimento, final, naturalFinal } = getBonusInfo(d)
                                             const isCsatSelected = !!npsCsatBonus[d.colaborador_id]
+                                            const isReconhecimentoSelected = !!reconhecimentoBonus[d.colaborador_id]
                                             const isChanged = final !== naturalFinal
                                             const isExpanded = !!expandedRows[d.colaborador_id]
                                             
@@ -371,6 +385,22 @@ export function PipjLaunchDialog() {
                                                                 )}
                                                             </div>
                                                         </td>
+                                                        <td className="p-2 text-center">
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="h-4 w-4 accent-violet-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                                                    checked={isReconhecimentoSelected}
+                                                                    disabled={!!d.detalhes_calculo?.plano_punicao}
+                                                                    onChange={() => toggleReconhecimento(d.colaborador_id)}
+                                                                />
+                                                                {isReconhecimentoSelected && (
+                                                                    <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400">
+                                                                        +R$ {bonusReconhecimento.toFixed(2).replace('.', ',')}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
                                                         <td className="p-2">
                                                             <Input
                                                                 type="number"
@@ -402,7 +432,7 @@ export function PipjLaunchDialog() {
                                                     </tr>
                                                     {isExpanded && d.detalhes_calculo && (
                                                         <tr className="bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800">
-                                                            <td colSpan={6} className="p-4 text-xs text-slate-600 dark:text-slate-400">
+                                                            <td colSpan={7} className="p-4 text-xs text-slate-600 dark:text-slate-400">
                                                                 <div className="grid grid-cols-2 sm:grid-cols-6 gap-4">
                                                                     <div>
                                                                         <span className="block text-[10px] font-bold text-slate-400 uppercase">Base Cargo</span>
@@ -432,6 +462,12 @@ export function PipjLaunchDialog() {
                                                                         <div>
                                                                             <span className="block text-[10px] font-bold text-slate-400 uppercase">NPS 10/CSAT 5</span>
                                                                             <span className="text-emerald-600 dark:text-emerald-400">+ R$ {bonusCsat.toFixed(2).replace('.', ',')}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {isReconhecimentoSelected && (
+                                                                        <div>
+                                                                            <span className="block text-[10px] font-bold text-slate-400 uppercase">Reconhecimento</span>
+                                                                            <span className="text-violet-600 dark:text-violet-400">+ R$ {bonusReconhecimento.toFixed(2).replace('.', ',')}</span>
                                                                         </div>
                                                                     )}
                                                                     {d.detalhes_calculo.plano_punicao && (
