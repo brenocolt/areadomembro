@@ -5,9 +5,9 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 const FIXED_VALUES: Record<string, number> = {
   'Consultor': 100,
   'Assessor': 100,
-  'Gerente': 175,
-  'Closer': 175,
-  'Diretor': 200,
+  'Gerente': 150,
+  'Closer': 150,
+  'Diretor': 250,
   'SDR': 100,
 }
 
@@ -15,6 +15,16 @@ const VARIABLE_PER_PROJECT: Record<string, number> = {
   'Consultor': 15,
   'Assessor': 15,
   'SDR': 15,
+  'Gerente': 5,
+}
+
+// "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
+// projeto de R$15 para R$10, aplicado a todos os colaboradores.
+const MES_SEM_LUCRO_BASE_MULTIPLIER = 0.70
+const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
+  'Consultor': 10,
+  'Assessor': 10,
+  'SDR': 10,
   'Gerente': 5,
 }
 
@@ -74,6 +84,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const overrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = body.overrides || {};
     const npsCsatBonus: Record<string, boolean> = body.npsCsatBonus || {};
+    const mesSemLucro: boolean = body.mesSemLucro === true;
 
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()
@@ -163,12 +174,17 @@ export async function POST(req: NextRequest) {
       const projetos = colab.projetos || 0
       const pontosNegativos = colab.pontos_negativos || 0
 
-      // 1. Fixed base value
-      const baseCargo = FIXED_VALUES[cargo] || 100
+      // 1. Fixed base value (reduzido 30% em mês sem lucro)
+      const baseCargoIntegral = FIXED_VALUES[cargo] || 100
+      const baseCargo = mesSemLucro
+        ? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100
+        : baseCargoIntegral
       let subtotal = baseCargo
 
-      // 2. Variable per project (only Consultor/Gerente)
-      const bonusProjetos = VARIABLE_PER_PROJECT[cargo] ? VARIABLE_PER_PROJECT[cargo] * projetos : 0
+      // 2. Variable per project (only Consultor/Gerente/SDR/Assessor; valor
+      // reduzido de R$15 para R$10 em mês sem lucro)
+      const tabelaPorProjeto = mesSemLucro ? VARIABLE_PER_PROJECT_MES_SEM_LUCRO : VARIABLE_PER_PROJECT
+      const bonusProjetos = tabelaPorProjeto[cargo] ? tabelaPorProjeto[cargo] * projetos : 0
       subtotal += bonusProjetos
 
       // 3. Level bonus (only for non-exclusive roles)
@@ -248,7 +264,8 @@ export async function POST(req: NextRequest) {
         nps_csat_selecionado: npsCsatSelecionado,
         bonus_nps_csat: bonusNpsCsat,
         ajuste_manual: ajusteManual,
-        motivo_ajuste: motivoAjuste
+        motivo_ajuste: motivoAjuste,
+        mes_sem_lucro: mesSemLucro
       }
 
       detalhes.push({
