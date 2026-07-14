@@ -18,6 +18,16 @@ const VARIABLE_PER_PROJECT: Record<string, number> = {
   'Gerente': 5,
 }
 
+// "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
+// projeto de R$15 para R$10, aplicado a todos os colaboradores.
+const MES_SEM_LUCRO_BASE_MULTIPLIER = 0.70
+const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
+  'Consultor': 10,
+  'Assessor': 10,
+  'SDR': 10,
+  'Gerente': 5,
+}
+
 const LEVEL_BONUS: Record<string, number> = {
   'Júnior': 0,
   'Junior': 0,
@@ -72,6 +82,7 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url)
     const mes = url.searchParams.get('mes') ? parseInt(url.searchParams.get('mes')!) : now.getMonth() + 1
     const ano = url.searchParams.get('ano') ? parseInt(url.searchParams.get('ano')!) : now.getFullYear()
+    const mesSemLucro = url.searchParams.get('mesSemLucro') === 'true'
 
     // Fetch active colaboradores sorted alphabetically
     const { data: colaboradores, error: colabError } = await supabaseAdmin
@@ -154,12 +165,17 @@ export async function GET(req: NextRequest) {
       const projetos = colab.projetos || 0
       const pontosNegativos = colab.pontos_negativos || 0
 
-      // 1. Fixed base value
-      const baseCargo = FIXED_VALUES[cargo] || 100
+      // 1. Fixed base value (reduzido 30% em mês sem lucro)
+      const baseCargoIntegral = FIXED_VALUES[cargo] || 100
+      const baseCargo = mesSemLucro
+        ? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100
+        : baseCargoIntegral
       let subtotal = baseCargo
 
-      // 2. Variable per project (only Consultor/Gerente)
-      const bonusProjetos = VARIABLE_PER_PROJECT[cargo] ? VARIABLE_PER_PROJECT[cargo] * projetos : 0
+      // 2. Variable per project (only Consultor/Gerente/SDR/Assessor; valor
+      // reduzido de R$15 para R$10 em mês sem lucro)
+      const tabelaPorProjeto = mesSemLucro ? VARIABLE_PER_PROJECT_MES_SEM_LUCRO : VARIABLE_PER_PROJECT
+      const bonusProjetos = tabelaPorProjeto[cargo] ? tabelaPorProjeto[cargo] * projetos : 0
       subtotal += bonusProjetos
 
       // 3. Level bonus (only for non-exclusive roles)
@@ -206,6 +222,7 @@ export async function GET(req: NextRequest) {
         bonus_nps: bonusNps,
         subtotal_apos_ausencia: subtotalAposAusencia,
         plano_punicao: planoPunicaoAtivo,
+        mes_sem_lucro: mesSemLucro,
       }
 
       detalhes.push({
@@ -227,6 +244,7 @@ export async function GET(req: NextRequest) {
       success: true,
       total_lancado: totalLancado,
       total_colaboradores: colaboradores.length,
+      mes_sem_lucro: mesSemLucro,
       detalhes,
     })
   } catch (error: any) {
