@@ -43,6 +43,10 @@ const NPS_BONUS_PERCENT = 0.10
 // mesma base que o bônus de NPS automático (subtotal após ausência) e somado
 // a ele — os dois bônus percentuais NUNCA compõem (um sobre o outro).
 const NPS_CSAT_BONUS_PERCENT = 0.10
+// Bônus manual "Reconhecimento" selecionado no lançamento. Valor FIXO (não
+// percentual) somado por fora — nunca entra na base dos bônus de NPS/CSAT
+// acima, nem é reduzido/limitado por eles.
+const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
 
 // Roles that get exclusive role bonus (no level bonus)
@@ -84,6 +88,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const overrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = body.overrides || {};
     const npsCsatBonus: Record<string, boolean> = body.npsCsatBonus || {};
+    const reconhecimentoBonus: Record<string, boolean> = body.reconhecimentoBonus || {};
     const mesSemLucro: boolean = body.mesSemLucro === true;
 
     const supabaseAdmin = createServerSupabaseClient()
@@ -231,6 +236,13 @@ export async function POST(req: NextRequest) {
       let pipjCalculado = Math.max(0, pipjSemAjusteManual - deducaoManual) + bonusNpsCsat
       pipjCalculado = Math.min(Math.round(pipjCalculado * 100) / 100, MAX_PER_PERSON)
 
+      // 7c. Bônus fixo "Reconhecimento" (R$50). Somado DEPOIS do teto de
+      // MAX_PER_PERSON e fora da base de qualquer bônus percentual — nunca
+      // entra no cálculo dos 10% de NPS/CSAT, nem é limitado pelo teto.
+      const reconhecimentoSelecionado = !emPlanoPunicao.has(colab.id) && !!reconhecimentoBonus[colab.id]
+      const bonusReconhecimento = reconhecimentoSelecionado ? RECONHECIMENTO_BONUS_VALOR : 0
+      pipjCalculado = Math.round((pipjCalculado + bonusReconhecimento) * 100) / 100
+
       // Plano de punição: zera o PIPJ (override manual não pode reverter)
       if (emPlanoPunicao.has(colab.id)) pipjCalculado = 0
 
@@ -265,6 +277,8 @@ export async function POST(req: NextRequest) {
         bonus_nps: bonusNps,
         nps_csat_selecionado: npsCsatSelecionado,
         bonus_nps_csat: bonusNpsCsat,
+        reconhecimento_selecionado: reconhecimentoSelecionado,
+        bonus_reconhecimento: bonusReconhecimento,
         ajuste_manual: ajusteManual,
         motivo_ajuste: motivoAjuste,
         mes_sem_lucro: mesSemLucro
