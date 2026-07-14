@@ -12,26 +12,31 @@ export function MilesStats() {
 
     useEffect(() => {
         async function fetch() {
-            // Milhas de trocas aprovadas
+            // Milhas de trocas aprovadas (membros desligados saem das telas de gestão)
             const { data: approved } = await supabase
                 .from('milhas_trocas')
-                .select('milhas_gastas')
+                .select('milhas_gastas, colaboradores!inner(status)')
                 .eq('status', 'APROVADA')
-            const total = approved?.reduce((sum, t) => sum + (t.milhas_gastas || 0), 0) || 0
+            const total = (approved || [])
+                .filter((t: any) => t.colaboradores?.status !== 'Desligado')
+                .reduce((sum, t) => sum + (t.milhas_gastas || 0), 0)
             setTotalMiles(total)
 
             // Solicitações pendentes (trocas e adições)
-            const { count: trocasCount } = await supabase
+            const { data: trocasPendentes } = await supabase
                 .from('milhas_trocas')
-                .select('*', { count: 'exact', head: true })
+                .select('id, colaboradores!inner(status)')
                 .eq('status', 'PENDENTE')
-            const { count: adicoesCount } = await supabase
+            const { data: adicoesPendentes } = await supabase
                 .from('solicitacoes_saque')
-                .select('*', { count: 'exact', head: true })
+                .select('id, colaboradores!inner(status)')
                 .eq('tipo', 'adicao_milhas')
                 .eq('status', 'PENDENTE')
 
-            setPendingRequests((trocasCount || 0) + (adicoesCount || 0))
+            const trocasCount = (trocasPendentes || []).filter((t: any) => t.colaboradores?.status !== 'Desligado').length
+            const adicoesCount = (adicoesPendentes || []).filter((a: any) => a.colaboradores?.status !== 'Desligado').length
+
+            setPendingRequests(trocasCount + adicoesCount)
             setLoading(false)
         }
         fetch()

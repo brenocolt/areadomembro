@@ -67,6 +67,21 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
                     return null;
                 }
 
+                // Bloqueia login de colaboradores desligados. O acesso volta
+                // automaticamente quando o membro é reativado.
+                if (user.colaborador_id) {
+                    const { data: colaborador } = await supabase
+                        .from('colaboradores')
+                        .select('status')
+                        .eq('id', user.colaborador_id)
+                        .single();
+
+                    if (colaborador?.status === 'Desligado') {
+                        console.log('Login blocked: colaborador desligado', email);
+                        return null;
+                    }
+                }
+
                 // Retornar dados do usuário para o token JWT
                 return {
                     id: user.id,

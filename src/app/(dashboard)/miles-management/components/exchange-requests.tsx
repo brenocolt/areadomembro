@@ -60,6 +60,12 @@ export function ExchangeRequests() {
     }
 
     const handleAccept = async (req: any) => {
+        const { data: colabData } = await supabase.from('colaboradores').select('status').eq('id', req.colaborador_id).single();
+        if (colabData?.status === 'Desligado') {
+            alert('Este colaborador está desligado — resgates não podem ser aprovados enquanto isso.');
+            return;
+        }
+
         const { data: saldoData } = await supabase.from('milhas_saldo').select('*').eq('colaborador_id', req.colaborador_id).single();
         const currentBalance = saldoData?.saldo_disponivel || 0;
 

@@ -64,12 +64,16 @@ export async function POST(request: Request) {
             // Get the user's current balance
             const { data: colab, error: colabError } = await supabase
                 .from('colaboradores')
-                .select('saldo_pipj')
+                .select('saldo_pipj, status')
                 .eq('id', saqueReq.colaborador_id)
                 .single()
 
             if (colabError || !colab) {
                 return NextResponse.json({ error: 'Colaborador não encontrado' }, { status: 404 })
+            }
+
+            if (colab.status === 'Desligado') {
+                return NextResponse.json({ error: 'Colaborador está desligado — saques/resgates não podem ser aprovados enquanto isso.' }, { status: 400 })
             }
 
             const currentBalance = Number(colab.saldo_pipj || 0)

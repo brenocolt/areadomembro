@@ -13,13 +13,17 @@ export function TopRedeemers() {
     useEffect(() => {
         async function fetch() {
             // Get top users by saldo_disponivel, only for active registered users
+            // (busca mais do que o necessário e filtra desligados no client)
             const { data } = await supabase
                 .from('milhas_saldo')
-                .select('saldo_disponivel, colaboradores!inner(nome, cargo_atual, users!inner(id))')
+                .select('saldo_disponivel, colaboradores!inner(nome, cargo_atual, status, users!inner(id))')
                 .order('saldo_disponivel', { ascending: false })
-                .limit(5)
+                .limit(30)
 
-            if (data) setTopUsers(data)
+            if (data) {
+                const ativos = data.filter((d: any) => d.colaboradores?.status !== 'Desligado')
+                setTopUsers(ativos.slice(0, 5))
+            }
         }
         fetch()
 

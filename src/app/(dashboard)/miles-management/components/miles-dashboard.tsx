@@ -35,16 +35,18 @@ export function MilesDashboard() {
         async function fetchData() {
             setLoading(true)
 
-            // 1: Ranking of people with most miles
+            // 1: Ranking of people with most miles (busca mais do que o
+            // necessário e filtra desligados no client)
             const { data: saldoData } = await supabase
                 .from('milhas_saldo')
-                .select('saldo_disponivel, colaboradores(nome)')
+                .select('saldo_disponivel, colaboradores!inner(nome, status)')
                 .order('saldo_disponivel', { ascending: false })
-                .limit(10)
+                .limit(30)
 
             if (saldoData) {
+                const ativos = saldoData.filter((d: any) => d.colaboradores?.status !== 'Desligado')
                 setRankingData(
-                    saldoData.map((d: any) => ({
+                    ativos.slice(0, 10).map((d: any) => ({
                         name: d.colaboradores?.nome ? d.colaboradores.nome.split(' ').slice(0, 2).join(' ') : 'Desconhecido',
                         value: d.saldo_disponivel || 0
                     }))

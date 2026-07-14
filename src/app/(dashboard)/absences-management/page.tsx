@@ -62,11 +62,12 @@ export default function AbsencesManagementPage() {
     async function fetchAusencias() {
         const { data, error } = await supabase
             .from('ausencias')
-            .select('*, colaboradores(nome, cargo_atual, nucleo_atual)')
+            .select('*, colaboradores(nome, cargo_atual, nucleo_atual, status)')
             .order('data_ida', { ascending: true })
 
         if (!error && data) {
-            setAusencias(data as Ausencia[])
+            // Membros desligados saem das telas de gestão.
+            setAusencias((data as any[]).filter(a => a.colaboradores?.status !== 'Desligado') as Ausencia[])
         }
         setLoading(false)
     }

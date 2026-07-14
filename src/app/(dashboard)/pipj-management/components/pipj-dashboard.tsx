@@ -37,6 +37,7 @@ export function PipjDashboard() {
             const { data: colabs } = await supabase
                 .from('colaboradores')
                 .select('nome, saldo_pipj')
+                .eq('status', 'Ativo')
                 .order('saldo_pipj', { ascending: false })
                 .limit(10)
 

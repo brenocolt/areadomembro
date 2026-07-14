@@ -14,12 +14,13 @@ export function AdditionRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores!inner(nome, cargo_atual, telefone, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, cargo_atual, telefone, status, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('tipo', 'adicao_milhas')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(10)
-            if (data) setRequests(data.map(r => {
+            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+            if (data) setRequests(ativos.map(r => {
                 const milhasSaldo = r.colaboradores?.milhas_saldo
                 const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
                 return {

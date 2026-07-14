@@ -16,7 +16,7 @@ interface PrePontuado {
     origem: string
     status: string
     created_at: string
-    colaboradores?: { nome: string, cargo_atual?: string | null }
+    colaboradores?: { nome: string, cargo_atual?: string | null, status?: string | null }
     formularios?: { titulo: string, tipo_formulario?: string | null } | null
 }
 
@@ -30,9 +30,10 @@ export function PrePontuadosView() {
         setLoading(true)
         const { data, error } = await supabase
             .from('pontos_pre_pontuacao')
-            .select('*, colaboradores(nome, cargo_atual), formularios(titulo, tipo_formulario)')
+            .select('*, colaboradores(nome, cargo_atual, status), formularios(titulo, tipo_formulario)')
             .order('created_at', { ascending: false })
-        if (!error && data) setItems(data as any)
+        // Membros desligados saem das telas de gestão.
+        if (!error && data) setItems((data as any[]).filter(i => i.colaboradores?.status !== 'Desligado') as any)
         setLoading(false)
     }
 

@@ -29,6 +29,7 @@ export function AddFlagDialog({ onSuccess }: { onSuccess?: () => void }) {
         const { data } = await supabase
             .from('colaboradores')
             .select('id, nome')
+            .eq('status', 'Ativo')
             .order('nome')
         if (data) setColaboradores(data)
     }

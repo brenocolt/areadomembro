@@ -15,12 +15,13 @@ export function RemovalHistory() {
         async function fetchHistory() {
             const { data } = await supabase
                 .from('solicitacoes_remocao')
-                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual)')
+                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual, status)')
                 .in('status', ['APROVADA', 'REJEITADA'])
                 .order('created_at', { ascending: false })
                 .limit(30)
 
-            if (data) setHistory(data.map(h => ({
+            const ativos = (data || []).filter((h: any) => h.colaboradores?.status !== 'Desligado')
+            if (data) setHistory(ativos.map(h => ({
                 id: h.id,
                 name: h.colaboradores?.nome || 'Desconhecido',
                 role: h.colaboradores?.cargo_atual || '',

@@ -21,7 +21,7 @@ export function PipjStats() {
             const now = new Date()
 
             const [colabsRes, saidasRes, aprovadosRes] = await Promise.all([
-                supabase.from('colaboradores').select('saldo_pipj'),
+                supabase.from('colaboradores').select('saldo_pipj').eq('status', 'Ativo'),
                 supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'SAIDA'),
                 supabase
                     .from('solicitacoes_saque')

@@ -14,10 +14,11 @@ export function RecentHistory() {
         async function fetch() {
             const { data } = await supabase
                 .from('ocorrencias')
-                .select('*, colaboradores!inner(nome, users!inner(id))')
+                .select('*, colaboradores!inner(nome, status, users!inner(id))')
                 .order('data', { ascending: false })
-                .limit(8)
-            if (data) setHistory(data.map(o => ({
+                .limit(20)
+            const ativos = (data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado')
+            setHistory(ativos.slice(0, 8).map(o => ({
                 id: o.id,
                 name: o.colaboradores?.nome || 'Desconhecido',
                 action: `+${o.pontuacao} pts`,

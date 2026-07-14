@@ -15,6 +15,7 @@ export function TopOffenders() {
             const { data } = await supabase
                 .from('colaboradores')
                 .select('id, nome, cargo_atual, pontos_negativos, users!inner(id)')
+                .eq('status', 'Ativo')
                 .gt('pontos_negativos', 0)
                 .order('pontos_negativos', { ascending: false })
                 .limit(5)
