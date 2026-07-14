@@ -25,13 +25,14 @@ export function PointsRecurrence() {
             setLoading(true)
             const { data: ocorrencias } = await supabase
                 .from('ocorrencias')
-                .select('colaborador_id, motivo, pontuacao, data, colaboradores(nome)')
+                .select('colaborador_id, motivo, pontuacao, data, colaboradores(nome, status)')
                 .order('data', { ascending: false })
 
             if (ocorrencias) {
-                // Group by colaborador_id + motivo
+                // Group by colaborador_id + motivo (membros desligados saem
+                // das telas de gestão)
                 const map: Record<string, RecurrenceItem> = {}
-                ocorrencias.forEach((o: any) => {
+                ocorrencias.filter((o: any) => o.colaboradores?.status !== 'Desligado').forEach((o: any) => {
                     const key = `${o.colaborador_id}||${o.motivo}`
                     if (!map[key]) {
                         map[key] = {

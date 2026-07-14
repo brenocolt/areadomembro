@@ -30,6 +30,7 @@ export function PipjSaldos() {
         const { data } = await supabase
             .from('colaboradores')
             .select('id, nome, cargo_atual, nivel_consultor, saldo_pipj, status')
+            .eq('status', 'Ativo')
             .order('nome', { ascending: true })
         if (data) setColabs(data)
         setLoading(false)
@@ -46,9 +47,7 @@ export function PipjSaldos() {
         (c.cargo_atual || '').toLowerCase().includes(search.toLowerCase())
     )
 
-    // "Em circulação" exclui membros desligados — o saldo deles fica retido,
-    // vinculado à conta, mas fora da contagem total.
-    const totalSaldo = colabs.filter(c => c.status !== 'Desligado').reduce((s, c) => s + Number(c.saldo_pipj || 0), 0)
+    const totalSaldo = colabs.reduce((s, c) => s + Number(c.saldo_pipj || 0), 0)
 
     const startEdit = (colab: ColabSaldo) => {
         setEditingId(colab.id)
@@ -159,11 +158,6 @@ export function PipjSaldos() {
                                     <div className="flex-1 min-w-0">
                                         <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{colab.nome}</p>
                                         <div className="flex items-center gap-1.5 mt-0.5">
-                                            {colab.status === 'Desligado' && (
-                                                <span className="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 px-1.5 py-0.5 rounded font-bold">
-                                                    Desligado
-                                                </span>
-                                            )}
                                             {colab.cargo_atual && (
                                                 <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded font-medium">
                                                     {colab.cargo_atual}

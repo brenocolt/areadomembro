@@ -22,15 +22,15 @@ export function MilesHistory() {
             // 1. Fetch exchanges
             const { data: exchanges } = await supabase
                 .from('milhas_trocas')
-                .select('*, colaboradores!inner(nome, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, status, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .neq('status', 'PENDENTE')
                 .order('data_troca', { ascending: false })
                 .limit(20)
-                
+
             // 2. Fetch additions
             const { data: additions } = await supabase
                 .from('solicitacoes_saque')
-                .select('*, colaboradores!inner(nome, users!inner(id), milhas_saldo(saldo_disponivel))')
+                .select('*, colaboradores!inner(nome, status, users!inner(id), milhas_saldo(saldo_disponivel))')
                 .eq('tipo', 'adicao_milhas')
                 .neq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
@@ -38,8 +38,9 @@ export function MilesHistory() {
 
             const combined = []
 
+            // Membros desligados saem das telas de gestão.
             if (exchanges) {
-                combined.push(...exchanges.map(o => {
+                combined.push(...exchanges.filter(o => o.colaboradores?.status !== 'Desligado').map(o => {
                     const milhasSaldo = o.colaboradores?.milhas_saldo
                     const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
                     return {
@@ -57,7 +58,7 @@ export function MilesHistory() {
             }
 
             if (additions) {
-                combined.push(...additions.map(o => {
+                combined.push(...additions.filter(o => o.colaboradores?.status !== 'Desligado').map(o => {
                     const milhasSaldo = o.colaboradores?.milhas_saldo
                     const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel
                     return {

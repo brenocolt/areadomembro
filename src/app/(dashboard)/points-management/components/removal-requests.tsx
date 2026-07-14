@@ -17,11 +17,12 @@ export function RemovalRequests() {
         async function fetch() {
             const { data } = await supabase
                 .from('solicitacoes_remocao')
-                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual, telefone, users!inner(id))')
+                .select('*, colaboradores!inner(nome, cargo_atual, nucleo_atual, telefone, status, users!inner(id))')
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(30)
-            if (data) setRequests(data.map(r => ({
+            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+            if (data) setRequests(ativos.map(r => ({
                 id: r.id,
                 colaborador_id: r.colaborador_id,
                 ocorrencia_id: r.ocorrencia_id,
