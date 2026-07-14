@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Flag, Loader2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -30,6 +31,7 @@ export function AddFlagDialog({ onSuccess }: { onSuccess?: () => void }) {
             .from('colaboradores')
             .select('id, nome')
             .eq('status', 'Ativo')
+            .neq('cargo_atual', CARGO_FANTASMA)
             .order('nome')
         if (data) setColaboradores(data)
     }

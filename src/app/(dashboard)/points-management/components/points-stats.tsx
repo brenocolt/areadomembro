@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { AlertTriangle, Clock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function PointsStats() {
@@ -17,6 +18,7 @@ export function PointsStats() {
                 .from('colaboradores')
                 .select('pontos_negativos, users!inner(id)')
                 .eq('status', 'Ativo')
+                .neq('cargo_atual', CARGO_FANTASMA)
             const total = colabs?.reduce((sum, c) => sum + (c.pontos_negativos || 0), 0) || 0
             setTotalPoints(total)
 

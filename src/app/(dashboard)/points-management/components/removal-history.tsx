@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { History, CheckCircle2, XCircle, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -20,7 +21,7 @@ export function RemovalHistory() {
                 .order('created_at', { ascending: false })
                 .limit(30)
 
-            const ativos = (data || []).filter((h: any) => h.colaboradores?.status !== 'Desligado')
+            const ativos = (data || []).filter((h: any) => h.colaboradores?.status !== 'Desligado' && h.colaboradores?.cargo_atual !== CARGO_FANTASMA)
             if (data) setHistory(ativos.map(h => ({
                 id: h.id,
                 name: h.colaboradores?.nome || 'Desconhecido',

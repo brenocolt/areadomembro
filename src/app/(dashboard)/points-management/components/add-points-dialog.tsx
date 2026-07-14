@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, AlertTriangle, Settings2 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { ManagePointsTypesDialog } from "./manage-points-types-dialog"
 
 interface PunishmentType {
@@ -43,7 +44,7 @@ export function AddPointsDialog() {
 
         async function fetchData() {
             const [colabRes, motivoRes] = await Promise.all([
-                supabase.from('colaboradores').select('id, nome, nucleo_atual, cargo_atual, users!inner(id)').eq('status', 'Ativo'),
+                supabase.from('colaboradores').select('id, nome, nucleo_atual, cargo_atual, users!inner(id)').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
                 supabase.from('pontos_motivos_punicao').select('*').eq('disponivel', true).order('pontos').order('titulo'),
             ])
 

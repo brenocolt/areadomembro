@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Calendar, Filter, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function RecentHistory() {
@@ -14,10 +15,10 @@ export function RecentHistory() {
         async function fetch() {
             const { data } = await supabase
                 .from('ocorrencias')
-                .select('*, colaboradores!inner(nome, status, users!inner(id))')
+                .select('*, colaboradores!inner(nome, status, cargo_atual, users!inner(id))')
                 .order('data', { ascending: false })
                 .limit(20)
-            const ativos = (data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado')
+            const ativos = (data || []).filter((o: any) => o.colaboradores?.status !== 'Desligado' && o.colaboradores?.cargo_atual !== CARGO_FANTASMA)
             setHistory(ativos.slice(0, 8).map(o => ({
                 id: o.id,
                 name: o.colaboradores?.nome || 'Desconhecido',

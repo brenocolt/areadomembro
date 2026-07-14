@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Check, X, PlusCircle, LayoutGrid, List } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export function AdditionRequests() {
@@ -19,7 +20,7 @@ export function AdditionRequests() {
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(10)
-            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado' && r.colaboradores?.cargo_atual !== CARGO_FANTASMA)
             if (data) setRequests(ativos.map(r => {
                 const milhasSaldo = r.colaboradores?.milhas_saldo
                 const saldo = Array.isArray(milhasSaldo) ? milhasSaldo[0]?.saldo_disponivel : milhasSaldo?.saldo_disponivel

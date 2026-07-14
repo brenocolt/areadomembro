@@ -1,21 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { CARGO_FANTASMA } from '@/lib/cargos'
 
 // Business Rules Constants
 const FIXED_VALUES: Record<string, number> = {
   'Consultor': 100,
   'Assessor': 100,
-  'Gerente': 150,
+  'SDR': 100,
   'Closer': 150,
   'Diretor': 250,
-  'SDR': 100,
+  'Gerente de Projetos': 150,
+  'Gerente de Inovação': 150,
+  'Gerente de Operações': 150,
+  'Gerente de CS': 150,
+  'Gerente de Gente': 150,
+  'Gerente Institucional': 150,
 }
 
 const VARIABLE_PER_PROJECT: Record<string, number> = {
   'Consultor': 15,
   'Assessor': 15,
   'SDR': 15,
-  'Gerente': 5,
+  // Gerente de Projetos ganha um adicional por projeto menor que os demais
+  // cargos de gerência — os outros seguem a mesma taxa de Consultor/Assessor.
+  'Gerente de Projetos': 5,
+  'Gerente de Inovação': 15,
+  'Gerente de Operações': 15,
+  'Gerente de CS': 15,
+  'Gerente de Gente': 15,
+  'Gerente Institucional': 15,
 }
 
 // "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
@@ -25,7 +38,12 @@ const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
   'Consultor': 10,
   'Assessor': 10,
   'SDR': 10,
-  'Gerente': 5,
+  'Gerente de Projetos': 5,
+  'Gerente de Inovação': 10,
+  'Gerente de Operações': 10,
+  'Gerente de CS': 10,
+  'Gerente de Gente': 10,
+  'Gerente Institucional': 10,
 }
 
 const LEVEL_BONUS: Record<string, number> = {
@@ -50,7 +68,11 @@ const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
 
 // Roles that get exclusive role bonus (no level bonus)
-const EXCLUSIVE_ROLES = ['Diretor', 'Closer', 'Gerente']
+const EXCLUSIVE_ROLES = [
+  'Diretor', 'Closer',
+  'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
+  'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
+]
 
 function getBusinessDaysInMonth(year: number, month: number): number {
   let count = 0
@@ -98,12 +120,13 @@ export async function POST(req: NextRequest) {
 
     // Monthly limit check removed for testing purposes
 
-    // Fetch active colaboradores sorted alphabetically (desligados não
-    // recebem PIPJ nos lançamentos)
+    // Fetch active colaboradores sorted alphabetically (desligados e contas
+    // fantasma de administrador não recebem PIPJ nos lançamentos)
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
       .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
       .eq('status', 'Ativo')
+      .neq('cargo_atual', CARGO_FANTASMA)
       .order('nome', { ascending: true })
 
     if (colabError || !colaboradores) {

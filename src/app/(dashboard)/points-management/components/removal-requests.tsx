@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Check, X, ShieldAlert, LayoutGrid, List, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -21,7 +22,7 @@ export function RemovalRequests() {
                 .eq('status', 'PENDENTE')
                 .order('created_at', { ascending: false })
                 .limit(30)
-            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado')
+            const ativos = (data || []).filter((r: any) => r.colaboradores?.status !== 'Desligado' && r.colaboradores?.cargo_atual !== CARGO_FANTASMA)
             if (data) setRequests(ativos.map(r => ({
                 id: r.id,
                 colaborador_id: r.colaborador_id,

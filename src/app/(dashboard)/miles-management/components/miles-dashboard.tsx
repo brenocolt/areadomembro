@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts"
@@ -39,12 +40,12 @@ export function MilesDashboard() {
             // necessário e filtra desligados no client)
             const { data: saldoData } = await supabase
                 .from('milhas_saldo')
-                .select('saldo_disponivel, colaboradores!inner(nome, status)')
+                .select('saldo_disponivel, colaboradores!inner(nome, status, cargo_atual)')
                 .order('saldo_disponivel', { ascending: false })
                 .limit(30)
 
             if (saldoData) {
-                const ativos = saldoData.filter((d: any) => d.colaboradores?.status !== 'Desligado')
+                const ativos = saldoData.filter((d: any) => d.colaboradores?.status !== 'Desligado' && d.colaboradores?.cargo_atual !== CARGO_FANTASMA)
                 setRankingData(
                     ativos.slice(0, 10).map((d: any) => ({
                         name: d.colaboradores?.nome ? d.colaboradores.nome.split(' ').slice(0, 2).join(' ') : 'Desconhecido',

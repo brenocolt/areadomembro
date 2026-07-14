@@ -11,6 +11,7 @@ import { Loader2, Shield, UserCog, History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
 import { useSession } from "next-auth/react"
+import { CARGOS } from "@/lib/cargos"
 
 const ALL_PAGES = [
     { label: "Início", path: "/" },
@@ -48,7 +49,7 @@ interface EditUserAccessDialogProps {
 
 const EDITABLE_FIELDS = [
     { key: 'nome', label: 'Nome', type: 'text' },
-    { key: 'cargo_atual', label: 'Cargo', type: 'text' },
+    { key: 'cargo_atual', label: 'Cargo', type: 'select', options: [...CARGOS] },
     { key: 'nucleo_atual', label: 'Núcleo', type: 'text' },
     { key: 'nivel_consultor', label: 'Nível do Consultor', type: 'select', options: ['Júnior', 'Pleno', 'Sênior'] },
     { key: 'matricula', label: 'Matrícula', type: 'text' },
