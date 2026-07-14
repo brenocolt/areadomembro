@@ -37,7 +37,7 @@ export function PointsDashboard() {
             setLoading(true)
 
             // 1 & 2: Colaboradores stats
-            const { data: cols } = await supabase.from('colaboradores').select('nucleo_atual, pontos_negativos')
+            const { data: cols } = await supabase.from('colaboradores').select('nucleo_atual, pontos_negativos').eq('status', 'Ativo')
 
             if (cols) {
                 // Pie data

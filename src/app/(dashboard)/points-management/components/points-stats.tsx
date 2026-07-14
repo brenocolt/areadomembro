@@ -16,6 +16,7 @@ export function PointsStats() {
             const { data: colabs } = await supabase
                 .from('colaboradores')
                 .select('pontos_negativos, users!inner(id)')
+                .eq('status', 'Ativo')
             const total = colabs?.reduce((sum, c) => sum + (c.pontos_negativos || 0), 0) || 0
             setTotalPoints(total)
 

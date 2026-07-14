@@ -15,6 +15,7 @@ export function PipjTopHolders() {
             const { data } = await supabase
                 .from('colaboradores')
                 .select('nome, saldo_pipj, cargo_atual')
+                .eq('status', 'Ativo')
                 .order('saldo_pipj', { ascending: false })
                 .limit(10)
 
