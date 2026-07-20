@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
+import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
 
 // Business Rules Constants
 const FIXED_VALUES: Record<string, number> = {
@@ -190,6 +191,21 @@ export async function POST(req: NextRequest) {
       npsMap.set(id, vals.reduce((a, b) => a + b, 0) / vals.length)
     }
 
+    // NPS final = média entre a nota da página Performance (avaliacoes_nps,
+    // acima) e a nota do NPS Interno (formulário "Piloto de Elite"), ambas
+    // do mês de referência selecionado. Se só uma das duas existir para o
+    // colaborador naquele mês, usa só ela — a média só ocorre quando as
+    // duas fontes têm avaliação no mês.
+    const npsInternoMap = await getNpsInternoMap(supabaseAdmin, mes, ano)
+    const npsFinalMap = new Map<string, number>()
+    for (const id of new Set([...npsMap.keys(), ...npsInternoMap.keys()])) {
+      const perf = npsMap.get(id)
+      const interno = npsInternoMap.get(id)
+      if (perf !== undefined && interno !== undefined) npsFinalMap.set(id, (perf + interno) / 2)
+      else if (perf !== undefined) npsFinalMap.set(id, perf)
+      else if (interno !== undefined) npsFinalMap.set(id, interno)
+    }
+
     // Pontos negativos referentes ao fim do mês de referência: parte do
     // saldo atual (colaboradores.pontos_negativos) e desfaz tudo que
     // aconteceu DEPOIS do mês escolhido — equivalente a (saldo antes do mês
@@ -281,7 +297,7 @@ export async function POST(req: NextRequest) {
       let subtotalAposAusencia = Math.max(0, subtotal - descontoAusencia)
 
       // 6. NPS Bonus (+10% if NPS > 4)
-      const latestNps = npsMap.get(colab.id) || 0
+      const latestNps = npsFinalMap.get(colab.id) || 0
       const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
 
       // Valor "Calculado" mostrado no preview (base + bônus de NPS automático).
