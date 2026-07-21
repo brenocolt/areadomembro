@@ -268,6 +268,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Cria o registro do lançamento ANTES de processar os colaboradores, para
+    // já ter um id e poder linkar cada transação a ele (necessário para
+    // permitir reverter só este lançamento depois). Os totais reais são
+    // preenchidos com um update no final.
+    const { data: lancamentoCriado, error: lancamentoCriadoError } = await supabaseAdmin
+      .from('lancamentos_pipj')
+      .insert({ mes, ano, total_lancado: 0, total_colaboradores: 0, detalhes: [] })
+      .select('id')
+      .single()
+
+    if (lancamentoCriadoError || !lancamentoCriado) {
+      return NextResponse.json({ error: 'Erro ao criar registro do lançamento.' }, { status: 500 })
+    }
+    const lancamentoId = lancamentoCriado.id
+
     const detalhes: any[] = []
     let totalLancado = 0
 
@@ -417,20 +432,24 @@ export async function POST(req: NextRequest) {
         cargo_no_periodo: cargo,
         detalhes_calculo: detalhesCalculo,
         status: 'CREDITADO',
+        descricao: `PIPJ ${periodo}`,
+        lancamento_id: lancamentoId,
       })
     }
 
-    // Log the launch
-    await supabaseAdmin.from('lancamentos_pipj').insert({
-      mes,
-      ano,
-      total_lancado: totalLancado,
-      total_colaboradores: colaboradores.length,
-      detalhes,
-    })
+    // Preenche o lançamento com os totais reais
+    await supabaseAdmin
+      .from('lancamentos_pipj')
+      .update({
+        total_lancado: totalLancado,
+        total_colaboradores: colaboradores.length,
+        detalhes,
+      })
+      .eq('id', lancamentoId)
 
     return NextResponse.json({
       success: true,
+      lancamento_id: lancamentoId,
       total_lancado: totalLancado,
       total_colaboradores: colaboradores.length,
       detalhes,

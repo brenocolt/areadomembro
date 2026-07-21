@@ -3,6 +3,7 @@ import { PipjStats } from "./components/pipj-stats"
 import { PipjTopHolders } from "./components/pipj-top-holders"
 import { PipjHistory, SaquePendingRequestsList, SaqueHistoryList } from "./components/pipj-history"
 import { PipjDashboard } from "./components/pipj-dashboard"
+import { PipjLancamentosList } from "./components/pipj-lancamentos-list"
 import { PipjSaldos } from "./components/pipj-saldos"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -45,6 +46,7 @@ export default function PipjManagementPage() {
 
                 <TabsContent value="dashboard" className="space-y-6 border-none p-0 outline-none">
                     <PipjDashboard />
+                    <PipjLancamentosList />
                 </TabsContent>
 
                 <TabsContent value="saques-pendentes" className="space-y-6 border-none p-0 outline-none">
