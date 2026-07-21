@@ -48,7 +48,9 @@ export default function FeedbackAgentePage() {
     const { colaboradorId, role, colaborador } = useColaborador()
     const isAdmin = role === "ADMIN" || role === "admin"
     const isGerente = (colaborador?.cargo_atual || "").toLowerCase().includes("gerente")
-    const canChoose = isAdmin || isGerente
+    const isAssessorGP = (colaborador?.cargo_atual || "").trim().toLowerCase() === "assessor"
+        && (colaborador?.nucleo_atual || "").trim().toLowerCase() === "gestão de pessoas"
+    const canChoose = isAdmin || isGerente || isAssessorGP
 
     const [colaboradores, setColaboradores] = useState<{ id: string; nome: string }[]>([])
     const [targetId, setTargetId] = useState<string>("")
