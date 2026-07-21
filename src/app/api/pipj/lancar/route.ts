@@ -33,8 +33,20 @@ const VARIABLE_PER_PROJECT: Record<string, number> = {
 }
 
 // "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
-// projeto de R$15 para R$10, aplicado a todos os colaboradores.
+// projeto de R$15 para R$10, aplicado a todos os colaboradores. Closer, os
+// cargos de Gerência e Diretor fogem da regra percentual — têm valor base
+// fixo nesse cenário (R$115 para Closer/Gerência, R$215 para Diretor).
 const MES_SEM_LUCRO_BASE_MULTIPLIER = 0.70
+const MES_SEM_LUCRO_BASE_FIXO: Record<string, number> = {
+  'Closer': 115,
+  'Gerente de Projetos': 115,
+  'Gerente de Inovação': 115,
+  'Gerente de Operações': 115,
+  'Gerente de CS': 115,
+  'Gerente de Gente': 115,
+  'Gerente Institucional': 115,
+  'Diretor': 215,
+}
 const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
   'Consultor': 10,
   'Assessor': 10,
@@ -269,7 +281,7 @@ export async function POST(req: NextRequest) {
       // 1. Fixed base value (reduzido 30% em mês sem lucro)
       const baseCargoIntegral = FIXED_VALUES[cargo] || 100
       const baseCargo = mesSemLucro
-        ? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100
+        ? (MES_SEM_LUCRO_BASE_FIXO[cargo] ?? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100)
         : baseCargoIntegral
       let subtotal = baseCargo
 
