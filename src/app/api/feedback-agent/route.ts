@@ -160,15 +160,18 @@ export async function POST(request: Request) {
         const ownId = (session.user as any).colaborador_id
         const isAdmin = role === 'ADMIN' || role === 'admin'
 
-        // Autorização: admin/gerente podem escolher; demais só veem o próprio.
+        // Autorização: admin/gerente e assessores de Gestão de Pessoas podem escolher; demais só veem o próprio.
         let targetId = ownId
         const supabase = createServerSupabaseClient()
         let isGerente = false
+        let isAssessorGP = false
         if (ownId) {
-            const { data: me } = await supabase.from('colaboradores').select('cargo_atual').eq('id', ownId).single()
+            const { data: me } = await supabase.from('colaboradores').select('cargo_atual, nucleo_atual').eq('id', ownId).single()
             isGerente = (me?.cargo_atual || '').toLowerCase().includes('gerente')
+            isAssessorGP = (me?.cargo_atual || '').trim().toLowerCase() === 'assessor'
+                && (me?.nucleo_atual || '').trim().toLowerCase() === 'gestão de pessoas'
         }
-        if (requestedId && (isAdmin || isGerente)) targetId = requestedId
+        if (requestedId && (isAdmin || isGerente || isAssessorGP)) targetId = requestedId
         if (!targetId) return NextResponse.json({ error: 'Colaborador não identificado.' }, { status: 400 })
 
         const { data: alvo } = await supabase.from('colaboradores').select('nome, cargo_atual').eq('id', targetId).single()
