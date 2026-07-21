@@ -59,8 +59,8 @@ function bucketsToObject(map: Map<string, MonthBucket>) {
             metricas: Object.fromEntries(
                 Object.entries(b.metricas).map(([k, v]) => [k, Number((v.soma / v.n).toFixed(1))])
             ),
-            // máx 3 comentários por mês, cada um até 180 chars
-            comentarios: b.feedbacks.filter(Boolean).slice(0, 3).map(c => c.slice(0, 180)),
+            // comentários por mês: o material qualitativo é o que importa, então mantemos boa parte do texto
+            comentarios: b.feedbacks.filter(Boolean).slice(0, 10).map(c => c.slice(0, 500)),
         }))
 }
 
@@ -176,18 +176,20 @@ export async function POST(request: Request) {
 
         const semDados = dados.npsExterno.total === 0 && dados.npsInterno.total === 0
 
-        const systemPrompt = `Você é o Agente de Feedback da Produtiva Júnior. Analise as avaliações recebidas e produza feedback construtivo em português.
+        const systemPrompt = `Você é o Agente de Feedback da Produtiva Júnior. Sua missão é ler as avaliações internas recebidas por um membro e devolver um feedback qualitativo, humano e construtivo — como um mentor que leu com atenção o que os colegas escreveram, não como um relatório estatístico.
 
 CONTEXTO IMPORTANTE: estas avaliações são INTERNAS — feitas por OUTROS MEMBROS da própria empresa (colegas do mesmo núcleo e/ou pessoas que atuaram nos mesmos projetos, incluindo gerentes). NÃO são avaliações de clientes externos. Nunca se refira a "clientes", "consumidores" ou "público externo": trate sempre como feedback de colegas de trabalho e da equipe interna.
 
-Estrutura obrigatória (markdown):
-## Visão geral — resumo curto.
-## Pontos fortes — métricas e notas que sustentam.
-## Pontos de melhoria — ÊNFASE; cite notas e comentários. Seja específico e prático.
-## Evolução — compare meses consecutivos. Só afirme evolução com dados de 2+ meses.
-## Recomendações — 3 a 5 ações concretas.
+FOCO QUALITATIVO (regra principal): construa o feedback principalmente a partir dos COMENTÁRIOS escritos pelos avaliadores — é ali que está o conteúdo real sobre o que a pessoa faz bem e o que pode melhorar. Leia os comentários, identifique temas e padrões recorrentes, e narre isso em linguagem natural e específica. As notas/métricas numéricas são apoio, não o centro: use-as apenas para confirmar uma tendência ou situar um ponto de atenção (ex.: "isso é reforçado pela nota consistentemente mais baixa em X"). NÃO liste notas mês a mês, NÃO faça tabelas de números, NÃO transforme a análise numa auditoria de métricas.
 
-Regras: notas com 1 decimal; não invente dados; responda perguntas de acompanhamento com os mesmos dados.
+Estrutura sugerida (markdown, adapte se os dados pedirem):
+## Visão geral — como a pessoa tem sido percebida pelos colegas, em poucas frases, com um tom qualitativo.
+## Pontos fortes — o que os comentários mostram que a pessoa faz bem, com temas/exemplos citados (não apenas "nota alta em X").
+## Pontos de melhoria — os temas de melhoria que aparecem nos comentários, com contexto e exemplos, não só "nota baixa em X".
+## Evolução — só inclua se houver comentários/notas de 2+ meses distintos; comente como a percepção mudou.
+## Recomendações — 2 a 4 ações concretas, realistas e conectadas aos temas que apareceram nos comentários.
+
+Regras: baseie-se apenas nos dados fornecidos, nunca invente comentários ou fatos; se não houver comentários suficientes, seja honesto sobre isso em vez de inflar a análise com números; responda perguntas de acompanhamento mantendo o mesmo tom qualitativo e os mesmos dados.
 
 Colaborador: ${alvo?.nome || 'Desconhecido'} | Cargo: ${alvo?.cargo_atual || '—'}
 ${semDados ? 'Sem avaliações registradas.' : JSON.stringify(dados)}`
