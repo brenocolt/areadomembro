@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
+import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
 
 // Business Rules Constants
 const FIXED_VALUES: Record<string, number> = {
@@ -148,37 +149,97 @@ export async function GET(req: NextRequest) {
 
     const businessDays = getBusinessDaysInMonth(ano, mes)
 
-    // Fetch all NPS evaluations to compute the average of the most recent month per collaborator
+    // Início do mês seguinte ao selecionado — usado para "rebobinar" saldos e
+    // contadores correntes até o fim exato do mês de referência.
+    const nextMonthStart = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, '0')}-01`
+
+    // Fetch NPS evaluations do mês de referência selecionado (não o mais
+    // recente disponível) e calcula a média por colaborador.
     const { data: avaliacoesNps } = await supabaseAdmin
       .from('avaliacoes_nps')
-      .select('colaborador_id, nps_geral, ano, mes')
-      .order('ano', { ascending: false })
-      .order('mes', { ascending: false })
+      .select('colaborador_id, nps_geral')
+      .eq('ano', ano)
+      .eq('mes', mes)
 
-    // Group by (colaborador_id) → most recent (ano, mes) bucket → all nps_geral values in that bucket
-    const npsGroupMap = new Map<string, { ano: number, mes: number, vals: number[] }>()
+    const npsGroupMap = new Map<string, number[]>()
     if (avaliacoesNps) {
-        for (const nps of avaliacoesNps) {
-            const id = nps.colaborador_id
-            const val = Number(nps.nps_geral)
-            if (isNaN(val)) continue
-            const existing = npsGroupMap.get(id)
-            if (!existing) {
-                // First seen = most recent month (rows are sorted desc)
-                npsGroupMap.set(id, { ano: Number(nps.ano), mes: Number(nps.mes), vals: [val] })
-            } else if (Number(nps.ano) === existing.ano && Number(nps.mes) === existing.mes) {
-                // Same most-recent month → accumulate for averaging
-                existing.vals.push(val)
-            }
-            // Older month → skip
-        }
+      for (const nps of avaliacoesNps) {
+        const val = Number(nps.nps_geral)
+        if (isNaN(val)) continue
+        const arr = npsGroupMap.get(nps.colaborador_id) || []
+        arr.push(val)
+        npsGroupMap.set(nps.colaborador_id, arr)
+      }
     }
 
-    // Build final npsMap with the average of all evaluations in the most recent month
     const npsMap = new Map<string, number>()
-    for (const [id, group] of npsGroupMap.entries()) {
-        const avg = group.vals.reduce((a, b) => a + b, 0) / group.vals.length
-        npsMap.set(id, avg)
+    for (const [id, vals] of npsGroupMap.entries()) {
+      npsMap.set(id, vals.reduce((a, b) => a + b, 0) / vals.length)
+    }
+
+    // NPS final = média entre a nota da página Performance (avaliacoes_nps,
+    // acima) e a nota do NPS Interno (formulário "Piloto de Elite"), ambas
+    // do mês de referência selecionado. Se só uma das duas existir para o
+    // colaborador naquele mês, usa só ela — a média só ocorre quando as
+    // duas fontes têm avaliação no mês.
+    const npsInternoMap = await getNpsInternoMap(supabaseAdmin, mes, ano)
+    const npsFinalMap = new Map<string, number>()
+    for (const id of new Set([...npsMap.keys(), ...npsInternoMap.keys()])) {
+      const perf = npsMap.get(id)
+      const interno = npsInternoMap.get(id)
+      if (perf !== undefined && interno !== undefined) npsFinalMap.set(id, (perf + interno) / 2)
+      else if (perf !== undefined) npsFinalMap.set(id, perf)
+      else if (interno !== undefined) npsFinalMap.set(id, interno)
+    }
+
+    // Pontos negativos referentes ao fim do mês de referência: parte do
+    // saldo atual (colaboradores.pontos_negativos) e desfaz tudo que
+    // aconteceu DEPOIS do mês escolhido — equivalente a (saldo antes do mês
+    // + ocorrências do mês), sem depender de reconstruir o histórico inteiro
+    // desde a criação da conta.
+    const { data: ocorrenciasFuturas } = await supabaseAdmin
+      .from('ocorrencias')
+      .select('colaborador_id, pontuacao')
+      .gte('data', nextMonthStart)
+
+    const adicoesFuturasMap = new Map<string, number>()
+    if (ocorrenciasFuturas) {
+      for (const o of ocorrenciasFuturas) {
+        adicoesFuturasMap.set(o.colaborador_id, (adicoesFuturasMap.get(o.colaborador_id) || 0) + (o.pontuacao || 0))
+      }
+    }
+
+    const { data: remocoesFuturas } = await supabaseAdmin
+      .from('solicitacoes_remocao')
+      .select('colaborador_id, pontos_solicitados')
+      .eq('status', 'APROVADA')
+      .gte('created_at', nextMonthStart)
+
+    const remocoesFuturasMap = new Map<string, number>()
+    if (remocoesFuturas) {
+      for (const r of remocoesFuturas) {
+        remocoesFuturasMap.set(r.colaborador_id, (remocoesFuturasMap.get(r.colaborador_id) || 0) + (r.pontos_solicitados || 0))
+      }
+    }
+
+    // Projetos referentes ao fim do mês de referência: usa o histórico de
+    // auditoria (audit_logs, campo "projetos") para achar o último valor
+    // registrado até o fim do mês escolhido. Sem histórico anterior a esse
+    // mês (cobertura parcial), cai de volta no valor corrente do colaborador.
+    const { data: projetosAuditoria } = await supabaseAdmin
+      .from('audit_logs')
+      .select('colaborador_id, valor_novo, created_at')
+      .eq('campo', 'projetos')
+      .lt('created_at', nextMonthStart)
+      .order('created_at', { ascending: false })
+
+    const projetosHistoricoMap = new Map<string, number>()
+    if (projetosAuditoria) {
+      for (const a of projetosAuditoria) {
+        if (projetosHistoricoMap.has(a.colaborador_id)) continue
+        const parsed = parseInt(a.valor_novo, 10)
+        if (!isNaN(parsed)) projetosHistoricoMap.set(a.colaborador_id, parsed)
+      }
     }
 
     const detalhes: any[] = []
@@ -187,8 +248,9 @@ export async function GET(req: NextRequest) {
     for (const colab of colaboradores) {
       const cargo = colab.cargo_atual || 'Assessor'
       const nivel = colab.nivel_consultor || 'Júnior'
-      const projetos = colab.projetos || 0
-      const pontosNegativos = colab.pontos_negativos || 0
+      const projetos = projetosHistoricoMap.has(colab.id) ? projetosHistoricoMap.get(colab.id)! : (colab.projetos || 0)
+      const pontosNegativosAtual = colab.pontos_negativos || 0
+      const pontosNegativos = Math.max(0, pontosNegativosAtual - (adicoesFuturasMap.get(colab.id) || 0) + (remocoesFuturasMap.get(colab.id) || 0))
 
       // 1. Fixed base value (reduzido 30% em mês sem lucro)
       const baseCargoIntegral = FIXED_VALUES[cargo] || 100
@@ -221,7 +283,7 @@ export async function GET(req: NextRequest) {
       let subtotalAposAusencia = Math.max(0, subtotal - descontoAusencia)
 
       // 6. NPS Bonus (+10% if NPS > 4)
-      const latestNps = npsMap.get(colab.id) || 0
+      const latestNps = npsFinalMap.get(colab.id) || 0
       const bonusNps = latestNps > NPS_THRESHOLD ? Math.round(subtotalAposAusencia * NPS_BONUS_PERCENT * 100) / 100 : 0
       
       let pipj = Math.round((subtotalAposAusencia + bonusNps) * 100) / 100
