@@ -310,7 +310,7 @@ export function PipjLaunchDialog() {
                                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
                                     <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                                     <p className="text-xs text-amber-800 dark:text-amber-200">
-                                        <strong>Mês sem lucro ativo:</strong> o valor base do cargo foi reduzido em 30% e o adicional por projeto passou de R$15 para R$10 para todos os colaboradores.
+                                        <strong>Mês sem lucro ativo:</strong> o valor base do cargo foi reduzido em 30% (R$115 fixo para Closer e cargos de Gerência, R$215 fixo para Diretor) e o adicional por projeto passou de R$15 para R$10 para todos os colaboradores.
                                     </p>
                                 </div>
                             )}
