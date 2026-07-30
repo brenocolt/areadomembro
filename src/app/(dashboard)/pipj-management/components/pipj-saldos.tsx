@@ -4,10 +4,17 @@ import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import {
+    Dialog, DialogContent, DialogDescription, DialogFooter,
+    DialogHeader, DialogTitle
+} from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import { toast } from "sonner"
-import { Search, Wallet, Pencil, Check, X, Loader2 } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { Search, Wallet, Pencil, Loader2, Plus, Minus } from "lucide-react"
 
 interface ColabSaldo {
     id: string
@@ -27,11 +34,14 @@ const OCULTOS_SALDOS_EQUIPE = [
 ]
 
 export function PipjSaldos() {
+    const { data: session } = useSession()
     const [colabs, setColabs] = useState<ColabSaldo[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState("")
-    const [editingId, setEditingId] = useState<string | null>(null)
-    const [editValue, setEditValue] = useState("")
+    const [editingColab, setEditingColab] = useState<ColabSaldo | null>(null)
+    const [tipoAjuste, setTipoAjuste] = useState<'ADICAO' | 'DEDUCAO'>('ADICAO')
+    const [valorAjuste, setValorAjuste] = useState("")
+    const [motivoAjuste, setMotivoAjuste] = useState("")
     const [saving, setSaving] = useState(false)
 
     const fetchData = useCallback(async () => {
@@ -59,58 +69,61 @@ export function PipjSaldos() {
 
     const totalSaldo = colabs.reduce((s, c) => s + Number(c.saldo_pipj || 0), 0)
 
-    const startEdit = (colab: ColabSaldo) => {
-        setEditingId(colab.id)
-        setEditValue(String(Number(colab.saldo_pipj || 0).toFixed(2)))
+    const openEdit = (colab: ColabSaldo) => {
+        setEditingColab(colab)
+        setTipoAjuste('ADICAO')
+        setValorAjuste("")
+        setMotivoAjuste("")
     }
 
-    const cancelEdit = () => {
-        setEditingId(null)
-        setEditValue("")
+    const closeEdit = () => {
+        setEditingColab(null)
+        setValorAjuste("")
+        setMotivoAjuste("")
     }
 
-    const saveEdit = async (colabId: string) => {
-        const newVal = parseFloat(editValue.replace(',', '.'))
-        if (isNaN(newVal) || newVal < 0) {
-            toast.error('Valor inválido.')
+    const confirmarAjuste = async () => {
+        if (!editingColab) return
+        const valor = parseFloat(valorAjuste.replace(',', '.'))
+        if (isNaN(valor) || valor <= 0) {
+            toast.error('Informe um valor válido, maior que zero.')
+            return
+        }
+        if (!motivoAjuste.trim()) {
+            toast.error('Informe o motivo do ajuste.')
             return
         }
 
         setSaving(true)
-        const old = colabs.find(c => c.id === colabId)
-        const diff = newVal - Number(old?.saldo_pipj || 0)
+        const saldoAtual = Number(editingColab.saldo_pipj || 0)
+        const delta = tipoAjuste === 'ADICAO' ? valor : -valor
+        const novoSaldo = saldoAtual + delta
+        const editorName = (session?.user as any)?.name || (session?.user as any)?.email || 'Sistema'
 
         const { error } = await supabase
             .from('colaboradores')
-            .update({ saldo_pipj: newVal })
-            .eq('id', colabId)
+            .update({ saldo_pipj: novoSaldo })
+            .eq('id', editingColab.id)
 
         if (error) {
             toast.error('Erro ao salvar.')
         } else {
-            // Record manual adjustment transaction
-            if (diff !== 0) {
-                await supabase.from('transacoes_pipj').insert({
-                    colaborador_id: colabId,
-                    tipo: diff > 0 ? 'ENTRADA' : 'SAIDA',
-                    valor: Math.abs(diff),
-                    descricao: 'Ajuste manual de saldo',
-                    data: new Date().toISOString(),
-                })
-            }
-            setColabs(prev => prev.map(c => c.id === colabId ? { ...c, saldo_pipj: newVal } : c))
-            toast.success('Saldo atualizado!')
+            await supabase.from('transacoes_pipj').insert({
+                colaborador_id: editingColab.id,
+                tipo: tipoAjuste === 'ADICAO' ? 'ENTRADA' : 'SAIDA',
+                valor,
+                descricao: `Ajuste manual de saldo: ${motivoAjuste.trim()}`,
+                status: 'CREDITADO',
+                data: new Date().toISOString(),
+                realizado_por: editorName,
+            })
+            setColabs(prev => prev.map(c => c.id === editingColab.id ? { ...c, saldo_pipj: novoSaldo } : c))
+            toast.success('Saldo ajustado!')
             window.dispatchEvent(new Event('refreshPipjData'))
+            closeEdit()
         }
 
         setSaving(false)
-        setEditingId(null)
-        setEditValue("")
-    }
-
-    const handleKeyDown = (e: React.KeyboardEvent, colabId: string) => {
-        if (e.key === 'Enter') saveEdit(colabId)
-        if (e.key === 'Escape') cancelEdit()
     }
 
     return (
@@ -153,7 +166,6 @@ export function PipjSaldos() {
                 ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
                         {filtered.map(colab => {
-                            const isEditing = editingId === colab.id
                             const saldo = Number(colab.saldo_pipj || 0)
                             const initials = colab.nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
 
@@ -183,44 +195,16 @@ export function PipjSaldos() {
 
                                     {/* Saldo + edit */}
                                     <div className="flex items-center gap-2 shrink-0">
-                                        {isEditing ? (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-sm text-slate-400 font-medium">R$</span>
-                                                <Input
-                                                    autoFocus
-                                                    value={editValue}
-                                                    onChange={e => setEditValue(e.target.value)}
-                                                    onKeyDown={e => handleKeyDown(e, colab.id)}
-                                                    className="h-8 w-28 text-sm text-right font-bold bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg"
-                                                />
-                                                <button
-                                                    onClick={() => saveEdit(colab.id)}
-                                                    disabled={saving}
-                                                    className="h-7 w-7 flex items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors"
-                                                >
-                                                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                                                </button>
-                                                <button
-                                                    onClick={cancelEdit}
-                                                    className="h-7 w-7 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-white/10 text-slate-500 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors"
-                                                >
-                                                    <X className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <span className={`text-base font-bold tabular-nums ${saldo > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
-                                                    R$ {saldo.toFixed(2).replace('.', ',')}
-                                                </span>
-                                                <button
-                                                    onClick={() => startEdit(colab)}
-                                                    className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
-                                                    title="Editar saldo"
-                                                >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                </button>
-                                            </>
-                                        )}
+                                        <span className={`text-base font-bold tabular-nums ${saldo > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}>
+                                            R$ {saldo.toFixed(2).replace('.', ',')}
+                                        </span>
+                                        <button
+                                            onClick={() => openEdit(colab)}
+                                            className="h-7 w-7 flex items-center justify-center rounded-lg text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-all"
+                                            title="Editar saldo"
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
                                 </div>
                             )
@@ -228,6 +212,82 @@ export function PipjSaldos() {
                     </div>
                 )}
             </CardContent>
+
+            <Dialog open={!!editingColab} onOpenChange={(open) => { if (!open) closeEdit() }}>
+                <DialogContent className="sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle className="font-display text-xl">Ajustar Saldo PIPJ</DialogTitle>
+                        <DialogDescription>
+                            {editingColab && (
+                                <>
+                                    {editingColab.nome} · Saldo atual: <strong>R$ {Number(editingColab.saldo_pipj || 0).toFixed(2).replace('.', ',')}</strong>
+                                </>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Tipo de ajuste</Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setTipoAjuste('ADICAO')}
+                                    className={`flex items-center justify-center gap-1.5 h-10 rounded-xl text-sm font-bold border transition-colors ${tipoAjuste === 'ADICAO'
+                                        ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
+                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                                        }`}
+                                >
+                                    <Plus className="h-4 w-4" /> Adição
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setTipoAjuste('DEDUCAO')}
+                                    className={`flex items-center justify-center gap-1.5 h-10 rounded-xl text-sm font-bold border transition-colors ${tipoAjuste === 'DEDUCAO'
+                                        ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-300 dark:border-rose-500/40 text-rose-700 dark:text-rose-400'
+                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                                        }`}
+                                >
+                                    <Minus className="h-4 w-4" /> Dedução
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="valor-ajuste">Valor (R$)</Label>
+                            <Input
+                                id="valor-ajuste"
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                placeholder="0,00"
+                                value={valorAjuste}
+                                onChange={e => setValorAjuste(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="motivo-ajuste">Motivo</Label>
+                            <Textarea
+                                id="motivo-ajuste"
+                                placeholder="Descreva o motivo do ajuste..."
+                                value={motivoAjuste}
+                                onChange={e => setMotivoAjuste(e.target.value)}
+                                className="resize-none"
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={closeEdit} disabled={saving}>Cancelar</Button>
+                        <Button onClick={confirmarAjuste} disabled={saving} className="bg-primary hover:bg-primary/90">
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Confirmar Ajuste
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     )
 }
