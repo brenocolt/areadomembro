@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Wallet, TrendingDown, ArrowDownCircle, ShieldAlert } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { OCULTOS_SALDOS_EQUIPE } from "@/lib/pipj-oculto"
 import { useState, useEffect } from "react"
 
 const LIMITE_MENSAL = 4000
@@ -22,7 +23,7 @@ export function PipjStats() {
             const now = new Date()
 
             const [colabsRes, saidasRes, aprovadosRes] = await Promise.all([
-                supabase.from('colaboradores').select('saldo_pipj').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
+                supabase.from('colaboradores').select('id, saldo_pipj').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
                 supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'SAIDA'),
                 supabase
                     .from('solicitacoes_saque')
@@ -32,7 +33,9 @@ export function PipjStats() {
                     .lte('data_solicitacao', new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()),
             ])
 
-            const total = colabsRes.data?.reduce((s, c) => s + Number(c.saldo_pipj || 0), 0) || 0
+            const total = colabsRes.data
+                ?.filter(c => !OCULTOS_SALDOS_EQUIPE.includes(c.id))
+                .reduce((s, c) => s + Number(c.saldo_pipj || 0), 0) || 0
             setTotalPipj(total)
 
             if (saidasRes.data && saidasRes.data.length > 0) {
