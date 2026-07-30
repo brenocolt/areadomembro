@@ -3,7 +3,7 @@ import { AddFlagDialog } from "./add-flag-dialog"
 import { ManageRemovalTypesDialog } from "./manage-removal-types-dialog"
 import { ManagePointsTypesDialog } from "./manage-points-types-dialog"
 
-export function PointsHeader() {
+export function PointsHeader({ restricted = false }: { restricted?: boolean }) {
     return (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
@@ -15,9 +15,13 @@ export function PointsHeader() {
                 </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
-                <ManagePointsTypesDialog />
-                <ManageRemovalTypesDialog />
-                <AddFlagDialog />
+                {!restricted && (
+                    <>
+                        <ManagePointsTypesDialog />
+                        <ManageRemovalTypesDialog />
+                        <AddFlagDialog />
+                    </>
+                )}
                 <AddPointsDialog />
             </div>
         </div>
