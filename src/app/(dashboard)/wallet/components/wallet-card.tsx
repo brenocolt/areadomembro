@@ -60,6 +60,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
     const [isPending, startTransition] = useTransition()
     const [msg, setMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
     const [uploadingFile, setUploadingFile] = useState(false)
+    const [pendenteSum, setPendenteSum] = useState(0)
     const [form, setForm] = useState({
         descricao: '',
         valor: '',
@@ -72,14 +73,30 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
         tipo_gasto: '',
     })
 
+    async function fetchPendenteSum() {
+        const { data } = await supabase
+            .from('solicitacoes_saque')
+            .select('valor')
+            .eq('colaborador_id', colaboradorId)
+            .eq('tipo', 'saque_pipj')
+            .eq('status', 'PENDENTE')
+        const sum = (data || []).reduce((s, r: any) => s + Number(r.valor || 0), 0)
+        setPendenteSum(sum)
+        return sum
+    }
+
+    useEffect(() => { fetchPendenteSum() }, [])
+
+    const disponivel = Math.max(0, saldo - pendenteSum)
+
     function handleSubmit() {
         const valor = Number(form.valor)
         if (!form.descricao || !form.valor || !form.forma_pagamento || !form.tipo_gasto) {
             setMsg({ text: 'Preencha descrição, valor, tipo de gasto e forma de pagamento.', type: 'error' })
             return
         }
-        if (valor <= 0 || valor > saldo) {
-            setMsg({ text: `Valor deve ser entre R$ 0,01 e R$ ${saldo.toFixed(2).replace('.', ',')}.`, type: 'error' })
+        if (valor <= 0 || valor > disponivel) {
+            setMsg({ text: `Valor deve ser entre R$ 0,01 e R$ ${disponivel.toFixed(2).replace('.', ',')} (saldo já considerando suas solicitações pendentes).`, type: 'error' })
             return
         }
         if (form.forma_pagamento === 'pix' && !form.chave_pix) {
@@ -92,6 +109,16 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
         }
         setMsg(null)
         startTransition(async () => {
+            // Reconfere a soma de pendentes na hora de enviar (evita que
+            // solicitações abertas em outra aba/dispositivo, no meio tempo
+            // que o diálogo esteve aberto, façam a soma ultrapassar o saldo).
+            const pendenteAtual = await fetchPendenteSum()
+            const disponivelAtual = Math.max(0, saldo - pendenteAtual)
+            if (valor > disponivelAtual) {
+                setMsg({ text: `Valor ultrapassa o saldo disponível (R$ ${disponivelAtual.toFixed(2).replace('.', ',')}, já considerando suas solicitações pendentes).`, type: 'error' })
+                return
+            }
+
             const dadosBancarios = form.forma_pagamento === 'pix'
                 ? { forma: 'pix', chave_pix: form.chave_pix, tipo_gasto: form.tipo_gasto }
                 : { forma: 'transferencia', banco: form.banco, agencia: form.agencia, conta: form.conta, tipo_gasto: form.tipo_gasto }
@@ -123,8 +150,13 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
             </DialogHeader>
             <div className="space-y-4 py-2">
                 <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl text-center">
-                    <span className="text-xs font-bold uppercase text-slate-400">Saldo disponível</span>
-                    <div className="text-2xl font-display font-bold text-primary dark:text-white">R$ {saldo.toFixed(2).replace('.', ',')}</div>
+                    <span className="text-xs font-bold uppercase text-slate-400">Saldo disponível para solicitar</span>
+                    <div className="text-2xl font-display font-bold text-primary dark:text-white">R$ {disponivel.toFixed(2).replace('.', ',')}</div>
+                    {pendenteSum > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                            R$ {pendenteSum.toFixed(2).replace('.', ',')} já solicitado(s) e pendente(s) de aprovação
+                        </p>
+                    )}
                 </div>
 
                 <div className="space-y-2">
@@ -134,7 +166,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
 
                 <div className="space-y-2">
                     <Label htmlFor="valor">Valor (R$)</Label>
-                    <Input id="valor" type="number" min="1" max={Math.min(saldo, 300)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
+                    <Input id="valor" type="number" min="1" max={Math.min(disponivel, 300)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
                 </div>
 
                 <div className="space-y-2">
