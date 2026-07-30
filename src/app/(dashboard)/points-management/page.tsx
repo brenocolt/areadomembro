@@ -1,3 +1,5 @@
+"use client"
+
 import { PointsHeader } from "./components/points-header"
 import { PointsStats } from "./components/points-stats"
 import { TopOffenders } from "./components/top-offenders"
@@ -11,8 +13,24 @@ import { PrePontuadosView } from "./components/pre-pontuados-view"
 import { PlanoPunicaoTab } from "../forms-management/components/plano-punicao-tab"
 import { PointsFullHistory } from "./components/points-full-history"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useColaborador } from "@/hooks/use-supabase"
 
 export default function PointsManagementPage() {
+    const { colaborador, loading, role } = useColaborador()
+    const isAdmin = (role || '').toUpperCase() === 'ADMIN'
+    const isGerente = (colaborador?.cargo_atual || '').toLowerCase().includes('gerente')
+    // Gerentes só têm acesso ao formulário de "Adicionar Pontuação" nesta página —
+    // dashboards e ferramentas administrativas seguem restritos a admins.
+    const restrictedToAddPoints = !loading && isGerente && !isAdmin
+
+    if (restrictedToAddPoints) {
+        return (
+            <div className="space-y-6">
+                <PointsHeader restricted />
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
             <PointsHeader />
