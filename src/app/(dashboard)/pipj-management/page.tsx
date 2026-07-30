@@ -6,6 +6,7 @@ import { PipjDashboard } from "./components/pipj-dashboard"
 import { PipjLancamentosPorMembroChart } from "./components/pipj-lancamentos-por-membro-chart"
 import { PipjLancamentosList } from "./components/pipj-lancamentos-list"
 import { PipjSaldos } from "./components/pipj-saldos"
+import { PipjAjustesHistorico } from "./components/pipj-ajustes-historico"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function PipjManagementPage() {
@@ -29,6 +30,9 @@ export default function PipjManagementPage() {
                     </TabsTrigger>
                     <TabsTrigger value="saldos" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Saldos da Equipe
+                    </TabsTrigger>
+                    <TabsTrigger value="ajustes" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
+                        Registros de Alterações
                     </TabsTrigger>
                 </TabsList>
 
@@ -61,6 +65,10 @@ export default function PipjManagementPage() {
 
                 <TabsContent value="saldos" className="border-none p-0 outline-none">
                     <PipjSaldos />
+                </TabsContent>
+
+                <TabsContent value="ajustes" className="border-none p-0 outline-none">
+                    <PipjAjustesHistorico />
                 </TabsContent>
             </Tabs>
         </div>
