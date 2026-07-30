@@ -3,13 +3,15 @@
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog"
 import { Trophy } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useState, useEffect } from "react"
 
 export function TopRedeemers() {
-    const [topUsers, setTopUsers] = useState<any[]>([])
+    const [allUsers, setAllUsers] = useState<any[]>([])
+    const topUsers = allUsers.slice(0, 5)
 
     useEffect(() => {
         async function fetch() {
@@ -23,7 +25,7 @@ export function TopRedeemers() {
 
             if (data) {
                 const ativos = data.filter((d: any) => d.colaboradores?.status !== 'Desligado' && d.colaboradores?.cargo_atual !== CARGO_FANTASMA)
-                setTopUsers(ativos.slice(0, 5))
+                setAllUsers(ativos)
             }
         }
         fetch()
@@ -81,9 +83,45 @@ export function TopRedeemers() {
             </CardContent>
 
             <div className="p-6 pt-0 mt-auto">
-                <Button variant="ghost" className="w-full text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl uppercase tracking-wider font-bold h-10 border border-transparent hover:border-slate-200 dark:hover:border-white/5">
-                    Ver Ranking Completo
-                </Button>
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="ghost" className="w-full text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl uppercase tracking-wider font-bold h-10 border border-transparent hover:border-slate-200 dark:hover:border-white/5">
+                            Ver Ranking Completo
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <Trophy className="h-5 w-5 text-amber-500" />
+                                Ranking Completo de Milhas
+                            </DialogTitle>
+                            <DialogDescription>Maiores saldos disponíveis</DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                            {allUsers.length > 0 ? allUsers.map((user, index) => (
+                                <div key={index} className="group">
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div className="flex items-center gap-3">
+                                            <span className={`text-xs font-bold w-4 ${index === 0 ? 'text-amber-500' : index === 1 ? 'text-slate-400' : index === 2 ? 'text-amber-700' : 'text-slate-500 dark:text-slate-600'}`}>
+                                                {String(index + 1).padStart(2, '0')}
+                                            </span>
+                                            <div className="min-w-0">
+                                                <span className="block text-sm font-bold text-slate-900 dark:text-white truncate">{user.colaboradores?.nome}</span>
+                                                <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">{user.colaboradores?.cargo_atual}</span>
+                                            </div>
+                                        </div>
+                                        <span className="text-sm font-bold text-cyan-700 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-200 dark:border-cyan-500/20 whitespace-nowrap">
+                                            {new Intl.NumberFormat('pt-BR').format(user.saldo_disponivel)} mi
+                                        </span>
+                                    </div>
+                                    <Progress value={user.saldo_disponivel} max={maxMiles} className="h-1.5 bg-slate-100 dark:bg-white/5" indicatorClassName="bg-gradient-to-r from-cyan-600 to-cyan-400" />
+                                </div>
+                            )) : (
+                                <p className="text-sm text-slate-400 italic text-center py-4">Nenhum saldo registrado</p>
+                            )}
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </Card>
     )
