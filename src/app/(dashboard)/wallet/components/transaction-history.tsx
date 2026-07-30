@@ -47,7 +47,7 @@ function BreakdownRow({ detalhes }: { detalhes: any }) {
                     {detalhes.mes_sem_lucro && (
                         <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-2 max-w-md">
                             <TrendingDown className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
-                            <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                            <p className="text-[11px] text-amber-800 dark:text-amber-200 min-w-0 break-words">
                                 <strong>Mês sem lucro:</strong> o valor base do cargo e o adicional por projeto foram reduzidos neste lançamento.
                             </p>
                         </div>
