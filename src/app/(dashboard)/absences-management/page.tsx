@@ -44,6 +44,12 @@ function formatDate(dateStr: string) {
     return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR')
 }
 
+function formatDateTime(dateStr: string) {
+    return new Date(dateStr).toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    })
+}
+
 function getDaysBetween(start: string, end: string) {
     const s = new Date(start + 'T12:00:00')
     const e = new Date(end + 'T12:00:00')
@@ -294,6 +300,7 @@ export default function AbsencesManagementPage() {
                                     <TableHead className="font-bold">Colaborador</TableHead>
                                     <TableHead className="font-bold">Cargo</TableHead>
                                     <TableHead className="font-bold">Localização</TableHead>
+                                    <TableHead className="font-bold">Registrado em</TableHead>
                                     <TableHead className="font-bold">Ida</TableHead>
                                     <TableHead className="font-bold">Volta</TableHead>
                                     <TableHead className="font-bold">Dias</TableHead>
@@ -320,6 +327,7 @@ export default function AbsencesManagementPage() {
                                                     {a.localizacao}
                                                 </div>
                                             </TableCell>
+                                            <TableCell className="text-muted-foreground text-sm whitespace-nowrap">{formatDateTime(a.created_at)}</TableCell>
                                             <TableCell>{formatDate(a.data_ida)}</TableCell>
                                             <TableCell>{formatDate(a.data_volta)}</TableCell>
                                             <TableCell>
