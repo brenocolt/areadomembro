@@ -3,7 +3,7 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { ArrowDownLeft, ArrowUpRight, AlertTriangle, ChevronDown, Briefcase, TrendingUp, Award, MinusCircle, CalendarOff } from "lucide-react"
+import { ArrowDownLeft, ArrowUpRight, AlertTriangle, ChevronDown, Briefcase, TrendingUp, Award, MinusCircle, CalendarOff, TrendingDown } from "lucide-react"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, Fragment } from "react"
@@ -29,8 +29,8 @@ function BreakdownRow({ detalhes }: { detalhes: any }) {
     }
 
     const items = [
-        { icon: Briefcase, label: `Base do cargo`, value: detalhes.base_cargo, color: 'text-slate-700 dark:text-slate-300', positive: true },
-        { icon: TrendingUp, label: `Bônus por projetos (${detalhes.qtd_projetos || 0} projetos)`, value: detalhes.bonus_projetos, color: 'text-cyan-600 dark:text-cyan-400', positive: true, hide: !detalhes.bonus_projetos },
+        { icon: Briefcase, label: `Base do cargo${detalhes.mes_sem_lucro ? ' (reduzida — mês sem lucro)' : ''}`, value: detalhes.base_cargo, color: 'text-slate-700 dark:text-slate-300', positive: true },
+        { icon: TrendingUp, label: `Bônus por projetos (${detalhes.qtd_projetos || 0} projetos${detalhes.mes_sem_lucro ? ', valor reduzido — mês sem lucro' : ''})`, value: detalhes.bonus_projetos, color: 'text-cyan-600 dark:text-cyan-400', positive: true, hide: !detalhes.bonus_projetos },
         { icon: Award, label: `Bônus por nível (${detalhes.nivel || '—'})`, value: detalhes.bonus_nivel, color: 'text-indigo-600 dark:text-indigo-400', positive: true, hide: !detalhes.bonus_nivel },
         { icon: MinusCircle, label: `Desconto punições (${detalhes.pontos_negativos || 0} pontos)`, value: detalhes.desconto_punicao, color: 'text-red-500', positive: false, hide: !detalhes.desconto_punicao },
         { icon: CalendarOff, label: `Desconto ausências (${detalhes.dias_ausencia || 0} dias de ${detalhes.dias_uteis_mes || '—'} úteis)`, value: detalhes.desconto_ausencia, color: 'text-amber-600 dark:text-amber-400', positive: false, hide: !detalhes.desconto_ausencia },
@@ -44,6 +44,14 @@ function BreakdownRow({ detalhes }: { detalhes: any }) {
         <TableRow className="bg-gradient-to-r from-cyan-50/40 to-slate-50/40 dark:from-cyan-900/10 dark:to-slate-900/30 border-b border-cyan-100/50 dark:border-cyan-800/20">
             <TableCell colSpan={6} className="px-6 py-3">
                 <div className="ml-11 space-y-1.5">
+                    {detalhes.mes_sem_lucro && (
+                        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-2 max-w-md">
+                            <TrendingDown className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                                <strong>Mês sem lucro:</strong> o valor base do cargo e o adicional por projeto foram reduzidos neste lançamento.
+                            </p>
+                        </div>
+                    )}
                     <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">Composição do cálculo</p>
                     {items.filter(i => !i.hide).map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between max-w-md">
@@ -126,7 +134,7 @@ export function TransactionHistory() {
                                                     {isEntry ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                                                 </div>
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-xs">{t.periodo || t.descricao_resgate || (isEntry ? 'Crédito' : 'Resgate')}</span>
+                                                    <span className="font-bold text-xs">{t.periodo || t.descricao_resgate || t.descricao || (isEntry ? 'Crédito' : 'Resgate')}</span>
                                                     <span className="text-[9px] text-slate-400">{new Date(t.data).toLocaleDateString('pt-BR')}</span>
                                                 </div>
                                                 {isEntry && (

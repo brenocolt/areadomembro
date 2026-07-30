@@ -3,8 +3,10 @@ import { PipjStats } from "./components/pipj-stats"
 import { PipjTopHolders } from "./components/pipj-top-holders"
 import { PipjHistory, SaquePendingRequestsList, SaqueHistoryList } from "./components/pipj-history"
 import { PipjDashboard } from "./components/pipj-dashboard"
+import { PipjLancamentosPorMembroChart } from "./components/pipj-lancamentos-por-membro-chart"
 import { PipjLancamentosList } from "./components/pipj-lancamentos-list"
 import { PipjSaldos } from "./components/pipj-saldos"
+import { PipjAjustesHistorico } from "./components/pipj-ajustes-historico"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function PipjManagementPage() {
@@ -29,6 +31,9 @@ export default function PipjManagementPage() {
                     <TabsTrigger value="saldos" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
                         Saldos da Equipe
                     </TabsTrigger>
+                    <TabsTrigger value="ajustes" className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold">
+                        Registros de Alterações
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-6 border-none p-0 outline-none">
@@ -46,6 +51,7 @@ export default function PipjManagementPage() {
 
                 <TabsContent value="dashboard" className="space-y-6 border-none p-0 outline-none">
                     <PipjDashboard />
+                    <PipjLancamentosPorMembroChart />
                     <PipjLancamentosList />
                 </TabsContent>
 
@@ -59,6 +65,10 @@ export default function PipjManagementPage() {
 
                 <TabsContent value="saldos" className="border-none p-0 outline-none">
                     <PipjSaldos />
+                </TabsContent>
+
+                <TabsContent value="ajustes" className="border-none p-0 outline-none">
+                    <PipjAjustesHistorico />
                 </TabsContent>
             </Tabs>
         </div>
