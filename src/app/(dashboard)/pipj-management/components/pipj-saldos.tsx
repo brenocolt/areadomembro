@@ -18,6 +18,14 @@ interface ColabSaldo {
     status?: string
 }
 
+// Pedido específico: estes colaboradores não devem aparecer na aba "Saldos
+// da Equipe" (mas continuam normalmente em todas as outras telas de PIPJ).
+const OCULTOS_SALDOS_EQUIPE = [
+    '3c473480-00b5-424b-bdba-0a6d1bc213c5', // Carolina Abreu
+    'a34e8f53-cc3d-41e6-a2ae-e5fcc048a5cb', // João Pedro Fernandes
+    '9d0a9bcf-a074-4d80-8d8f-8808ee21ede8', // Lucas Damaceno
+]
+
 export function PipjSaldos() {
     const [colabs, setColabs] = useState<ColabSaldo[]>([])
     const [loading, setLoading] = useState(true)
@@ -34,7 +42,7 @@ export function PipjSaldos() {
             .eq('status', 'Ativo')
             .neq('cargo_atual', CARGO_FANTASMA)
             .order('nome', { ascending: true })
-        if (data) setColabs(data)
+        if (data) setColabs((data as ColabSaldo[]).filter(c => !OCULTOS_SALDOS_EQUIPE.includes(c.id)))
         setLoading(false)
     }, [])
 

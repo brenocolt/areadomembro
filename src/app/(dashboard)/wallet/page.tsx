@@ -3,6 +3,7 @@ import { PerformanceCard } from "./components/performance-card";
 import { TransactionHistory, PunishmentAlert } from "./components/transaction-history";
 import { CriteriaCard } from "./components/criteria-card";
 import { PipjForecastCard } from "./components/pipj-forecast-card";
+import { PipjSolicitacoesCard } from "./components/pipj-solicitacoes-card";
 import { FadeIn } from "./components/motion-wrapper";
 
 export default function WalletPage() {
@@ -38,6 +39,10 @@ export default function WalletPage() {
 
             <FadeIn delay={0} direction="up">
                 <TransactionHistory />
+            </FadeIn>
+
+            <FadeIn delay={0} direction="up">
+                <PipjSolicitacoesCard />
             </FadeIn>
 
             <FadeIn delay={0} direction="up">
