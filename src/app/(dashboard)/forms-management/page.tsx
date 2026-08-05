@@ -215,6 +215,7 @@ export default function FormsManagementPage() {
                 opcoes: p.opcoes,
                 obrigatoria: p.obrigatoria,
                 logica_condicional: p.logica_condicional || null,
+                proxima_secao: p.proxima_secao || null,
             })),
         }
     }
