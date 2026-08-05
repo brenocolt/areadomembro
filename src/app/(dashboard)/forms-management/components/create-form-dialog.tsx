@@ -27,6 +27,10 @@ interface Pergunta {
     tipo: string
     opcoes: any
     obrigatoria: boolean
+    // Só usado em perguntas do tipo 'selecao_unica'. Mapa { índice da opção
+    // em `opcoes` -> alvo }, onde alvo é o id de uma pergunta do tipo
+    // 'secao' ou "enviar". Ausência de chave = continuar sequência normal.
+    logica_condicional?: Record<string, string> | null
 }
 
 export interface FormInitialData {
@@ -60,7 +64,7 @@ interface CreateFormDialogProps {
     hideTrigger?: boolean
 }
 
-function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao, insertFormatQuestion }: any) {
+function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao, insertFormatQuestion, secoes, updateLogicaCondicional }: any) {
     const {
         attributes,
         listeners,
@@ -208,6 +212,54 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                             <button type="button" onClick={() => addOpcao(p.id)} className="text-xs text-violet-600 dark:text-violet-400 font-bold hover:underline flex items-center gap-1">
                                 <Plus className="w-3 h-3" /> Adicionar opção
                             </button>
+                        </div>
+                    )}
+
+                    {p.tipo === 'selecao_unica' && Array.isArray(p.opcoes) && (
+                        <div className="pl-2 pt-2 mt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-2">
+                                <Switch
+                                    checked={!!p.logica_condicional}
+                                    onCheckedChange={(v: boolean) => updatePergunta(p.id, 'logica_condicional', v ? {} : null)}
+                                />
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                    Lógica condicional (ir para seção conforme a resposta)
+                                </span>
+                            </div>
+                            {p.logica_condicional && (
+                                secoes.length === 0 ? (
+                                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-2">
+                                        Crie ao menos uma &quot;Seção&quot; no formulário para poder direcionar respostas para ela.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2 mt-2">
+                                        {p.opcoes.map((opt: string, oi: number) => (
+                                            <div key={oi} className="flex items-center gap-2">
+                                                <span className="text-[11px] text-slate-500 dark:text-slate-400 w-28 truncate shrink-0" title={opt}>
+                                                    Se &quot;{opt}&quot;:
+                                                </span>
+                                                <Select
+                                                    value={p.logica_condicional?.[oi] ?? 'continuar'}
+                                                    onValueChange={(v) => updateLogicaCondicional(p.id, oi, v)}
+                                                >
+                                                    <SelectTrigger className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg flex-1">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                                                        <SelectItem value="continuar" className="text-xs">Continuar sequência normal</SelectItem>
+                                                        <SelectItem value="enviar" className="text-xs">Enviar formulário</SelectItem>
+                                                        {secoes.map((s: Pergunta) => (
+                                                            <SelectItem key={s.id} value={s.id} className="text-xs">
+                                                                Ir para seção: {s.titulo || '(sem título)'}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
+                            )}
                         </div>
                     )}
 
@@ -499,8 +551,25 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 } else {
                     updated.opcoes = null
                 }
+                // Lógica condicional só existe em perguntas de seleção única.
+                if (value !== 'selecao_unica') {
+                    updated.logica_condicional = null
+                }
             }
             return updated
+        }))
+    }
+
+    // Atualiza o alvo da lógica condicional para uma opção específica (pelo
+    // índice dela em `opcoes`). "continuar" remove a chave — ausência de
+    // chave já significa "seguir sequência normal", mantendo o objeto limpo.
+    const updateLogicaCondicional = (perguntaId: string, optionIndex: number, target: string) => {
+        setPerguntas(perguntas.map(p => {
+            if (p.id !== perguntaId) return p
+            const logica = { ...(p.logica_condicional || {}) }
+            if (target === 'continuar') delete logica[optionIndex]
+            else logica[optionIndex] = target
+            return { ...p, logica_condicional: logica }
         }))
     }
 
@@ -523,8 +592,52 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const removeOpcao = (perguntaId: string, index: number) => {
         setPerguntas(perguntas.map(p => {
             if (p.id !== perguntaId || !Array.isArray(p.opcoes)) return p
-            return { ...p, opcoes: p.opcoes.filter((_: any, i: number) => i !== index) }
+            const newOpcoes = p.opcoes.filter((_: any, i: number) => i !== index)
+            // Reindexa a lógica condicional para acompanhar o deslocamento dos
+            // índices das opções remanescentes (senão a lógica passaria a
+            // apontar para a opção errada após a remoção).
+            let newLogica = p.logica_condicional
+            if (newLogica) {
+                const reindexed: Record<string, string> = {}
+                Object.entries(newLogica).forEach(([key, val]) => {
+                    const k = parseInt(key, 10)
+                    if (k === index) return
+                    reindexed[k > index ? k - 1 : k] = val
+                })
+                newLogica = reindexed
+            }
+            return { ...p, opcoes: newOpcoes, logica_condicional: newLogica }
         }))
+    }
+
+    // Grava a lógica condicional depois que TODAS as perguntas já foram
+    // salvas — os alvos podem referenciar o id de uma seção nova, que só
+    // existe de fato após o insert dela. `idMap` traduz o id client-side
+    // (temporário ou já real) de cada pergunta para o id real no banco.
+    const saveLogicaCondicional = async (perguntasList: Pergunta[], idMap: Map<string, string>) => {
+        const secaoIdSet = new Set(perguntasList.filter(p => p.tipo === 'secao').map(p => p.id))
+        for (const p of perguntasList) {
+            if (p.tipo !== 'selecao_unica') continue
+            const realId = idMap.get(p.id)
+            if (!realId) continue
+
+            if (!p.logica_condicional || Object.keys(p.logica_condicional).length === 0) {
+                await supabase.from('formulario_perguntas').update({ logica_condicional: null }).eq('id', realId)
+                continue
+            }
+
+            const traduzida: Record<string, string> = {}
+            for (const [optionIndex, target] of Object.entries(p.logica_condicional)) {
+                if (target === 'enviar') {
+                    traduzida[optionIndex] = 'enviar'
+                } else if (secaoIdSet.has(target)) {
+                    traduzida[optionIndex] = idMap.get(target) || target
+                }
+                // Alvo inválido/removido (ex: seção excluída): a entrada é
+                // descartada, caindo no comportamento padrão (continuar).
+            }
+            await supabase.from('formulario_perguntas').update({ logica_condicional: traduzida }).eq('id', realId)
+        }
     }
 
     const handleSubmit = async () => {
@@ -579,6 +692,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             const existingIds = new Set((existingPerguntas || []).map((p: any) => p.id))
 
             const keptIds: string[] = []
+            const idMap = new Map<string, string>()
             for (let i = 0; i < validPerguntas.length; i++) {
                 const p = validPerguntas[i]
                 const payload = {
@@ -599,16 +713,20 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         setLoading(false)
                         return
                     }
+                    idMap.set(p.id, p.id)
                     keptIds.push(p.id)
                 } else {
-                    const { error: insErr } = await supabase
+                    const { data: insData, error: insErr } = await supabase
                         .from('formulario_perguntas')
                         .insert({ formulario_id: initialData.id!, ...payload })
-                    if (insErr) {
-                        toast.error('Erro ao criar pergunta: ' + insErr.message)
+                        .select('id')
+                        .single()
+                    if (insErr || !insData) {
+                        toast.error('Erro ao criar pergunta: ' + (insErr?.message || ''))
                         setLoading(false)
                         return
                     }
+                    idMap.set(p.id, insData.id)
                 }
             }
 
@@ -616,6 +734,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             if (toDelete.length > 0) {
                 await supabase.from('formulario_perguntas').delete().in('id', toDelete)
             }
+
+            await saveLogicaCondicional(validPerguntas, idMap)
 
             toast.success("Formulário atualizado com sucesso!")
         } else {
@@ -647,7 +767,23 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 ordem: i + 1,
             }))
 
-            await supabase.from('formulario_perguntas').insert(perguntasToInsert)
+            const { data: insertedPerguntas, error: perguntasError } = await supabase
+                .from('formulario_perguntas')
+                .insert(perguntasToInsert)
+                .select('id')
+
+            if (perguntasError || !insertedPerguntas) {
+                toast.error('Erro ao criar perguntas: ' + (perguntasError?.message || ''))
+                setLoading(false)
+                return
+            }
+
+            // O Postgres preserva a ordem de um INSERT em lote, então o i-ésimo
+            // registro retornado corresponde ao i-ésimo item enviado.
+            const idMap = new Map<string, string>()
+            validPerguntas.forEach((p, i) => idMap.set(p.id, insertedPerguntas[i].id))
+            await saveLogicaCondicional(validPerguntas, idMap)
+
             toast.success("Formulário criado com sucesso!")
         }
 
@@ -813,6 +949,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         addOpcao={addOpcao}
                                         removeOpcao={removeOpcao}
                                         insertFormatQuestion={insertFormatQuestion}
+                                        secoes={perguntas.filter(x => x.tipo === 'secao' && x.id !== p.id)}
+                                        updateLogicaCondicional={updateLogicaCondicional}
                                     />
                                 ))}
                             </SortableContext>

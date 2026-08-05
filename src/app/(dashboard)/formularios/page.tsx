@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Star, Loader2 } from "lucide-react"
@@ -11,6 +11,79 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
+interface FormSection {
+    id: string | null
+    titulo: string
+    descricao: string
+    perguntas: any[]
+}
+
+// Agrupa a lista linear de perguntas em "seções" — cada pergunta do tipo
+// 'secao' inicia uma seção nova (ela mesma vira o cabeçalho, não entra na
+// lista de perguntas da seção). Perguntas antes da primeira 'secao' formam
+// uma seção inicial implícita (sem cabeçalho); formulários sem nenhuma
+// 'secao' resultam em uma única seção com tudo — comportamento idêntico ao
+// de antes da navegação por seções existir.
+function buildSections(perguntas: any[]): FormSection[] {
+    const sections: FormSection[] = []
+    let current: FormSection = { id: null, titulo: '', descricao: '', perguntas: [] }
+    for (const p of perguntas) {
+        if (p.tipo === 'secao') {
+            sections.push(current)
+            current = { id: p.id, titulo: p.titulo || '', descricao: p.descricao || '', perguntas: [] }
+        } else {
+            current.perguntas.push(p)
+        }
+    }
+    sections.push(current)
+    return sections.filter((s, i) => !(i === 0 && s.id === null && s.perguntas.length === 0 && sections.length > 1))
+}
+
+// Resolve o alvo da lógica condicional configurado na primeira pergunta de
+// seleção única respondida (dentro da seção atual) que tiver uma regra para
+// a opção escolhida. Sem lógica configurada/respondida, segue a sequência.
+function resolveNextTarget(section: FormSection, respostas: Record<string, any>): string {
+    for (const p of section.perguntas) {
+        if (p.tipo !== 'selecao_unica' || !p.logica_condicional) continue
+        const resposta = respostas[p.id]
+        if (!resposta) continue
+        const optionIndex = (p.opcoes || []).indexOf(resposta)
+        if (optionIndex === -1) continue
+        const target = p.logica_condicional[optionIndex]
+        if (target) return target
+    }
+    return 'continuar'
+}
+
+function computeNext(sections: FormSection[], currentIndex: number, respostas: Record<string, any>): { type: 'submit' } | { type: 'section', index: number } {
+    const target = resolveNextTarget(sections[currentIndex], respostas)
+    if (target === 'enviar') return { type: 'submit' }
+    if (target !== 'continuar') {
+        const idx = sections.findIndex(s => s.id === target)
+        if (idx !== -1) return { type: 'section', index: idx }
+        // Alvo inválido (ex: seção foi excluída depois) — cai no padrão abaixo.
+    }
+    return currentIndex + 1 < sections.length ? { type: 'section', index: currentIndex + 1 } : { type: 'submit' }
+}
+
+function validateSection(section: FormSection, respostas: Record<string, any>): string | null {
+    for (const p of section.perguntas) {
+        if (p.tipo === 'titulo' || !p.obrigatoria) continue
+        if (p.tipo === 'grade_multipla_escolha') {
+            const linhas: string[] = p.opcoes?.linhas || []
+            const respostaGrade = respostas[p.id] || {}
+            const allAnswered = linhas.every((l: string) => respostaGrade[l])
+            if (!allAnswered) return `Pergunta obrigatória não respondida: "${p.titulo}" — responda todas as linhas`
+        } else {
+            const val = respostas[p.id]
+            if (!val || (typeof val === 'string' && val.trim() === '') || (Array.isArray(val) && val.length === 0)) {
+                return `Pergunta obrigatória não respondida: "${p.titulo}"`
+            }
+        }
+    }
+    return null
+}
+
 export default function FormulariosPage() {
     const { colaborador } = useColaborador()
     const [forms, setForms] = useState<any[]>([])
@@ -18,6 +91,8 @@ export default function FormulariosPage() {
     const [activeFormId, setActiveFormId] = useState<string | null>(null)
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [respostas, setRespostas] = useState<Record<string, any>>({})
+    const [sectionIndex, setSectionIndex] = useState(0)
+    const [sectionHistory, setSectionHistory] = useState<number[]>([])
     const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
@@ -108,12 +183,64 @@ export default function FormulariosPage() {
             .order('ordem')
         if (data) setPerguntas(data)
         setRespostas({})
+        setSectionIndex(0)
+        setSectionHistory([])
     }
 
-    const handleSubmit = async () => {
+    // Seções derivadas da lista linear de perguntas (ver buildSections) e a
+    // numeração absoluta de cada pergunta real, calculada sobre a ordem
+    // completa do formulário — assim o número de uma pergunta não muda
+    // conforme o caminho percorrido pela lógica condicional.
+    const sections = useMemo(() => buildSections(perguntas), [perguntas])
+    const questionNumbers = useMemo(() => {
+        const map = new Map<string, number>()
+        let n = 0
+        for (const p of perguntas) {
+            if (p.tipo === 'titulo' || p.tipo === 'secao') continue
+            n++
+            map.set(p.id, n)
+        }
+        return map
+    }, [perguntas])
+
+    const handleNext = async () => {
+        const section = sections[sectionIndex]
+        if (!section) return
+        const error = validateSection(section, respostas)
+        if (error) {
+            toast.error(error)
+            return
+        }
+        const next = computeNext(sections, sectionIndex, respostas)
+        if (next.type === 'submit') {
+            await submitAnswers()
+        } else {
+            setSectionHistory(h => [...h, sectionIndex])
+            setSectionIndex(next.index)
+        }
+    }
+
+    const handleBack = () => {
+        if (sectionHistory.length === 0) {
+            setActiveFormId(null)
+            return
+        }
+        const prev = sectionHistory[sectionHistory.length - 1]
+        setSectionHistory(h => h.slice(0, -1))
+        setSectionIndex(prev)
+    }
+
+    const submitAnswers = async () => {
         if (!colaborador?.id || !activeFormId) return
 
-        const realPerguntas = perguntas.filter(p => p.tipo !== 'titulo' && p.tipo !== 'secao')
+        // Só envia respostas das seções realmente visitadas neste percurso —
+        // perguntas de seções puladas pela lógica condicional (ou respostas
+        // "órfãs" de uma navegação anterior por outro caminho) não entram.
+        const visitedIndices = new Set([...sectionHistory, sectionIndex])
+        const visitedPerguntaIds = new Set(
+            sections.filter((_, i) => visitedIndices.has(i)).flatMap(s => s.perguntas.map((p: any) => p.id))
+        )
+        const realPerguntas = perguntas.filter(p => p.tipo !== 'titulo' && p.tipo !== 'secao' && visitedPerguntaIds.has(p.id))
 
         for (const p of realPerguntas) {
             if (p.obrigatoria) {
@@ -206,7 +333,8 @@ export default function FormulariosPage() {
     if (activeFormId) {
         const form = forms.find(f => f.id === activeFormId)
         const prevCount = responseCount(activeFormId)
-        let questionCounter = 0
+        const currentSection = sections[sectionIndex] || sections[0]
+        const nextIsSubmit = computeNext(sections, sectionIndex, respostas).type === 'submit'
 
         return (
             <div className="flex flex-col gap-6 pb-8 max-w-2xl mx-auto">
@@ -232,8 +360,27 @@ export default function FormulariosPage() {
                             </div>
                         )}
 
+                        {sections.length > 1 && (
+                            <div className="ml-12 mb-2">
+                                <Badge className="bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-[10px] font-bold border-none">
+                                    Seção {sectionIndex + 1} de {sections.length}
+                                </Badge>
+                            </div>
+                        )}
+
+                        {(currentSection.titulo || currentSection.descricao) && (
+                            <div className="mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                                {currentSection.titulo && (
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">{currentSection.titulo}</h2>
+                                )}
+                                {currentSection.descricao && (
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{currentSection.descricao}</p>
+                                )}
+                            </div>
+                        )}
+
                         <div className="space-y-6 mt-6">
-                            {perguntas.map((p) => {
+                            {currentSection.perguntas.map((p) => {
                                 if (p.tipo === 'titulo') {
                                     return (
                                         <div key={p.id} className="pt-2 pb-1">
@@ -247,25 +394,7 @@ export default function FormulariosPage() {
                                     )
                                 }
 
-                                if (p.tipo === 'secao') {
-                                    return (
-                                        <div key={p.id} className="py-2">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                                                {p.titulo && (
-                                                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap">{p.titulo}</span>
-                                                )}
-                                                <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-                                            </div>
-                                            {p.descricao && (
-                                                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-center">{p.descricao}</p>
-                                            )}
-                                        </div>
-                                    )
-                                }
-
-                                questionCounter++
-                                const qNum = questionCounter
+                                const qNum = questionNumbers.get(p.id) || 0
 
                                 return (
                                     <div key={p.id} className="space-y-2">
@@ -433,12 +562,14 @@ export default function FormulariosPage() {
                         </div>
 
                         <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-                            <Button variant="ghost" onClick={() => setActiveFormId(null)} className="rounded-xl font-bold text-slate-500">
+                            <Button variant="ghost" onClick={handleBack} className="rounded-xl font-bold text-slate-500">
                                 ← Voltar
                             </Button>
-                            <Button onClick={handleSubmit} disabled={submitting} className="rounded-xl font-bold h-11 px-8 bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
-                                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                                {submitting ? 'Enviando...' : 'Enviar Respostas'}
+                            <Button onClick={handleNext} disabled={submitting} className="rounded-xl font-bold h-11 px-8 bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
+                                {submitting
+                                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    : (nextIsSubmit ? <Send className="h-4 w-4 mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />)}
+                                {submitting ? 'Enviando...' : (nextIsSubmit ? 'Enviar Respostas' : 'Próxima Seção')}
                             </Button>
                         </div>
                     </div>
