@@ -214,6 +214,7 @@ export default function FormsManagementPage() {
                 tipo: p.tipo,
                 opcoes: p.opcoes,
                 obrigatoria: p.obrigatoria,
+                logica_condicional: p.logica_condicional || null,
             })),
         }
     }
