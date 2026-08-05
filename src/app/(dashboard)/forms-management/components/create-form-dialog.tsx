@@ -31,6 +31,11 @@ interface Pergunta {
     // em `opcoes` -> alvo }, onde alvo é o id de uma pergunta do tipo
     // 'secao' ou "enviar". Ausência de chave = continuar sequência normal.
     logica_condicional?: Record<string, string> | null
+    // Só usado em perguntas do tipo 'secao'. Navegação padrão ao final desta
+    // seção quando nenhuma lógica condicional de pergunta decidir o próximo
+    // passo: null/"continuar" = próxima seção da sequência, "enviar" = envia
+    // o formulário, ou o id de outra pergunta 'secao' para pular até ela.
+    proxima_secao?: string | null
 }
 
 export interface FormInitialData {
@@ -138,6 +143,31 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                             className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-8 focus-visible:ring-violet-500 text-sm"
                             placeholder="Descrição da seção (opcional)"
                         />
+                        <div className="pt-2 mt-1 border-t border-dashed border-slate-300 dark:border-slate-600 space-y-1.5">
+                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                                Ao final desta seção, ir para:
+                            </span>
+                            <Select
+                                value={p.proxima_secao || 'continuar'}
+                                onValueChange={(v) => updatePergunta(p.id, 'proxima_secao', v === 'continuar' ? null : v)}
+                            >
+                                <SelectTrigger className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                                    <SelectItem value="continuar" className="text-xs">Próxima seção (sequência normal)</SelectItem>
+                                    <SelectItem value="enviar" className="text-xs">Enviar formulário</SelectItem>
+                                    {secoes.map((s: Pergunta) => (
+                                        <SelectItem key={s.id} value={s.id} className="text-xs">
+                                            Ir para seção: {s.titulo || '(sem título)'}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                                Vale apenas quando nenhuma pergunta desta seção tiver lógica condicional própria decidindo o próximo passo.
+                            </p>
+                        </div>
                     </div>
                     <button type="button" onClick={() => removePergunta(p.id)} className="text-slate-400 hover:text-rose-500 p-1 mt-1" title="Excluir">
                         <Trash2 className="w-4 h-4" />
@@ -617,26 +647,38 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const saveLogicaCondicional = async (perguntasList: Pergunta[], idMap: Map<string, string>) => {
         const secaoIdSet = new Set(perguntasList.filter(p => p.tipo === 'secao').map(p => p.id))
         for (const p of perguntasList) {
-            if (p.tipo !== 'selecao_unica') continue
             const realId = idMap.get(p.id)
             if (!realId) continue
 
-            if (!p.logica_condicional || Object.keys(p.logica_condicional).length === 0) {
-                await supabase.from('formulario_perguntas').update({ logica_condicional: null }).eq('id', realId)
-                continue
-            }
-
-            const traduzida: Record<string, string> = {}
-            for (const [optionIndex, target] of Object.entries(p.logica_condicional)) {
-                if (target === 'enviar') {
-                    traduzida[optionIndex] = 'enviar'
-                } else if (secaoIdSet.has(target)) {
-                    traduzida[optionIndex] = idMap.get(target) || target
+            if (p.tipo === 'selecao_unica') {
+                if (!p.logica_condicional || Object.keys(p.logica_condicional).length === 0) {
+                    await supabase.from('formulario_perguntas').update({ logica_condicional: null }).eq('id', realId)
+                    continue
                 }
-                // Alvo inválido/removido (ex: seção excluída): a entrada é
-                // descartada, caindo no comportamento padrão (continuar).
+
+                const traduzida: Record<string, string> = {}
+                for (const [optionIndex, target] of Object.entries(p.logica_condicional)) {
+                    if (target === 'enviar') {
+                        traduzida[optionIndex] = 'enviar'
+                    } else if (secaoIdSet.has(target)) {
+                        traduzida[optionIndex] = idMap.get(target) || target
+                    }
+                    // Alvo inválido/removido (ex: seção excluída): a entrada é
+                    // descartada, caindo no comportamento padrão (continuar).
+                }
+                await supabase.from('formulario_perguntas').update({ logica_condicional: traduzida }).eq('id', realId)
+            } else if (p.tipo === 'secao') {
+                // Navegação padrão ao final desta seção (ver comentário na
+                // migration). Alvo inválido/removido cai de volta em null
+                // (= continuar sequência normal).
+                let proximaSecao: string | null = null
+                if (p.proxima_secao === 'enviar') {
+                    proximaSecao = 'enviar'
+                } else if (p.proxima_secao && secaoIdSet.has(p.proxima_secao)) {
+                    proximaSecao = idMap.get(p.proxima_secao) || p.proxima_secao
+                }
+                await supabase.from('formulario_perguntas').update({ proxima_secao: proximaSecao }).eq('id', realId)
             }
-            await supabase.from('formulario_perguntas').update({ logica_condicional: traduzida }).eq('id', realId)
         }
     }
 

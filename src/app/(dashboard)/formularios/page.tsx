@@ -15,6 +15,12 @@ interface FormSection {
     id: string | null
     titulo: string
     descricao: string
+    // Navegação padrão configurada na própria pergunta 'secao' que inicia
+    // esta seção: null/"continuar" = próxima seção da sequência, "enviar" =
+    // envia o formulário, ou o id de outra seção para pular até ela. Só
+    // existe quando a seção tem um cabeçalho real (id !== null) — a seção
+    // implícita inicial (sem 'secao' própria) não tem onde configurar isso.
+    proximaSecaoPadrao: string | null
     perguntas: any[]
 }
 
@@ -26,11 +32,11 @@ interface FormSection {
 // de antes da navegação por seções existir.
 function buildSections(perguntas: any[]): FormSection[] {
     const sections: FormSection[] = []
-    let current: FormSection = { id: null, titulo: '', descricao: '', perguntas: [] }
+    let current: FormSection = { id: null, titulo: '', descricao: '', proximaSecaoPadrao: null, perguntas: [] }
     for (const p of perguntas) {
         if (p.tipo === 'secao') {
             sections.push(current)
-            current = { id: p.id, titulo: p.titulo || '', descricao: p.descricao || '', perguntas: [] }
+            current = { id: p.id, titulo: p.titulo || '', descricao: p.descricao || '', proximaSecaoPadrao: p.proxima_secao || null, perguntas: [] }
         } else {
             current.perguntas.push(p)
         }
@@ -55,8 +61,15 @@ function resolveNextTarget(section: FormSection, respostas: Record<string, any>)
     return 'continuar'
 }
 
+// Decide a próxima seção (ou envio) ao final da seção atual. Precedência:
+// 1) lógica condicional de alguma pergunta respondida na seção atual;
+// 2) navegação padrão configurada na própria seção ("ao final desta seção,
+//    ir para");
+// 3) sequência normal (próxima seção da lista, ou envio se for a última).
 function computeNext(sections: FormSection[], currentIndex: number, respostas: Record<string, any>): { type: 'submit' } | { type: 'section', index: number } {
-    const target = resolveNextTarget(sections[currentIndex], respostas)
+    const perQuestionTarget = resolveNextTarget(sections[currentIndex], respostas)
+    const target = perQuestionTarget !== 'continuar' ? perQuestionTarget : (sections[currentIndex].proximaSecaoPadrao || 'continuar')
+
     if (target === 'enviar') return { type: 'submit' }
     if (target !== 'continuar') {
         const idx = sections.findIndex(s => s.id === target)
