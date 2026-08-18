@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Users, Clock } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 interface Ausencia {
     id: string
@@ -255,7 +256,32 @@ export default function AbsencesManagementPage() {
                                                 )
                                             })}
                                             {dayAusencias.length > 3 && (
-                                                <div className="text-[10px] text-muted-foreground px-1">+{dayAusencias.length - 3}</div>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <button className="text-[10px] font-medium text-muted-foreground hover:text-foreground px-1 underline decoration-dotted underline-offset-2">
+                                                            +{dayAusencias.length - 3}
+                                                        </button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent side="top" className="w-64 p-2">
+                                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1 pb-1.5">
+                                                            {dayAusencias.length} ausentes em {day}/{month + 1}
+                                                        </p>
+                                                        <div className="space-y-1 max-h-56 overflow-y-auto">
+                                                            {dayAusencias.map(a => {
+                                                                const colorIdx = memberColorMap.get(a.colaborador_id) || 0
+                                                                return (
+                                                                    <div key={a.id} className="flex items-start gap-2 px-1 py-1 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                                                        <div className={`h-2 w-2 rounded-full mt-1 shrink-0 ${MEMBER_COLORS[colorIdx]}`} />
+                                                                        <div className="min-w-0">
+                                                                            <p className="text-xs font-semibold truncate">{a.colaboradores?.nome}</p>
+                                                                            <p className="text-[11px] text-muted-foreground truncate">{a.localizacao}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                             )}
                                         </div>
                                     </div>
