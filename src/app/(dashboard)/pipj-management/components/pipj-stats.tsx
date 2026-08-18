@@ -25,12 +25,14 @@ export function PipjStats() {
             const [colabsRes, saidasRes, aprovadosRes] = await Promise.all([
                 supabase.from('colaboradores').select('id, saldo_pipj').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
                 supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'SAIDA'),
+                // Limite mensal conta pelo mês em que a solicitação foi
+                // APROVADA, não pelo mês em que foi solicitada.
                 supabase
                     .from('solicitacoes_saque')
                     .select('valor')
                     .eq('status', 'APROVADO')
-                    .gte('data_solicitacao', new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
-                    .lte('data_solicitacao', new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()),
+                    .gte('data_aprovacao', new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
+                    .lte('data_aprovacao', new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString()),
             ])
 
             const total = colabsRes.data
