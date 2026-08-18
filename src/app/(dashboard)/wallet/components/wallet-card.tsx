@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
 
 const ICON_MAP: Record<string, any> = { 'coffee': Coffee, 'car': Car, 'graduation-cap': GraduationCap, 'shopping-bag': ShoppingBag }
+const VALOR_MAXIMO_SAQUE = 300
 
 export function BenefitsCatalog() {
     const [benefits, setBenefits] = useState<any[]>([])
@@ -95,8 +96,13 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
             setMsg({ text: 'Preencha descrição, valor, tipo de gasto e forma de pagamento.', type: 'error' })
             return
         }
-        if (valor <= 0 || valor > disponivel) {
-            setMsg({ text: `Valor deve ser entre R$ 0,01 e R$ ${disponivel.toFixed(2).replace('.', ',')} (saldo já considerando suas solicitações pendentes).`, type: 'error' })
+        if (!form.comprovante_url) {
+            setMsg({ text: 'Anexe o comprovante da despesa.', type: 'error' })
+            return
+        }
+        const limiteMaximo = Math.min(disponivel, VALOR_MAXIMO_SAQUE)
+        if (valor <= 0 || valor > limiteMaximo) {
+            setMsg({ text: `Valor deve ser entre R$ 0,01 e R$ ${limiteMaximo.toFixed(2).replace('.', ',')} (máximo de R$ ${VALOR_MAXIMO_SAQUE.toFixed(2).replace('.', ',')} por solicitação, considerando também suas solicitações pendentes).`, type: 'error' })
             return
         }
         if (form.forma_pagamento === 'pix' && !form.chave_pix) {
@@ -166,7 +172,8 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
 
                 <div className="space-y-2">
                     <Label htmlFor="valor">Valor (R$)</Label>
-                    <Input id="valor" type="number" min="1" max={Math.min(disponivel, 300)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
+                    <Input id="valor" type="number" min="1" max={Math.min(disponivel, VALOR_MAXIMO_SAQUE)} step="1" placeholder="0" value={form.valor} onChange={(e) => setForm(f => ({ ...f, valor: e.target.value }))} />
+                    <p className="text-xs text-slate-400">Máximo de R$ {VALOR_MAXIMO_SAQUE.toFixed(2).replace('.', ',')} por solicitação.</p>
                 </div>
 
                 <div className="space-y-2">
@@ -221,7 +228,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
                 )}
 
                 <div className="space-y-2">
-                    <Label htmlFor="comprovante">Comprovante / Imagem (opcional)</Label>
+                    <Label htmlFor="comprovante">Comprovante / Imagem</Label>
                     <div className="flex items-center gap-3">
                         <label className="flex-1 flex items-center gap-2 cursor-pointer border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                             {uploadingFile ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : <Paperclip className="h-4 w-4 text-slate-400" />}
