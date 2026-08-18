@@ -346,6 +346,10 @@ export function QuickActions() {
             setAusenciaMsg({ text: 'Preencha todos os campos.', type: 'error' })
             return
         }
+        if (ausenciaForm.data_volta < ausenciaForm.data_ida) {
+            setAusenciaMsg({ text: 'A data de volta não pode ser anterior à data de ida.', type: 'error' })
+            return
+        }
         setAusenciaMsg(null)
         startTransition(async () => {
             const { error } = await supabase.from('ausencias').insert({
@@ -429,6 +433,7 @@ export function QuickActions() {
                                     <Input
                                         id="data_volta"
                                         type="date"
+                                        min={ausenciaForm.data_ida || undefined}
                                         value={ausenciaForm.data_volta}
                                         onChange={(e) => setAusenciaForm(f => ({ ...f, data_volta: e.target.value }))}
                                         className="dark:bg-slate-800 dark:border-slate-700"
