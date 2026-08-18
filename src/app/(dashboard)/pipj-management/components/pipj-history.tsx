@@ -703,8 +703,13 @@ export function SaqueHistoryList() {
                                             </a>
                                         )}
                                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
-                                            📅 {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
+                                            📅 Solicitado em {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
                                         </span>
+                                        {s.status === 'APROVADO' && s.data_aprovacao && (
+                                            <span className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-2 py-1 rounded-lg">
+                                                ✅ Aprovado em {new Date(s.data_aprovacao).toLocaleDateString('pt-BR')}{s.aprovado_por ? ` por ${s.aprovado_por}` : ''}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             )

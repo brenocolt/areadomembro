@@ -150,10 +150,18 @@ export async function POST(request: Request) {
         }
 
 
-        // Update the request status
+        // Update the request status. Em aprovação, registra quando e por
+        // quem — o limite mensal de aprovações é contado pelo mês de
+        // data_aprovacao, não pelo mês em que foi solicitado.
+        const updatePayload: Record<string, any> = { status }
+        if (action === 'APROVAR') {
+            updatePayload.data_aprovacao = new Date().toISOString()
+            updatePayload.aprovado_por = (session.user as any).name || (session.user as any).email || 'Sistema'
+        }
+
         const { error: updateReqError } = await supabase
             .from('solicitacoes_saque')
-            .update({ status })
+            .update(updatePayload)
             .eq('id', id)
 
         if (updateReqError) {
