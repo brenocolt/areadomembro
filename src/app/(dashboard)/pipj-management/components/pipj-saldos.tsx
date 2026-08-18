@@ -15,7 +15,9 @@ import { CARGO_FANTASMA } from "@/lib/cargos"
 import { OCULTOS_SALDOS_EQUIPE } from "@/lib/pipj-oculto"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
-import { Search, Wallet, Pencil, Loader2, Plus, Minus } from "lucide-react"
+import { Search, Wallet, Pencil, Loader2, Plus, Minus, Award } from "lucide-react"
+
+const VALOR_RECONHECIMENTO = 50
 
 interface ColabSaldo {
     id: string
@@ -73,6 +75,12 @@ export function PipjSaldos() {
         setEditingColab(null)
         setValorAjuste("")
         setMotivoAjuste("")
+    }
+
+    const aplicarReconhecimento = () => {
+        setTipoAjuste('ADICAO')
+        setValorAjuste(VALOR_RECONHECIMENTO.toFixed(2))
+        setMotivoAjuste(prev => prev.trim() ? prev : 'Reconhecimento')
     }
 
     const confirmarAjuste = async () => {
@@ -244,6 +252,13 @@ export function PipjSaldos() {
                                     <Minus className="h-4 w-4" /> Dedução
                                 </button>
                             </div>
+                            <button
+                                type="button"
+                                onClick={aplicarReconhecimento}
+                                className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl text-xs font-bold border border-dashed border-violet-300 dark:border-violet-500/40 text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-colors"
+                            >
+                                <Award className="h-3.5 w-3.5" /> Reconhecimento (R$ {VALOR_RECONHECIMENTO.toFixed(2).replace('.', ',')})
+                            </button>
                         </div>
 
                         <div className="space-y-2">
