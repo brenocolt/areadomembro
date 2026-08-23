@@ -16,6 +16,19 @@ import { CSS } from '@dnd-kit/utilities';
 import { PublicoParesEditor } from "./publico-pares-editor"
 import { saveFormularioPublico, type PublicoPar } from "@/lib/forms-publico"
 
+// Colunas criadas pela migração 20260825 (competência, "Não avaliar" e
+// sub-aba). Enquanto ela não for aplicada, o banco recusa a gravação inteira
+// com uma mensagem técnica — aqui isso vira um aviso acionável.
+const COLUNAS_MIGRACAO_20260825 = ['gerar_subaba', 'competencia', 'permite_nao_avaliar']
+
+function mensagemErroGravacao(error: { message?: string, details?: string } | null): string {
+    const msg = `${error?.message || ''} ${error?.details || ''}`
+    if (COLUNAS_MIGRACAO_20260825.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem as colunas de competência/sub-aba. Aplique a migração supabase/migrations/20260825_formularios_subabas_competencias.sql e tente de novo.'
+    }
+    return error?.message || 'Erro desconhecido'
+}
+
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
     if (!local) return null
     const d = new Date(local)
@@ -751,7 +764,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }).eq('id', initialData.id)
 
             if (updateError) {
-                toast.error("Erro ao atualizar formulário")
+                toast.error("Erro ao atualizar formulário: " + mensagemErroGravacao(updateError))
                 setLoading(false)
                 return
             }
@@ -784,7 +797,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         .update(payload)
                         .eq('id', p.id)
                     if (upErr) {
-                        toast.error('Erro ao atualizar pergunta: ' + upErr.message)
+                        toast.error('Erro ao atualizar pergunta: ' + mensagemErroGravacao(upErr))
                         setLoading(false)
                         return
                     }
@@ -797,7 +810,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         .select('id')
                         .single()
                     if (insErr || !insData) {
-                        toast.error('Erro ao criar pergunta: ' + (insErr?.message || ''))
+                        toast.error('Erro ao criar pergunta: ' + mensagemErroGravacao(insErr))
                         setLoading(false)
                         return
                     }
@@ -835,7 +848,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }).select().single()
 
             if (formError || !formData) {
-                toast.error("Erro ao criar formulário")
+                toast.error("Erro ao criar formulário: " + mensagemErroGravacao(formError))
                 setLoading(false)
                 return
             }
@@ -858,7 +871,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 .select('id')
 
             if (perguntasError || !insertedPerguntas) {
-                toast.error('Erro ao criar perguntas: ' + (perguntasError?.message || ''))
+                toast.error('Erro ao criar perguntas: ' + mensagemErroGravacao(perguntasError))
                 setLoading(false)
                 return
             }

@@ -182,21 +182,52 @@ export default function FormsManagementPage() {
             .not('data_prazo', 'is', null)
 
         if (expired && expired.length > 0) {
-            await supabase
-                .from('formularios')
-                .update({ status: 'encerrado' })
-                .in('id', expired.map(e => e.id))
+            // Isolado: uma falha aqui (ex.: pré-pontuação) não pode impedir a
+            // listagem dos formulários mais abaixo.
+            try {
+                await supabase
+                    .from('formularios')
+                    .update({ status: 'encerrado' })
+                    .in('id', expired.map(e => e.id))
 
-            for (const form of expired) {
-                await prePontuarNaoRespondentes(form)
+                for (const form of expired) {
+                    await prePontuarNaoRespondentes(form)
+                }
+            } catch (err) {
+                console.error('Falha ao encerrar formulários vencidos / pré-pontuar:', err)
             }
         }
 
-        const { data } = await supabase
+        // Caminho normal: um select com as contagens embutidas (exatas).
+        const { data: comContagens, error: erroContagens } = await supabase
             .from('formularios')
             .select('*, formulario_perguntas(count), formulario_respostas(count), formulario_publico_recebe(count)')
             .order('created_at', { ascending: false })
-        if (data) setForms(data)
+
+        if (comContagens) {
+            setForms(comContagens)
+        } else {
+            // As contagens embutidas dependem de relações existirem e de o
+            // cache de schema do PostgREST estar atualizado. Se qualquer uma
+            // falhar, a lista inteira vinha vazia — indistinguível de "perdi
+            // todos os formulários". Aqui caímos para um select simples, que
+            // não depende de relação nenhuma, e assumimos as contagens como
+            // desconhecidas (exibidas como "—") em vez de mostrar 0.
+            console.error('Erro ao listar formulários com contagens:', erroContagens)
+            const { data: lista, error: erroLista } = await supabase
+                .from('formularios')
+                .select('*')
+                .order('created_at', { ascending: false })
+
+            if (!lista) {
+                console.error('Erro ao listar formulários:', erroLista)
+                toast.error('Erro ao carregar os formulários: ' + (erroLista?.message || 'erro desconhecido'))
+                return
+            }
+
+            setForms(lista.map(f => ({ ...f, _contagensIndisponiveis: true })))
+            toast.error('Os formulários foram carregados, mas as contagens não. Verifique se as migrações do banco foram aplicadas.')
+        }
 
         const { data: configRows } = await supabase
             .from('configuracoes')
@@ -426,7 +457,9 @@ export default function FormsManagementPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {forms.reduce((acc, f) => acc + (f.formulario_respostas?.[0]?.count || 0), 0)}
+                                {forms.some(f => f._contagensIndisponiveis)
+                                    ? '—'
+                                    : forms.reduce((acc, f) => acc + (f.formulario_respostas?.[0]?.count || 0), 0)}
                             </p>
                             <p className="text-xs text-slate-500">Total de Respostas</p>
                         </div>
@@ -531,11 +564,11 @@ export default function FormsManagementPage() {
                                         <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400">
                                             <span className="flex items-center gap-1">
                                                 <BarChart3 className="h-3 w-3" />
-                                                {form.formulario_perguntas?.[0]?.count || 0} perguntas
+                                                {form._contagensIndisponiveis ? '—' : (form.formulario_perguntas?.[0]?.count || 0)} perguntas
                                             </span>
                                             <span className="flex items-center gap-1">
                                                 <Users className="h-3 w-3" />
-                                                {form.formulario_respostas?.[0]?.count || 0} respostas
+                                                {form._contagensIndisponiveis ? '—' : (form.formulario_respostas?.[0]?.count || 0)} respostas
                                             </span>
                                             {form.data_prazo && (
                                                 <span className="flex items-center gap-1">

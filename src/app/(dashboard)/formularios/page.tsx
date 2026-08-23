@@ -76,11 +76,15 @@ export default function FormulariosPage() {
             .lt('data_prazo', new Date().toISOString())
             .not('data_prazo', 'is', null)
 
-        const { data: formsData } = await supabase
+        const { data: formsData, error: formsError } = await supabase
             .from('formularios')
             .select('*')
             .eq('status', 'ativo')
             .order('created_at', { ascending: false })
+        if (formsError) {
+            console.error('Erro ao carregar formulários ativos:', formsError)
+            toast.error('Erro ao carregar os formulários: ' + formsError.message)
+        }
 
         // Colaboradores com cargo/núcleo — usado tanto para as perguntas do
         // tipo "Selecionar Colaborador" quanto para resolver o público de
@@ -93,11 +97,19 @@ export default function FormulariosPage() {
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
 
         if (visibleForms.length > 0 && colaborador) {
+          // Se a resolução de público falhar (ex.: migração pendente), o
+          // formulário deve continuar aparecendo como um formulário comum.
+          // Esconder tudo por causa de um erro de leitura seria pior do que
+          // mostrar um formulário sem direcionamento.
+          try {
             const formIds = visibleForms.map(f => f.id)
-            const [{ data: respondeRows }, { data: recebeRows }] = await Promise.all([
+            const [{ data: respondeRows, error: erroResponde }, { data: recebeRows, error: erroRecebe }] = await Promise.all([
                 supabase.from('formulario_publico_responde').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
                 supabase.from('formulario_publico_recebe').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
             ])
+            if (erroResponde || erroRecebe) {
+                throw new Error((erroResponde || erroRecebe)!.message)
+            }
 
             const groupByForm = (rows: any[] | null) => {
                 const map = new Map<string, PublicoPar[]>()
@@ -129,6 +141,9 @@ export default function FormulariosPage() {
                 }
                 return true
             })
+          } catch (err) {
+            console.error('Erro ao resolver o público dos formulários — exibindo todos sem direcionamento:', err)
+          }
         }
 
         setForms(visibleForms)
