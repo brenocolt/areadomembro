@@ -10,6 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
+
+// Chave usada no mapa de respostas/navegação por alvo quando o formulário
+// NÃO é direcionado (Quem Recebe = Ninguém) — a resposta é sobre o próprio
+// respondente.
+const SELF_KEY = '__self__'
 
 interface FormSection {
     id: string | null
@@ -87,12 +93,47 @@ function validateSection(section: FormSection, respostas: Record<string, any>): 
 export default function FormulariosPage() {
     const { colaborador } = useColaborador()
     const [forms, setForms] = useState<any[]>([])
+    // Respostas do respondente atual neste mês — inclui alvo_colaborador_id
+    // para dar suporte a formulários direcionados (ver targetsByForm abaixo).
     const [respostasFeitas, setRespostasFeitas] = useState<any[]>([])
     const [activeFormId, setActiveFormId] = useState<string | null>(null)
     const [perguntas, setPerguntas] = useState<any[]>([])
-    const [respostas, setRespostas] = useState<Record<string, any>>({})
-    const [sectionIndex, setSectionIndex] = useState(0)
-    const [sectionHistory, setSectionHistory] = useState<number[]>([])
+
+    // Público do formulário aberto (ver src/lib/forms-publico.ts). `targets`
+    // null = formulário comum, sem direcionamento; array = uma aba de
+    // preenchimento por pessoa (pode ter zero pessoas só transitoriamente,
+    // entre o fechamento de uma aba e o fetch seguinte — a lista de
+    // formulários já esconde formulários com pool vazio).
+    const [targets, setTargets] = useState<{ id: string, nome: string }[] | null>(null)
+    const [activeAlvoId, setActiveAlvoId] = useState<string | null>(null)
+    const [enviadosPorAlvo, setEnviadosPorAlvo] = useState<Set<string>>(new Set())
+    // Formulário -> lista de alvos elegíveis para o colaborador atual,
+    // calculada uma vez no fetchData (evita recalcular a cada render/abertura).
+    const [targetsByForm, setTargetsByForm] = useState<Map<string, { id: string, nome: string }[]>>(new Map())
+
+    // Respostas/navegação são guardadas POR ALVO (SELF_KEY quando não há
+    // direcionamento), para que cada aba seja preenchida e navegada de forma
+    // independente. `respostas`/`sectionIndex`/`sectionHistory` abaixo são
+    // apenas a "fatia" do alvo ativo — todo o resto do componente continua
+    // lendo/escrevendo neles exatamente como antes.
+    const [respostasPorAlvo, setRespostasPorAlvo] = useState<Record<string, Record<string, any>>>({})
+    const [sectionIndexPorAlvo, setSectionIndexPorAlvo] = useState<Record<string, number>>({})
+    const [sectionHistoryPorAlvo, setSectionHistoryPorAlvo] = useState<Record<string, number[]>>({})
+
+    const currentAlvoKey = targets ? (activeAlvoId || SELF_KEY) : SELF_KEY
+    const respostas = respostasPorAlvo[currentAlvoKey] || {}
+    const setRespostas = (updated: Record<string, any>) => {
+        setRespostasPorAlvo(prev => ({ ...prev, [currentAlvoKey]: updated }))
+    }
+    const sectionIndex = sectionIndexPorAlvo[currentAlvoKey] ?? 0
+    const setSectionIndex = (idx: number) => {
+        setSectionIndexPorAlvo(prev => ({ ...prev, [currentAlvoKey]: idx }))
+    }
+    const sectionHistory = sectionHistoryPorAlvo[currentAlvoKey] || []
+    const setSectionHistory = (updater: (h: number[]) => number[]) => {
+        setSectionHistoryPorAlvo(prev => ({ ...prev, [currentAlvoKey]: updater(prev[currentAlvoKey] || []) }))
+    }
+
     const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
@@ -114,7 +155,58 @@ export default function FormulariosPage() {
             .select('*')
             .eq('status', 'ativo')
             .order('created_at', { ascending: false })
-        if (formsData) setForms(formsData)
+
+        // Colaboradores com cargo/núcleo — usado tanto para as perguntas do
+        // tipo "Selecionar Colaborador" quanto para resolver o público de
+        // formulários direcionados (ver src/lib/forms-publico.ts).
+        const { data: cData } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
+        const colaboradoresFull = cData || []
+        setColaboradores(colaboradoresFull)
+
+        let visibleForms = formsData || []
+        const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
+
+        if (visibleForms.length > 0 && colaborador) {
+            const formIds = visibleForms.map(f => f.id)
+            const [{ data: respondeRows }, { data: recebeRows }] = await Promise.all([
+                supabase.from('formulario_publico_responde').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
+                supabase.from('formulario_publico_recebe').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
+            ])
+
+            const groupByForm = (rows: any[] | null) => {
+                const map = new Map<string, PublicoPar[]>()
+                for (const r of rows || []) {
+                    const arr = map.get(r.formulario_id) || []
+                    arr.push({ cargo: r.cargo, nucleo: r.nucleo })
+                    map.set(r.formulario_id, arr)
+                }
+                return map
+            }
+            const respondeByForm = groupByForm(respondeRows)
+            const recebeByForm = groupByForm(recebeRows)
+
+            visibleForms = visibleForms.filter(f => {
+                // "Quem Responde": só aparece pra quem bate com o público
+                // (lista vazia = Todos, comportamento de sempre).
+                if (!colaboradorNoPublico(colaborador, respondeByForm.get(f.id) || [])) return false
+
+                // "Quem Recebe": formulário direcionado — se não sobrar
+                // ninguém pra avaliar (pool vazio após excluir o próprio
+                // respondente), não há o que preencher, então esconde.
+                const recebe = recebeByForm.get(f.id) || []
+                if (recebe.length > 0) {
+                    const alvos = resolveAlvos(colaboradoresFull, recebe, colaborador.id)
+                    if (alvos.length === 0) return false
+                    newTargetsByForm.set(f.id, alvos
+                        .map(a => ({ id: a.id, nome: a.nome }))
+                        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')))
+                }
+                return true
+            })
+        }
+
+        setForms(visibleForms)
+        setTargetsByForm(newTargetsByForm)
 
         if (colaborador?.id) {
             const now = new Date()
@@ -125,7 +217,7 @@ export default function FormulariosPage() {
             // não devem marcar o formulário como "já respondido" no novo mês.
             const { data: rData } = await supabase
                 .from('formulario_respostas')
-                .select('formulario_id, enviado_em')
+                .select('formulario_id, enviado_em, alvo_colaborador_id')
                 .eq('colaborador_id', colaborador.id)
                 .gte('enviado_em', firstDayOfMonth)
                 .lte('enviado_em', lastDayOfMonth)
@@ -157,9 +249,6 @@ export default function FormulariosPage() {
                 setNpsLastDate(null)
             }
         }
-
-        const { data: cData } = await supabase.from('colaboradores').select('id, nome')
-        if (cData) setColaboradores(cData)
     }
 
     useEffect(() => {
@@ -171,8 +260,25 @@ export default function FormulariosPage() {
         return resp ? new Date(resp.enviado_em) : null
     }
 
-    const hasResponded = (formId: string) => respostasFeitas.some(r => r.formulario_id === formId)
+    // Formulário direcionado só conta como "respondido" quando TODOS os
+    // alvos atuais têm pelo menos uma resposta este mês — se um novo alvo
+    // entrar no público depois, o formulário volta a ficar pendente mesmo
+    // que os alvos antigos já tenham sido respondidos.
+    const hasResponded = (formId: string) => {
+        const alvos = targetsByForm.get(formId)
+        if (!alvos) return respostasFeitas.some(r => r.formulario_id === formId)
+        if (alvos.length === 0) return false
+        const respondidos = new Set(respostasFeitas.filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
+        return alvos.every(a => respondidos.has(a.id))
+    }
     const responseCount = (formId: string) => respostasFeitas.filter(r => r.formulario_id === formId).length
+    // Progresso de um formulário direcionado (null = não é direcionado).
+    const alvosStatus = (formId: string): { total: number, respondidos: number } | null => {
+        const alvos = targetsByForm.get(formId)
+        if (!alvos) return null
+        const respondidos = new Set(respostasFeitas.filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
+        return { total: alvos.length, respondidos: alvos.filter(a => respondidos.has(a.id)).length }
+    }
 
     const openForm = async (formId: string) => {
         setActiveFormId(formId)
@@ -182,9 +288,23 @@ export default function FormulariosPage() {
             .eq('formulario_id', formId)
             .order('ordem')
         if (data) setPerguntas(data)
-        setRespostas({})
-        setSectionIndex(0)
-        setSectionHistory([])
+
+        const alvosDoForm = targetsByForm.get(formId) || null
+        setTargets(alvosDoForm)
+        setActiveAlvoId(alvosDoForm && alvosDoForm.length > 0 ? alvosDoForm[0].id : null)
+
+        // Estado de preenchimento limpo a cada abertura.
+        setRespostasPorAlvo({})
+        setSectionIndexPorAlvo({})
+        setSectionHistoryPorAlvo({})
+
+        // Abas já respondidas neste mês (antes desta sessão) começam marcadas
+        // — a pessoa pode reabri-las e responder de novo se quiser.
+        setEnviadosPorAlvo(new Set(
+            respostasFeitas
+                .filter(r => r.formulario_id === formId)
+                .map(r => r.alvo_colaborador_id || SELF_KEY)
+        ))
     }
 
     // Seções derivadas da lista linear de perguntas (ver buildSections) e a
@@ -264,9 +384,13 @@ export default function FormulariosPage() {
 
         setSubmitting(true)
 
+        // Em formulário direcionado, cada envio é sobre a aba (alvo) ativa.
+        const alvoId = targets ? activeAlvoId : null
+
         const { data: respData, error } = await supabase.from('formulario_respostas').insert({
             formulario_id: activeFormId,
             colaborador_id: colaborador.id,
+            alvo_colaborador_id: alvoId,
         }).select().single()
 
         if (error || !respData) {
@@ -310,8 +434,28 @@ export default function FormulariosPage() {
             return
         }
 
-        toast.success("Respostas enviadas com sucesso! 🎉")
         setSubmitting(false)
+
+        // Formulário direcionado: marca esta aba como enviada. Se sobrar
+        // alguma aba pendente, avança pra ela e mantém o formulário aberto —
+        // só fecha (e conta como concluído) quando todas as abas tiverem
+        // sido enviadas nesta sessão.
+        if (targets && alvoId) {
+            const nomeAlvo = targets.find(t => t.id === alvoId)?.nome || ''
+            const novosEnviados = new Set(enviadosPorAlvo)
+            novosEnviados.add(alvoId)
+            setEnviadosPorAlvo(novosEnviados)
+
+            const proximo = targets.find(t => !novosEnviados.has(t.id))
+            if (proximo) {
+                toast.success(`Resposta sobre ${nomeAlvo} enviada!`)
+                setActiveAlvoId(proximo.id)
+                return
+            }
+            toast.success("Todas as respostas foram enviadas! 🎉")
+        } else {
+            toast.success("Respostas enviadas com sucesso! 🎉")
+        }
 
         const submittedForm = forms.find(f => f.id === activeFormId)
         setActiveFormId(null)
@@ -352,7 +496,39 @@ export default function FormulariosPage() {
                         {form?.descricao && (
                             <p className="text-sm text-slate-500 ml-12 mb-2 whitespace-normal break-words" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>
                         )}
-                        {prevCount > 0 && (
+
+                        {targets && targets.length > 0 && (
+                            <div className="ml-12 mb-4">
+                                <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                                    Responda sobre cada pessoa abaixo:
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {targets.map(t => {
+                                        const done = enviadosPorAlvo.has(t.id)
+                                        const active = t.id === activeAlvoId
+                                        return (
+                                            <button
+                                                key={t.id}
+                                                type="button"
+                                                onClick={() => setActiveAlvoId(t.id)}
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                                    active
+                                                        ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
+                                                        : done
+                                                        ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-500/10'
+                                                }`}
+                                            >
+                                                {done && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                                {t.nome}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {!targets && prevCount > 0 && (
                             <div className="ml-12 mb-4">
                                 <Badge className="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 text-[10px] font-bold border-none">
                                     Você já respondeu {prevCount}x — esta será uma nova resposta
@@ -569,7 +745,7 @@ export default function FormulariosPage() {
                                 {submitting
                                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                     : (nextIsSubmit ? <Send className="h-4 w-4 mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />)}
-                                {submitting ? 'Enviando...' : (nextIsSubmit ? 'Enviar Respostas' : 'Próxima Seção')}
+                                {submitting ? 'Enviando...' : (nextIsSubmit ? (targets ? `Enviar sobre ${targets.find(t => t.id === activeAlvoId)?.nome || ''}` : 'Enviar Respostas') : 'Próxima Seção')}
                             </Button>
                         </div>
                     </div>
@@ -646,7 +822,9 @@ export default function FormulariosPage() {
                         <Clock className="h-5 w-5 text-amber-500" /> Pendentes
                     </h2>
                     <div className="grid gap-3">
-                        {pendentes.map(form => (
+                        {pendentes.map(form => {
+                            const status = alvosStatus(form.id)
+                            return (
                             <div
                                 key={form.id}
                                 onClick={() => openForm(form.id)}
@@ -660,17 +838,25 @@ export default function FormulariosPage() {
                                         <div>
                                             <h3 className="font-bold text-slate-900 dark:text-white">{form.titulo}</h3>
                                             {form.descricao && <p className="text-sm text-slate-500 mt-0.5 whitespace-normal break-words line-clamp-2" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>}
-                                            {form.data_prazo && (
-                                                <p className="text-xs text-slate-400 mt-1">
-                                                    Prazo: {new Date(form.data_prazo).toLocaleDateString('pt-BR')}
-                                                </p>
-                                            )}
+                                            <div className="flex items-center gap-3 mt-1">
+                                                {status && (
+                                                    <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                                        {status.respondidos}/{status.total} pessoas avaliadas
+                                                    </span>
+                                                )}
+                                                {form.data_prazo && (
+                                                    <p className="text-xs text-slate-400">
+                                                        Prazo: {new Date(form.data_prazo).toLocaleDateString('pt-BR')}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />
                                 </div>
                             </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </div>
             )}
@@ -684,6 +870,7 @@ export default function FormulariosPage() {
                         {jaRespondidos.map(form => {
                             const lastDate = getLastResponseDate(form.id)
                             const count = responseCount(form.id)
+                            const status = alvosStatus(form.id)
                             return (
                                 <div
                                     key={form.id}
@@ -699,7 +886,7 @@ export default function FormulariosPage() {
                                                 <h3 className="font-bold text-slate-900 dark:text-white">{form.titulo}</h3>
                                                 <div className="flex items-center gap-3 mt-0.5">
                                                     <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                                        ✓ Respondido {count}x
+                                                        {status ? `✓ ${status.respondidos}/${status.total} pessoas avaliadas` : `✓ Respondido ${count}x`}
                                                     </p>
                                                     {lastDate && (
                                                         <span className="text-xs text-slate-400">

@@ -24,7 +24,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             setLoading(true)
             const [{ data: pData }, { data: rData }, { data: cData }] = await Promise.all([
                 supabase.from('formulario_perguntas').select('*').eq('formulario_id', formularioId).order('ordem'),
-                supabase.from('formulario_respostas').select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores(nome)').eq('formulario_id', formularioId).order('enviado_em', { ascending: false }),
+                // colaboradores é resolvido duas vezes (autor da resposta e,
+                // em formulários direcionados, o alvo dela) — precisa apontar
+                // pra FK explícita, senão o PostgREST não sabe desambiguar.
+                supabase.from('formulario_respostas')
+                    .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
+                    .eq('formulario_id', formularioId).order('enviado_em', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome'),
             ])
             setPerguntas(pData || [])
@@ -599,7 +604,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                     {authorName.charAt(0).toUpperCase()}
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-sm text-slate-900 dark:text-white">{authorName}</p>
+                                                    <p className="font-bold text-sm text-slate-900 dark:text-white">
+                                                        {authorName}
+                                                        {resposta.alvo?.nome && (
+                                                            <span className="font-normal text-slate-400"> — sobre {resposta.alvo.nome}</span>
+                                                        )}
+                                                    </p>
                                                     <p className="text-[11px] text-slate-400">{dateStr} às {timeStr}</p>
                                                 </div>
                                             </div>

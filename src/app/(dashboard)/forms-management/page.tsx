@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { toast } from "sonner"
+import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
 
 // Convert ISO/UTC string -> "YYYY-MM-DDTHH:mm" in LOCAL timezone (input format).
 function isoToLocalDatetimeInput(iso: string | null | undefined): string {
@@ -105,16 +106,44 @@ export default function FormsManagementPage() {
         const lastDayDate = new Date(ano, mes, 0).getDate()
         const lastDay = `${ano}-${pad(mes)}-${pad(lastDayDate)}T23:59:59.999Z`
 
-        const { data: allColabs } = await supabase.from('colaboradores').select('id')
-        const { data: respondentes } = await supabase
-            .from('formulario_respostas')
-            .select('colaborador_id')
-            .eq('formulario_id', form.id)
-            .gte('enviado_em', firstDay)
-            .lte('enviado_em', lastDay)
+        const [{ data: allColabs }, publico, { data: respostas }] = await Promise.all([
+            supabase.from('colaboradores').select('id, cargo_atual, nucleo_atual'),
+            loadFormularioPublico(form.id),
+            supabase
+                .from('formulario_respostas')
+                .select('colaborador_id, alvo_colaborador_id')
+                .eq('formulario_id', form.id)
+                .gte('enviado_em', firstDay)
+                .lte('enviado_em', lastDay),
+        ])
 
-        const respondidos = new Set((respondentes || []).map((r: any) => r.colaborador_id))
-        const naoResponderam = (allColabs || []).filter((c: any) => !respondidos.has(c.id))
+        const colaboradoresList = allColabs || []
+        // Só quem bate com "quem responde" é candidato a ser cobrado por não ter respondido.
+        const elegiveis = colaboradoresList.filter((c: any) => colaboradorNoPublico(c, publico.quemResponde))
+
+        // colaborador_id -> conjunto de alvos já respondidos neste período
+        // ('__self__' representa uma resposta sem alvo, isto é, o formulário
+        // comum de sempre).
+        const respondidoPor = new Map<string, Set<string>>()
+        for (const r of respostas || []) {
+            if (!r.colaborador_id) continue
+            const set = respondidoPor.get(r.colaborador_id) || new Set<string>()
+            set.add(r.alvo_colaborador_id || '__self__')
+            respondidoPor.set(r.colaborador_id, set)
+        }
+
+        const naoResponderam = elegiveis.filter((c: any) => {
+            if (publico.quemRecebe.length === 0) {
+                return !respondidoPor.get(c.id)?.size
+            }
+            // Formulário direcionado: só é cobrado quem tem pelo menos um
+            // alvo esperado, e só conta como respondido quando TODOS os
+            // alvos atuais foram preenchidos neste período.
+            const alvos = resolveAlvos(colaboradoresList, publico.quemRecebe, c.id)
+            if (alvos.length === 0) return false
+            const respondidos = respondidoPor.get(c.id) || new Set<string>()
+            return !alvos.every((a: any) => respondidos.has(a.id))
+        })
         if (naoResponderam.length === 0) return 0
 
         const tipo = form.tipo_formulario || 'formulário'
@@ -163,7 +192,7 @@ export default function FormsManagementPage() {
 
         const { data } = await supabase
             .from('formularios')
-            .select('*, formulario_perguntas(count), formulario_respostas(count)')
+            .select('*, formulario_perguntas(count), formulario_respostas(count), formulario_publico_recebe(count)')
             .order('created_at', { ascending: false })
         if (data) setForms(data)
 
@@ -193,11 +222,10 @@ export default function FormsManagementPage() {
     useEffect(() => { fetchForms() }, [])
 
     const loadFormWithQuestions = async (form: any): Promise<FormInitialData> => {
-        const { data: perguntas } = await supabase
-            .from('formulario_perguntas')
-            .select('*')
-            .eq('formulario_id', form.id)
-            .order('ordem')
+        const [{ data: perguntas }, publico] = await Promise.all([
+            supabase.from('formulario_perguntas').select('*').eq('formulario_id', form.id).order('ordem'),
+            loadFormularioPublico(form.id),
+        ])
 
         return {
             id: form.id,
@@ -216,6 +244,8 @@ export default function FormsManagementPage() {
                 obrigatoria: p.obrigatoria,
                 logica_condicional: p.logica_condicional || null,
             })),
+            quemResponde: publico.quemResponde,
+            quemRecebe: publico.quemRecebe,
         }
     }
 
@@ -475,6 +505,11 @@ export default function FormsManagementPage() {
                                             {form.pagina_destino && (
                                                 <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
                                                     → {form.pagina_destino === 'performance' ? 'Performance' : 'NPS Gerente'}
+                                                </Badge>
+                                            )}
+                                            {(form.formulario_publico_recebe?.[0]?.count || 0) > 0 && (
+                                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
+                                                    Direcionado
                                                 </Badge>
                                             )}
                                         </div>

@@ -226,16 +226,19 @@ export async function deleteUserCompletely(colaboradorId: string) {
         .single();
 
     // 2. Delete from ALL tables that reference colaborador_id
-    // First delete formulario response items (child records)
+    // First delete formulario response items (child records). Cobre tanto
+    // respostas escritas pelo colaborador quanto — em formulários
+    // direcionados — respostas de OUTRAS pessoas que são sobre ele
+    // (alvo_colaborador_id), já que a coluna não tem ON DELETE CASCADE.
     const { data: respostas } = await supabase
         .from('formulario_respostas')
         .select('id')
-        .eq('colaborador_id', colaboradorId);
+        .or(`colaborador_id.eq.${colaboradorId},alvo_colaborador_id.eq.${colaboradorId}`);
     if (respostas && respostas.length > 0) {
         const respostaIds = respostas.map(r => r.id);
         await supabase.from('formulario_respostas_itens').delete().in('resposta_id', respostaIds);
+        await supabase.from('formulario_respostas').delete().in('id', respostaIds);
     }
-    await supabase.from('formulario_respostas').delete().eq('colaborador_id', colaboradorId);
 
     await supabase.from('ausencias').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('avaliacoes_nps').delete().eq('colaborador_id', colaboradorId);
