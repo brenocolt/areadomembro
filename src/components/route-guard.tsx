@@ -17,6 +17,9 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     const ROUTE_IMPLICATIONS: Record<string, string> = {
         '/forms-responses': '/forms-management',
         '/nps-projeto':     '/forms-management',
+        // O NPS Interno virou sub-aba de Performance: quem já tinha acesso à
+        // página antiga continua enxergando o mesmo conteúdo no novo lugar.
+        '/performance':     '/nps-interno',
     }
     const impliedByParent = (() => {
         const parent = ROUTE_IMPLICATIONS[pathname]

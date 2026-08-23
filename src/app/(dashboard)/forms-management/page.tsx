@@ -1,13 +1,14 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil } from "lucide-react"
+import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, FlaskConical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
+import { SimularFormularioDialog } from "./components/simular-formulario-dialog"
 import { toast } from "sonner"
 import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
 
@@ -49,6 +50,7 @@ export default function FormsManagementPage() {
     const [dialogData, setDialogData] = useState<FormInitialData | null>(null)
     const [dialogEditMode, setDialogEditMode] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
+    const [simularForm, setSimularForm] = useState<{ id: string, titulo: string } | null>(null)
 
 
 
@@ -243,9 +245,12 @@ export default function FormsManagementPage() {
                 opcoes: p.opcoes,
                 obrigatoria: p.obrigatoria,
                 logica_condicional: p.logica_condicional || null,
+                competencia: p.competencia || null,
+                permite_nao_avaliar: !!p.permite_nao_avaliar,
             })),
             quemResponde: publico.quemResponde,
             quemRecebe: publico.quemRecebe,
+            gerarSubaba: !!form.gerar_subaba,
         }
     }
 
@@ -381,6 +386,13 @@ export default function FormsManagementPage() {
                 open={dialogOpen}
                 onOpenChange={handleDialogClose}
                 hideTrigger
+            />
+
+            {/* Simulação de resposta (não grava nada) */}
+            <SimularFormularioDialog
+                formulario={simularForm}
+                open={!!simularForm}
+                onOpenChange={(o) => { if (!o) setSimularForm(null) }}
             />
 
             {/* Stats */}
@@ -555,6 +567,15 @@ export default function FormsManagementPage() {
                                             <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reenviar
                                         </Button>
                                     )}
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => { e.stopPropagation(); setSimularForm({ id: form.id, titulo: form.titulo }) }}
+                                        className="h-8 w-8 text-slate-400 hover:text-violet-600"
+                                        title="Simular resposta (nada é salvo)"
+                                    >
+                                        <FlaskConical className="h-4 w-4" />
+                                    </Button>
                                     <Button
                                         variant="ghost"
                                         size="icon"
