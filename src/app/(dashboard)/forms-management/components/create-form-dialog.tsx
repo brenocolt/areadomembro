@@ -6,12 +6,15 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
-import { PlusCircle, Trash2, GripVertical, Plus, Loader2, Copy, Bold, Italic, ImagePlus, X, Heading1, Columns } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PlusCircle, Trash2, GripVertical, Plus, Loader2, Copy, Bold, Italic, ImagePlus, X, Heading1, Columns, FileEdit, Users } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { toast } from "sonner"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { PublicoParesEditor } from "./publico-pares-editor"
+import { saveFormularioPublico, type PublicoPar } from "@/lib/forms-publico"
 
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
     if (!local) return null
@@ -43,6 +46,10 @@ export interface FormInitialData {
     tipo_formulario?: string
     perguntas: Pergunta[]
     banner_url?: string | null
+    // Público do formulário (aba "Público") — ver src/lib/forms-publico.ts.
+    // Ausente/vazio = "Todos" (quemResponde) / "Ninguém" (quemRecebe).
+    quemResponde?: PublicoPar[]
+    quemRecebe?: PublicoPar[]
 }
 
 const TIPOS = [
@@ -378,6 +385,10 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         { id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }
     ])
 
+    // Público do formulário — ver aba "Público" mais abaixo e src/lib/forms-publico.ts.
+    const [quemResponde, setQuemResponde] = useState<PublicoPar[]>([])
+    const [quemRecebe, setQuemRecebe] = useState<PublicoPar[]>([])
+
     const sensors = useSensors(
         useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
@@ -396,6 +407,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setExistingBannerUrl(initialData.banner_url || null)
             setBannerPreview(initialData.banner_url || null)
             setBannerFile(null)
+            setQuemResponde(initialData.quemResponde || [])
+            setQuemRecebe(initialData.quemRecebe || [])
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
                     ...p,
@@ -422,6 +435,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setBannerPreview(null)
         setExistingBannerUrl(null)
         setPerguntas([{ id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }])
+        setQuemResponde([])
+        setQuemRecebe([])
     }
 
     const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -736,6 +751,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }
 
             await saveLogicaCondicional(validPerguntas, idMap)
+            await saveFormularioPublico(initialData.id, { quemResponde, quemRecebe })
 
             toast.success("Formulário atualizado com sucesso!")
         } else {
@@ -783,6 +799,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             const idMap = new Map<string, string>()
             validPerguntas.forEach((p, i) => idMap.set(p.id, insertedPerguntas[i].id))
             await saveLogicaCondicional(validPerguntas, idMap)
+            await saveFormularioPublico(formData.id, { quemResponde, quemRecebe })
 
             toast.success("Formulário criado com sucesso!")
         }
@@ -818,7 +835,19 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     </DialogHeader>
                 </div>
 
-                <div className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <Tabs defaultValue="detalhes" className="w-full">
+                    <div className="px-8">
+                        <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl w-full">
+                            <TabsTrigger value="detalhes" className="flex-1 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold text-xs">
+                                <FileEdit className="h-3.5 w-3.5 mr-1.5" /> Detalhes
+                            </TabsTrigger>
+                            <TabsTrigger value="publico" className="flex-1 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold text-xs">
+                                <Users className="h-3.5 w-3.5 mr-1.5" /> Público
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
+
+                <TabsContent value="detalhes" className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar mt-4">
                     <div className="space-y-4">
                         {/* Banner upload */}
                         <div className="space-y-2">
@@ -980,7 +1009,32 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             </Button>
                         </div>
                     </div>
-                </div>
+                </TabsContent>
+
+                <TabsContent value="publico" className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar mt-4">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Por padrão, o formulário é comum: aparece para <strong>Todos</strong> e cada resposta é sobre o próprio respondente
+                        (<strong>Ninguém</strong> é recebido). Se você selecionar cargo + núcleo em qualquer uma das seções abaixo, a lógica muda.
+                    </p>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-900 dark:text-slate-200">1. Quem Responde</label>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Quem vê e pode preencher este formulário. Cada grupo é um par Cargo + Núcleo — qualquer pessoa que bata com algum dos grupos vê o formulário.
+                        </p>
+                        <PublicoParesEditor pares={quemResponde} onChange={setQuemResponde} defaultLabel="Todos" addLabel="Restringir a um grupo" />
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
+                        <label className="text-sm font-bold text-slate-900 dark:text-slate-200 mt-4 block">2. Quem Recebe</label>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            Sobre quem o formulário é respondido. Se preenchido, cada colaborador que bate com algum dos grupos vira uma aba de preenchimento
+                            separada para quem está respondendo (a própria pessoa nunca aparece como aba de si mesma).
+                        </p>
+                        <PublicoParesEditor pares={quemRecebe} onChange={setQuemRecebe} defaultLabel="Ninguém" addLabel="Direcionar a um grupo" />
+                    </div>
+                </TabsContent>
+                </Tabs>
 
                 <div className="px-8 py-5 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3 bg-slate-50/50 dark:bg-black/10">
                     <Button variant="ghost" onClick={() => setOpen(false)} className="rounded-xl font-bold h-11 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800">

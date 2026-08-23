@@ -222,7 +222,12 @@ export default function FormsResponsesPage() {
                 // Default forms PDF generator
                 let groups: Record<string, { label: string; respostas: any[] }> = {}
                 // We'll group by month for the generic export
-                const rawResp = await supabase.from('formulario_respostas').select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores(nome)').eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false })
+                // colaboradores é resolvido duas vezes (autor e, em
+                // formulários direcionados, o alvo) — precisa apontar pra FK
+                // explícita, senão o PostgREST não sabe desambiguar.
+                const rawResp = await supabase.from('formulario_respostas')
+                    .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
+                    .eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false })
                 if (rawResp.data) {
                     rawResp.data.forEach(r => {
                         const date = new Date(r.enviado_em)
@@ -240,7 +245,7 @@ export default function FormsResponsesPage() {
                             ${group.respostas.map(r => {
                                 const sendDate = new Date(r.enviado_em)
                                 const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                                const author = r.colaboradores?.nome || 'Anônimo'
+                                const author = (r.colaboradores?.nome || 'Anônimo') + (r.alvo?.nome ? ` — sobre ${r.alvo.nome}` : '')
                                 
                                 const itemsHtml = r.formulario_respostas_itens?.map((item: any) => {
                                     return `
