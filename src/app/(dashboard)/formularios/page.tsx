@@ -4,94 +4,20 @@ import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Star, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
+import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
+import { PerguntaInput } from "@/components/forms/pergunta-input"
 
 // Chave usada no mapa de respostas/navegação por alvo quando o formulário
 // NÃO é direcionado (Quem Recebe = Ninguém) — a resposta é sobre o próprio
 // respondente.
 const SELF_KEY = '__self__'
 
-interface FormSection {
-    id: string | null
-    titulo: string
-    descricao: string
-    perguntas: any[]
-}
-
-// Agrupa a lista linear de perguntas em "seções" — cada pergunta do tipo
-// 'secao' inicia uma seção nova (ela mesma vira o cabeçalho, não entra na
-// lista de perguntas da seção). Perguntas antes da primeira 'secao' formam
-// uma seção inicial implícita (sem cabeçalho); formulários sem nenhuma
-// 'secao' resultam em uma única seção com tudo — comportamento idêntico ao
-// de antes da navegação por seções existir.
-function buildSections(perguntas: any[]): FormSection[] {
-    const sections: FormSection[] = []
-    let current: FormSection = { id: null, titulo: '', descricao: '', perguntas: [] }
-    for (const p of perguntas) {
-        if (p.tipo === 'secao') {
-            sections.push(current)
-            current = { id: p.id, titulo: p.titulo || '', descricao: p.descricao || '', perguntas: [] }
-        } else {
-            current.perguntas.push(p)
-        }
-    }
-    sections.push(current)
-    return sections.filter((s, i) => !(i === 0 && s.id === null && s.perguntas.length === 0 && sections.length > 1))
-}
-
-// Resolve o alvo da lógica condicional configurado na primeira pergunta de
-// seleção única respondida (dentro da seção atual) que tiver uma regra para
-// a opção escolhida. Sem lógica configurada/respondida, segue a sequência.
-function resolveNextTarget(section: FormSection, respostas: Record<string, any>): string {
-    for (const p of section.perguntas) {
-        if (p.tipo !== 'selecao_unica' || !p.logica_condicional) continue
-        const resposta = respostas[p.id]
-        if (!resposta) continue
-        const optionIndex = (p.opcoes || []).indexOf(resposta)
-        if (optionIndex === -1) continue
-        const target = p.logica_condicional[optionIndex]
-        if (target) return target
-    }
-    return 'continuar'
-}
-
-function computeNext(sections: FormSection[], currentIndex: number, respostas: Record<string, any>): { type: 'submit' } | { type: 'section', index: number } {
-    const target = resolveNextTarget(sections[currentIndex], respostas)
-    if (target === 'enviar') return { type: 'submit' }
-    if (target !== 'continuar') {
-        const idx = sections.findIndex(s => s.id === target)
-        if (idx !== -1) return { type: 'section', index: idx }
-        // Alvo inválido (ex: seção foi excluída depois) — cai no padrão abaixo.
-    }
-    return currentIndex + 1 < sections.length ? { type: 'section', index: currentIndex + 1 } : { type: 'submit' }
-}
-
-function validateSection(section: FormSection, respostas: Record<string, any>): string | null {
-    for (const p of section.perguntas) {
-        if (p.tipo === 'titulo' || !p.obrigatoria) continue
-        if (p.tipo === 'grade_multipla_escolha') {
-            const linhas: string[] = p.opcoes?.linhas || []
-            const respostaGrade = respostas[p.id] || {}
-            const allAnswered = linhas.every((l: string) => respostaGrade[l])
-            if (!allAnswered) return `Pergunta obrigatória não respondida: "${p.titulo}" — responda todas as linhas`
-        } else {
-            const val = respostas[p.id]
-            if (!val || (typeof val === 'string' && val.trim() === '') || (Array.isArray(val) && val.length === 0)) {
-                return `Pergunta obrigatória não respondida: "${p.titulo}"`
-            }
-        }
-    }
-    return null
-}
-
 export default function FormulariosPage() {
-    const { colaborador } = useColaborador()
+    const { colaborador, loading: loadingColaborador } = useColaborador()
     const [forms, setForms] = useState<any[]>([])
     // Respostas do respondente atual neste mês — inclui alvo_colaborador_id
     // para dar suporte a formulários direcionados (ver targetsByForm abaixo).
@@ -252,8 +178,14 @@ export default function FormulariosPage() {
     }
 
     useEffect(() => {
+        // Só busca depois que o colaborador logado foi resolvido. Rodar antes
+        // disso dispararia um fetchData sem `colaborador`, que pula todo o
+        // filtro de público — e, como as duas chamadas são assíncronas, a
+        // resposta sem filtro podia chegar por último e sobrescrever a
+        // correta, deixando um formulário direcionado sem nenhuma aba.
+        if (loadingColaborador) return
         fetchData()
-    }, [colaborador?.id])
+    }, [loadingColaborador, colaborador?.id])
 
     const getLastResponseDate = (formId: string) => {
         const resp = respostasFeitas.find(r => r.formulario_id === formId)
@@ -399,28 +331,14 @@ export default function FormulariosPage() {
             return
         }
 
-        const items = realPerguntas.map(p => {
-            const val = respostas[p.id]
-            if (p.tipo === 'grade_multipla_escolha') {
-                return {
-                    resposta_id: respData.id,
-                    pergunta_id: p.id,
-                    valor: val ? JSON.stringify(val) : null,
-                    valores: null,
-                }
-            }
-            const isMulti = Array.isArray(val)
-            return {
-                resposta_id: respData.id,
-                pergunta_id: p.id,
-                valor: isMulti ? null : (val?.toString() || null),
-                valores: isMulti ? val : null,
-            }
-        }).filter(item => item.valor || (Array.isArray(item.valores) && item.valores.length > 0))
+        // Perguntas marcadas como "Não avaliar" ficam de fora — a pessoa
+        // declarou não ter insumo, então a nota não deve existir nem entrar
+        // em nenhuma média.
+        const items = buildRespostaItens(respData.id, realPerguntas, respostas)
 
         if (items.length === 0) {
             await supabase.from('formulario_respostas').delete().eq('id', respData.id)
-            toast.error('Não foi possível salvar suas respostas. Preencha pelo menos uma pergunta antes de enviar.')
+            toast.error('Não foi possível salvar suas respostas. Responda ao menos uma pergunta (respostas marcadas como "Não avaliar" não são gravadas).')
             setSubmitting(false)
             return
         }
@@ -556,185 +474,17 @@ export default function FormulariosPage() {
                         )}
 
                         <div className="space-y-6 mt-6">
-                            {currentSection.perguntas.map((p) => {
-                                if (p.tipo === 'titulo') {
-                                    return (
-                                        <div key={p.id} className="pt-2 pb-1">
-                                            {p.titulo && (
-                                                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{p.titulo}</h2>
-                                            )}
-                                            {p.descricao && (
-                                                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{p.descricao}</p>
-                                            )}
-                                        </div>
-                                    )
-                                }
-
-                                const qNum = questionNumbers.get(p.id) || 0
-
-                                return (
-                                    <div key={p.id} className="space-y-2">
-                                        <label className="text-sm font-bold text-slate-900 dark:text-slate-200 flex items-center gap-2">
-                                            <span className="text-violet-600 dark:text-violet-400">{qNum}.</span>
-                                            <span dangerouslySetInnerHTML={{ __html: p.titulo }} />
-                                            {p.obrigatoria && <span className="text-rose-500 text-xs">*</span>}
-                                        </label>
-
-                                        {p.tipo === 'texto' && (
-                                            <Textarea
-                                                placeholder="Sua resposta..."
-                                                className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl min-h-[80px] resize-none focus-visible:ring-violet-500 text-sm"
-                                                value={respostas[p.id] || ''}
-                                                onChange={(e) => setRespostas({ ...respostas, [p.id]: e.target.value })}
-                                            />
-                                        )}
-
-                                        {p.tipo === 'selecao_unica' && Array.isArray(p.opcoes) && (
-                                            <div className="space-y-2">
-                                                {p.opcoes.map((opt: string, oi: number) => (
-                                                    <label key={oi} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 cursor-pointer transition-colors has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/50 dark:has-[:checked]:bg-violet-500/10">
-                                                        <input
-                                                            type="radio"
-                                                            name={`q_${p.id}`}
-                                                            value={opt}
-                                                            checked={respostas[p.id] === opt}
-                                                            onChange={() => setRespostas({ ...respostas, [p.id]: opt })}
-                                                            className="accent-violet-600"
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">{opt}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {p.tipo === 'selecao_multipla' && Array.isArray(p.opcoes) && (
-                                            <div className="space-y-2">
-                                                {p.opcoes.map((opt: string, oi: number) => {
-                                                    const current = respostas[p.id] || []
-                                                    const isChecked = current.includes(opt)
-                                                    return (
-                                                        <label key={oi} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 cursor-pointer transition-colors has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/50 dark:has-[:checked]:bg-violet-500/10">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isChecked}
-                                                                onChange={() => {
-                                                                    const updated = isChecked ? current.filter((v: string) => v !== opt) : [...current, opt]
-                                                                    setRespostas({ ...respostas, [p.id]: updated })
-                                                                }}
-                                                                className="accent-violet-600"
-                                                            />
-                                                            <span className="text-sm text-slate-700 dark:text-slate-300">{opt}</span>
-                                                        </label>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-
-                                        {p.tipo === 'escala' && (
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between text-[10px] text-slate-400 px-1">
-                                                    <span>{p.opcoes?.labelMin || '1'}</span>
-                                                    <span>{p.opcoes?.labelMax || '5'}</span>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    {[1, 2, 3, 4, 5].map(v => (
-                                                        <button
-                                                            key={v}
-                                                            onClick={() => setRespostas({ ...respostas, [p.id]: v.toString() })}
-                                                            className={`flex-1 h-11 rounded-xl font-bold text-sm transition-all ${
-                                                                respostas[p.id] === v.toString()
-                                                                    ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20'
-                                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-violet-500/10'
-                                                            }`}
-                                                        >
-                                                            {v}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {p.tipo === 'colaborador_unico' && (
-                                            <Select
-                                                value={respostas[p.id] || ''}
-                                                onValueChange={(v) => setRespostas({ ...respostas, [p.id]: v })}
-                                            >
-                                                <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus:ring-violet-500">
-                                                    <SelectValue placeholder="Selecione um colaborador" />
-                                                </SelectTrigger>
-                                                <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
-                                                    {colaboradores.filter(c => c.id !== colaborador?.id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => (
-                                                        <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-
-                                        {p.tipo === 'colaborador_multiplo' && (
-                                            <div className="space-y-2 max-h-52 overflow-y-auto custom-scrollbar">
-                                                {colaboradores.filter(c => c.id !== colaborador?.id).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map(c => {
-                                                    const current = respostas[p.id] || []
-                                                    const isChecked = current.includes(c.id)
-                                                    return (
-                                                        <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-violet-300 cursor-pointer transition-colors has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/50 dark:has-[:checked]:bg-violet-500/10">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isChecked}
-                                                                onChange={() => {
-                                                                    const updated = isChecked ? current.filter((v: string) => v !== c.id) : [...current, c.id]
-                                                                    setRespostas({ ...respostas, [p.id]: updated })
-                                                                }}
-                                                                className="accent-violet-600"
-                                                            />
-                                                            <span className="text-sm text-slate-700 dark:text-slate-300">{c.nome}</span>
-                                                        </label>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-
-                                        {p.tipo === 'grade_multipla_escolha' && p.opcoes?.linhas && p.opcoes?.colunas && (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-sm border-collapse">
-                                                    <thead>
-                                                        <tr>
-                                                            <th className="p-2 text-left" />
-                                                            {(p.opcoes.colunas as string[]).map((col: string, ci: number) => (
-                                                                <th key={ci} className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-400">{col}</th>
-                                                            ))}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {(p.opcoes.linhas as string[]).map((linha: string, li: number) => {
-                                                            const respostaGrade = respostas[p.id] || {}
-                                                            return (
-                                                                <tr key={li} className={li % 2 === 0 ? 'bg-slate-50 dark:bg-slate-800/30' : ''}>
-                                                                    <td className="p-2 text-xs font-medium text-slate-700 dark:text-slate-300 pr-4">{linha}</td>
-                                                                    {(p.opcoes.colunas as string[]).map((col: string, ci: number) => (
-                                                                        <td key={ci} className="p-2 text-center">
-                                                                            <input
-                                                                                type="radio"
-                                                                                name={`grade_${p.id}_${li}`}
-                                                                                value={col}
-                                                                                checked={respostaGrade[linha] === col}
-                                                                                onChange={() => {
-                                                                                    const updated = { ...(respostas[p.id] || {}), [linha]: col }
-                                                                                    setRespostas({ ...respostas, [p.id]: updated })
-                                                                                }}
-                                                                                className="accent-violet-600"
-                                                                            />
-                                                                        </td>
-                                                                    ))}
-                                                                </tr>
-                                                            )
-                                                        })}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
+                            {currentSection.perguntas.map((p) => (
+                                <PerguntaInput
+                                    key={p.id}
+                                    pergunta={p}
+                                    valor={respostas[p.id]}
+                                    onChange={(v) => setRespostas({ ...respostas, [p.id]: v })}
+                                    colaboradores={colaboradores}
+                                    selfId={colaborador?.id}
+                                    numero={questionNumbers.get(p.id) || 0}
+                                />
+                            ))}
                         </div>
 
                         <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">

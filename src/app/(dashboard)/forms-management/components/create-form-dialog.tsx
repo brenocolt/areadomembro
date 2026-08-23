@@ -34,6 +34,12 @@ interface Pergunta {
     // em `opcoes` -> alvo }, onde alvo é o id de uma pergunta do tipo
     // 'secao' ou "enviar". Ausência de chave = continuar sequência normal.
     logica_condicional?: Record<string, string> | null
+    // Só em perguntas do tipo 'escala'. `competencia` é o nome curto exibido
+    // na sub-aba de Performance no lugar do texto da pergunta;
+    // `permite_nao_avaliar` libera a opção "Não avaliar" para quem não tem
+    // insumo — essa resposta não é gravada e não entra em nenhuma média.
+    competencia?: string | null
+    permite_nao_avaliar?: boolean
 }
 
 export interface FormInitialData {
@@ -50,6 +56,9 @@ export interface FormInitialData {
     // Ausente/vazio = "Todos" (quemResponde) / "Ninguém" (quemRecebe).
     quemResponde?: PublicoPar[]
     quemRecebe?: PublicoPar[]
+    // Gera uma sub-aba dentro de Performance com a visualização de
+    // competências deste formulário. Só se aplica a formulário direcionado.
+    gerarSubaba?: boolean
 }
 
 const TIPOS = [
@@ -192,12 +201,25 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                                 ))}
                             </SelectContent>
                         </Select>
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                checked={p.obrigatoria}
-                                onCheckedChange={(v) => updatePergunta(p.id, 'obrigatoria', v)}
-                            />
-                            <span className="text-xs text-slate-500">Obrigatória</span>
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <Switch
+                                    checked={p.obrigatoria}
+                                    onCheckedChange={(v) => updatePergunta(p.id, 'obrigatoria', v)}
+                                />
+                                <span className="text-xs text-slate-500">Obrigatória</span>
+                            </div>
+                            {p.tipo === 'escala' && (
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        checked={!!p.permite_nao_avaliar}
+                                        onCheckedChange={(v) => updatePergunta(p.id, 'permite_nao_avaliar', v)}
+                                    />
+                                    <span className="text-xs text-slate-500" title="Deixa quem responde marcar que não tem insumo para avaliar — a resposta não é gravada e não entra nas médias.">
+                                        Não avaliar
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -271,19 +293,32 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                     )}
 
                     {p.tipo === 'escala' && p.opcoes && (
-                        <div className="grid grid-cols-2 gap-2">
-                            <Input
-                                value={p.opcoes.labelMin || ''}
-                                onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMin: e.target.value })}
-                                className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                placeholder="Label 1 (ex: Muito Insatisfeito)"
-                            />
-                            <Input
-                                value={p.opcoes.labelMax || ''}
-                                onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMax: e.target.value })}
-                                className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                placeholder="Label 5 (ex: Muito Satisfeito)"
-                            />
+                        <div className="space-y-2">
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input
+                                    value={p.opcoes.labelMin || ''}
+                                    onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMin: e.target.value })}
+                                    className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                    placeholder="Label 1 (ex: Muito Insatisfeito)"
+                                />
+                                <Input
+                                    value={p.opcoes.labelMax || ''}
+                                    onChange={(e) => updatePergunta(p.id, 'opcoes', { ...p.opcoes, labelMax: e.target.value })}
+                                    className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                    placeholder="Label 5 (ex: Muito Satisfeito)"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <Input
+                                    value={p.competencia || ''}
+                                    onChange={(e) => updatePergunta(p.id, 'competencia', e.target.value)}
+                                    className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                    placeholder="Competência avaliada (ex: Pontualidade)"
+                                />
+                                <p className="text-[11px] text-slate-400">
+                                    Nome curto mostrado na sub-aba de Performance no lugar do texto da pergunta.
+                                </p>
+                            </div>
                         </div>
                     )}
 
@@ -388,6 +423,9 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     // Público do formulário — ver aba "Público" mais abaixo e src/lib/forms-publico.ts.
     const [quemResponde, setQuemResponde] = useState<PublicoPar[]>([])
     const [quemRecebe, setQuemRecebe] = useState<PublicoPar[]>([])
+    const [gerarSubaba, setGerarSubaba] = useState(false)
+    // Lista de colaboradores só para a prévia de alcance na aba "Público".
+    const [colaboradores, setColaboradores] = useState<{ id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]>([])
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -409,6 +447,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setBannerFile(null)
             setQuemResponde(initialData.quemResponde || [])
             setQuemRecebe(initialData.quemRecebe || [])
+            setGerarSubaba(!!initialData.gerarSubaba)
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
                     ...p,
@@ -424,6 +463,14 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         }
     }, [open])
 
+    // Colaboradores para a prévia de alcance dos grupos na aba "Público".
+    useEffect(() => {
+        if (!open) return
+        supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').then(({ data }) => {
+            if (data) setColaboradores(data)
+        })
+    }, [open])
+
     const resetForm = () => {
         setTitulo("")
         setDescricao("")
@@ -437,6 +484,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setPerguntas([{ id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }])
         setQuemResponde([])
         setQuemRecebe([])
+        setGerarSubaba(false)
     }
 
     const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -570,6 +618,11 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 if (value !== 'selecao_unica') {
                     updated.logica_condicional = null
                 }
+                // Competência e "Não avaliar" só existem em perguntas de escala.
+                if (value !== 'escala') {
+                    updated.competencia = null
+                    updated.permite_nao_avaliar = false
+                }
             }
             return updated
         }))
@@ -668,6 +721,10 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
         setLoading(true)
 
+        // Sub-aba só existe em formulário direcionado — sem "Quem Recebe" não
+        // há sobre quem montar a visualização de competências.
+        const subabaEfetiva = quemRecebe.length > 0 && gerarSubaba
+
         let finalBannerUrl: string | null = existingBannerUrl || null
 
         if (bannerFile) {
@@ -690,6 +747,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,
                 banner_url: finalBannerUrl,
+                gerar_subaba: subabaEfetiva,
             }).eq('id', initialData.id)
 
             if (updateError) {
@@ -717,6 +775,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     opcoes: p.opcoes,
                     obrigatoria: p.obrigatoria,
                     ordem: i + 1,
+                    competencia: p.tipo === 'escala' ? (p.competencia?.trim() || null) : null,
+                    permite_nao_avaliar: p.tipo === 'escala' ? !!p.permite_nao_avaliar : false,
                 }
                 if (p.id && isUuid(p.id) && existingIds.has(p.id)) {
                     const { error: upErr } = await supabase
@@ -751,7 +811,13 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }
 
             await saveLogicaCondicional(validPerguntas, idMap)
-            await saveFormularioPublico(initialData.id, { quemResponde, quemRecebe })
+            try {
+                await saveFormularioPublico(initialData.id, { quemResponde, quemRecebe })
+            } catch (err: any) {
+                toast.error(err?.message || 'Erro ao salvar o público do formulário.')
+                setLoading(false)
+                return
+            }
 
             toast.success("Formulário atualizado com sucesso!")
         } else {
@@ -765,6 +831,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 tipo_formulario: tipoFormulario,
                 pagina_destino: paginaDestino || null,
                 banner_url: finalBannerUrl,
+                gerar_subaba: subabaEfetiva,
             }).select().single()
 
             if (formError || !formData) {
@@ -781,6 +848,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 opcoes: p.opcoes,
                 obrigatoria: p.obrigatoria,
                 ordem: i + 1,
+                competencia: p.tipo === 'escala' ? (p.competencia?.trim() || null) : null,
+                permite_nao_avaliar: p.tipo === 'escala' ? !!p.permite_nao_avaliar : false,
             }))
 
             const { data: insertedPerguntas, error: perguntasError } = await supabase
@@ -799,7 +868,13 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             const idMap = new Map<string, string>()
             validPerguntas.forEach((p, i) => idMap.set(p.id, insertedPerguntas[i].id))
             await saveLogicaCondicional(validPerguntas, idMap)
-            await saveFormularioPublico(formData.id, { quemResponde, quemRecebe })
+            try {
+                await saveFormularioPublico(formData.id, { quemResponde, quemRecebe })
+            } catch (err: any) {
+                toast.error(err?.message || 'Erro ao salvar o público do formulário.')
+                setLoading(false)
+                return
+            }
 
             toast.success("Formulário criado com sucesso!")
         }
@@ -1022,7 +1097,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         <p className="text-xs text-slate-500 dark:text-slate-400">
                             Quem vê e pode preencher este formulário. Cada grupo é um par Cargo + Núcleo — qualquer pessoa que bata com algum dos grupos vê o formulário.
                         </p>
-                        <PublicoParesEditor pares={quemResponde} onChange={setQuemResponde} defaultLabel="Todos" addLabel="Restringir a um grupo" />
+                        <PublicoParesEditor pares={quemResponde} onChange={setQuemResponde} defaultLabel="Todos" addLabel="Restringir a um grupo" colaboradores={colaboradores} />
                     </div>
 
                     <div className="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
@@ -1031,8 +1106,25 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             Sobre quem o formulário é respondido. Se preenchido, cada colaborador que bate com algum dos grupos vira uma aba de preenchimento
                             separada para quem está respondendo (a própria pessoa nunca aparece como aba de si mesma).
                         </p>
-                        <PublicoParesEditor pares={quemRecebe} onChange={setQuemRecebe} defaultLabel="Ninguém" addLabel="Direcionar a um grupo" />
+                        <PublicoParesEditor pares={quemRecebe} onChange={setQuemRecebe} defaultLabel="Ninguém" addLabel="Direcionar a um grupo" colaboradores={colaboradores} />
                     </div>
+
+                    {quemRecebe.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
+                            <label className="text-sm font-bold text-slate-900 dark:text-slate-200 mt-4 block">3. Sub-aba em Performance</label>
+                            <div className="flex items-start gap-3 bg-violet-50/50 dark:bg-violet-500/5 border border-violet-100 dark:border-violet-500/20 rounded-xl px-4 py-3">
+                                <Switch checked={gerarSubaba} onCheckedChange={setGerarSubaba} className="mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Criar sub-aba deste formulário</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Quem é avaliado passa a ver, dentro de Performance, uma sub-aba com as notas por competência
+                                        (média, nº de avaliações, evolução no tempo e detalhamento) — sem quantidade de projetos.
+                                        Defina a <strong>competência</strong> de cada pergunta de escala na aba Detalhes.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </TabsContent>
                 </Tabs>
 

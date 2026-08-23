@@ -20,7 +20,6 @@ const ALL_PAGES = [
     { label: "Perfil", path: "/profile" },
     { label: "Performance", path: "/performance" },
     { label: "NPS Gerente", path: "/nps-gerente" },
-    { label: "NPS Interno", path: "/nps-interno" },
     { label: "Agente de Feedback", path: "/feedback-agente" },
     { label: "Assistente Pessoal", path: "/assistente-pessoal" },
     { label: "NPS Projeto", path: "/nps-projeto" },

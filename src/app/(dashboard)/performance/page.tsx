@@ -1,13 +1,139 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { NPSChart } from "./components/nps-chart";
 import { DetailedPerformance } from "./components/detailed-performance";
+import { FormularioCompetenciasView } from "./components/formulario-competencias-view";
 import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase";
 import { ImportNpsDialog } from "@/components/import-nps-dialog";
+import { supabase } from "@/lib/supabase";
+import { colaboradorNoPublico, type PublicoPar } from "@/lib/forms-publico";
 import { MessageSquare, FolderKanban, Zap, Award } from "lucide-react"
 
+// Sub-abas fixas: a visualização histórica de Performance (NPS Projetos) e o
+// NPS Interno, que antes era uma página própria. As demais sub-abas vêm de
+// formulários direcionados marcados com "Criar sub-aba" em Gestão de
+// Formulários — ver formularios.gerar_subaba e src/lib/forms-publico.ts.
+const TAB_NPS_PROJETOS = '__nps_projetos__'
+const TAB_NPS_INTERNO = '__nps_interno__'
+
+type SubAba = { id: string; titulo: string }
+
 export default function PerformancePage() {
-    const { colaboradorId, loading: loadingColab, colaborador } = useColaborador()
+    const { colaboradorId, colaborador } = useColaborador()
+    const [activeTab, setActiveTab] = useState<string>(TAB_NPS_PROJETOS)
+    const [subAbas, setSubAbas] = useState<SubAba[]>([])
+    const [npsInternoFormId, setNpsInternoFormId] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!colaborador) return
+
+        async function carregarSubAbas() {
+            // NPS Interno = formulário "Piloto de Elite" (mesma heurística que
+            // a antiga página /nps-interno usava).
+            const { data: piloto } = await supabase
+                .from('formularios')
+                .select('id')
+                .or('titulo.ilike.%piloto%,titulo.ilike.%elite%')
+                .limit(1)
+            setNpsInternoFormId(piloto && piloto.length > 0 ? piloto[0].id : null)
+
+            // Formulários que pediram sub-aba. A aba aparece para quem está no
+            // público de "Quem Recebe" — ou seja, para quem é avaliado ali,
+            // mesmo antes da primeira avaliação chegar.
+            const { data: forms } = await supabase
+                .from('formularios')
+                .select('id, titulo')
+                .eq('gerar_subaba', true)
+                .order('created_at', { ascending: true })
+
+            if (!forms || forms.length === 0) { setSubAbas([]); return }
+
+            const { data: recebeRows } = await supabase
+                .from('formulario_publico_recebe')
+                .select('formulario_id, cargo, nucleo')
+                .in('formulario_id', forms.map(f => f.id))
+
+            const recebeByForm = new Map<string, PublicoPar[]>()
+            for (const r of recebeRows || []) {
+                const arr = recebeByForm.get(r.formulario_id) || []
+                arr.push({ cargo: r.cargo, nucleo: r.nucleo })
+                recebeByForm.set(r.formulario_id, arr)
+            }
+
+            setSubAbas(forms
+                .filter(f => {
+                    const recebe = recebeByForm.get(f.id) || []
+                    // Sem público de "Quem Recebe" não há sobre quem avaliar.
+                    return recebe.length > 0 && colaboradorNoPublico(colaborador, recebe)
+                })
+                .map(f => ({ id: f.id, titulo: f.titulo })))
+        }
+        carregarSubAbas()
+    }, [colaborador])
+
+    const tabs: SubAba[] = [
+        { id: TAB_NPS_PROJETOS, titulo: 'NPS Projetos' },
+        ...(npsInternoFormId ? [{ id: TAB_NPS_INTERNO, titulo: 'NPS Interno' }] : []),
+        ...subAbas,
+    ]
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center text-sm text-muted-foreground">
+                    <span>Dashboard</span>
+                    <span className="mx-2">›</span>
+                    <span className="font-semibold text-primary dark:text-white">Performance &amp; NPS</span>
+                </div>
+                {activeTab === TAB_NPS_PROJETOS && <ImportNpsDialog />}
+            </div>
+
+            {/* Barra de sub-abas */}
+            {tabs.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    {tabs.map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setActiveTab(t.id)}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                                activeTab === t.id
+                                    ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 hover:text-violet-700 dark:hover:text-violet-300'
+                            }`}
+                        >
+                            {t.titulo}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {activeTab === TAB_NPS_PROJETOS && <NpsProjetosTab />}
+
+            {activeTab === TAB_NPS_INTERNO && npsInternoFormId && (
+                <FormularioCompetenciasView
+                    formularioId={npsInternoFormId}
+                    colaboradorId={colaboradorId}
+                    usarMesReferencia
+                    emptyMessage="Você ainda não recebeu avaliações no NPS Interno."
+                />
+            )}
+
+            {subAbas.some(s => s.id === activeTab) && (
+                <FormularioCompetenciasView
+                    key={activeTab}
+                    formularioId={activeTab}
+                    colaboradorId={colaboradorId}
+                />
+            )}
+        </div>
+    )
+}
+
+// Visualização histórica de Performance (avaliacoes_nps), preservada como a
+// sub-aba "NPS Projetos".
+function NpsProjetosTab() {
+    const { colaboradorId, colaborador } = useColaborador()
     const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
         column: 'colaborador_id',
         value: colaboradorId,
@@ -17,7 +143,6 @@ export default function PerformancePage() {
         select: 'mes, ano, nps_geral, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico'
     })
 
-    // NPS atual = média do mês mais recente com avaliações (consistente com wallet).
     const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
     const sorted = [...npsData].sort((a: any, b: any) => (b.ano - a.ano) || (b.mes - a.mes))
     const latest = sorted[0]
@@ -44,15 +169,6 @@ export default function PerformancePage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center text-sm text-muted-foreground">
-                    <span>Dashboard</span>
-                    <span className="mx-2">›</span>
-                    <span className="font-semibold text-primary dark:text-white">Performance & NPS</span>
-                </div>
-                <ImportNpsDialog />
-            </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-4">
                 {metrics.map((m) => (
                     <div key={m.title} className="bg-white dark:bg-[#0F172A] p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-none">
