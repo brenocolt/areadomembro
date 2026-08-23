@@ -6,6 +6,7 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sparkles, Send, Bot, User as UserIcon, Loader2, RefreshCw, AlertCircle } from "lucide-react"
+import { isCargoGerencial, isCargoAssessorGP } from "@/lib/cargos"
 
 const INIT_PROMPT = "Gere o feedback completo com base nas minhas avaliações recebidas."
 
@@ -47,9 +48,8 @@ function renderMarkdown(text: string) {
 export default function FeedbackAgentePage() {
     const { colaboradorId, role, colaborador } = useColaborador()
     const isAdmin = role === "ADMIN" || role === "admin"
-    const isGerente = (colaborador?.cargo_atual || "").toLowerCase().includes("gerente")
-    const isAssessorGP = (colaborador?.cargo_atual || "").trim().toLowerCase() === "assessor"
-        && (colaborador?.nucleo_atual || "").trim().toLowerCase() === "gestão de pessoas"
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
+    const isAssessorGP = isCargoAssessorGP(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     const canChoose = isAdmin || isGerente || isAssessorGP
 
     const [colaboradores, setColaboradores] = useState<{ id: string; nome: string }[]>([])

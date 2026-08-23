@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Check, X, ShieldAlert, LayoutGrid, List, Search } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { NUCLEOS } from "@/lib/nucleos"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -156,11 +157,9 @@ export function RemovalRequests() {
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-white/10 rounded-xl">
                             <SelectItem value="all">Todos os Núcleos</SelectItem>
-                            <SelectItem value="Presidência">Presidência</SelectItem>
-                            <SelectItem value="Vice-Presidência">Vice-Presidência</SelectItem>
-                            <SelectItem value="Projetos">Projetos</SelectItem>
-                            <SelectItem value="Marketing">Marketing</SelectItem>
-                            <SelectItem value="Gestão de Pessoas">Gestão de Pessoas</SelectItem>
+                            {NUCLEOS.map(n => (
+                                <SelectItem key={n} value={n}>{n}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>

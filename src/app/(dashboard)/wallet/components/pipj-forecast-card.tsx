@@ -5,32 +5,23 @@ import { Calculator, Briefcase, Star, AlertTriangle, FolderKanban, Calendar, Tre
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect } from "react"
+import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from "@/lib/pipj-cargo-rules"
 
-// Same constants as the API
+// Same constants as the API — indexadas pela chave resolvida por
+// resolvePipjCargoKey (cargo simplificado + núcleo). Ver
+// src/lib/pipj-cargo-rules.ts e src/app/api/pipj/preview/route.ts.
 const FIXED_VALUES: Record<string, number> = {
-    'Consultor': 100,
-    'Assessor': 100,
-    'SDR': 100,
-    'Closer': 150,
-    'Diretor': 250,
-    'Gerente de Projetos': 150,
-    'Gerente de Inovação': 150,
-    'Gerente de Operações': 150,
-    'Gerente de CS': 150,
-    'Gerente de Gente': 150,
-    'Gerente Institucional': 150,
+    [K.OPERACIONAL]: 100,
+    [K.TATICO_MARKETING]: 150,
+    [K.ESTRATEGICO]: 250,
+    [K.TATICO_PROJETOS]: 150,
+    [K.TATICO_GERAL]: 150,
 }
 
 const VARIABLE_PER_PROJECT: Record<string, number> = {
-    'Consultor': 15,
-    'Assessor': 15,
-    'SDR': 15,
-    'Gerente de Projetos': 5,
-    'Gerente de Inovação': 15,
-    'Gerente de Operações': 15,
-    'Gerente de CS': 15,
-    'Gerente de Gente': 15,
-    'Gerente Institucional': 15,
+    [K.OPERACIONAL]: 15,
+    [K.TATICO_PROJETOS]: 5,
+    [K.TATICO_GERAL]: 15,
 }
 
 const LEVEL_BONUS: Record<string, number> = {
@@ -43,10 +34,8 @@ const LEVEL_BONUS: Record<string, number> = {
 
 const PUNISHMENT_PER_POINT = 10
 const MAX_PER_PERSON = 300
-const EXCLUSIVE_ROLES = [
-    'Diretor', 'Closer',
-    'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
-    'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
+const EXCLUSIVE_ROLES: string[] = [
+    K.ESTRATEGICO, K.TATICO_MARKETING, K.TATICO_PROJETOS, K.TATICO_GERAL,
 ]
 const NPS_THRESHOLD = 4
 const NPS_BONUS_PERCENT = 0.10
@@ -139,19 +128,20 @@ export function PipjForecastCard() {
 
     if (loading) return <Card className="h-64 animate-pulse bg-slate-800 rounded-3xl border-none" />
 
-    const cargo = colaborador?.cargo_atual || 'Assessor'
+    const cargo = colaborador?.cargo_atual || 'Operacional'
+    const pipjCargoKey = resolvePipjCargoKey(cargo, colaborador?.nucleo_atual)
     const nivel = colaborador?.nivel_consultor || 'Júnior'
     const projetos = colaborador?.projetos || 0
     const pontosNegativos = colaborador?.pontos_negativos || 0
 
     // 1. Fixed base
-    const baseCargo = FIXED_VALUES[cargo] || 100
+    const baseCargo = FIXED_VALUES[pipjCargoKey] || 100
 
     // 2. Variable per project
-    const bonusProjetos = VARIABLE_PER_PROJECT[cargo] ? VARIABLE_PER_PROJECT[cargo] * projetos : 0
+    const bonusProjetos = VARIABLE_PER_PROJECT[pipjCargoKey] ? VARIABLE_PER_PROJECT[pipjCargoKey] * projetos : 0
 
     // 3. Level bonus
-    const bonusNivel = !EXCLUSIVE_ROLES.includes(cargo) ? (LEVEL_BONUS[nivel] || 0) : 0
+    const bonusNivel = !EXCLUSIVE_ROLES.includes(pipjCargoKey) ? (LEVEL_BONUS[nivel] || 0) : 0
 
     // 4. Punishment deduction
     const descontoPunicao = PUNISHMENT_PER_POINT * pontosNegativos
@@ -180,7 +170,7 @@ export function PipjForecastCard() {
 
     const items = [
         { label: "Base do Cargo", value: `+ R$ ${baseCargo.toFixed(2).replace('.', ',')}`, detail: cargo, icon: Briefcase, color: "text-blue-400" },
-        { label: "Bônus Projetos", value: bonusProjetos > 0 ? `+ R$ ${bonusProjetos.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${projetos} projeto(s) × R$ ${VARIABLE_PER_PROJECT[cargo] || 0}`, icon: FolderKanban, color: "text-cyan-400" },
+        { label: "Bônus Projetos", value: bonusProjetos > 0 ? `+ R$ ${bonusProjetos.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${projetos} projeto(s) × R$ ${VARIABLE_PER_PROJECT[pipjCargoKey] || 0}`, icon: FolderKanban, color: "text-cyan-400" },
         { label: "Bônus Nível", value: bonusNivel > 0 ? `+ R$ ${bonusNivel.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: nivel, icon: Star, color: "text-amber-400" },
         { label: "Desc. Punições", value: descontoPunicao > 0 ? `- R$ ${descontoPunicao.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${pontosNegativos} pt(s) × R$ ${PUNISHMENT_PER_POINT}`, icon: AlertTriangle, color: descontoPunicao > 0 ? "text-red-400" : "text-slate-500" },
         { label: "Desc. Ausências", value: descontoAusencia > 0 ? `- R$ ${descontoAusencia.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${absenceDays} dia(s) de ${businessDays}`, icon: Calendar, color: descontoAusencia > 0 ? "text-red-400" : "text-slate-500" },

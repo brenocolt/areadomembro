@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
+import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -167,9 +168,8 @@ export async function POST(request: Request) {
         let isAssessorGP = false
         if (ownId) {
             const { data: me } = await supabase.from('colaboradores').select('cargo_atual, nucleo_atual').eq('id', ownId).single()
-            isGerente = (me?.cargo_atual || '').toLowerCase().includes('gerente')
-            isAssessorGP = (me?.cargo_atual || '').trim().toLowerCase() === 'assessor'
-                && (me?.nucleo_atual || '').trim().toLowerCase() === 'gestão de pessoas'
+            isGerente = isCargoGerencial(me?.cargo_atual, me?.nucleo_atual)
+            isAssessorGP = isCargoAssessorGP(me?.cargo_atual, me?.nucleo_atual)
         }
         if (requestedId && (isAdmin || isGerente || isAssessorGP)) targetId = requestedId
         if (!targetId) return NextResponse.json({ error: 'Colaborador não identificado.' }, { status: 400 })

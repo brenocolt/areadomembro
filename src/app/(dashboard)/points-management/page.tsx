@@ -14,11 +14,12 @@ import { PlanoPunicaoTab } from "../forms-management/components/plano-punicao-ta
 import { PointsFullHistory } from "./components/points-full-history"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useColaborador } from "@/hooks/use-supabase"
+import { isCargoGerencial } from "@/lib/cargos"
 
 export default function PointsManagementPage() {
     const { colaborador, loading, role } = useColaborador()
     const isAdmin = (role || '').toUpperCase() === 'ADMIN'
-    const isGerente = (colaborador?.cargo_atual || '').toLowerCase().includes('gerente')
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     // Gerentes só têm acesso ao formulário de "Adicionar Pontuação" nesta página —
     // dashboards e ferramentas administrativas seguem restritos a admins.
     const restrictedToAddPoints = !loading && isGerente && !isAdmin
