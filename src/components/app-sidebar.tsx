@@ -40,6 +40,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { useSession, signOut } from "next-auth/react"
+import { isCargoGerencial } from "@/lib/cargos"
 
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
@@ -113,8 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // If paginas_permitidas is null/undefined, show all pages (backwards compatible)
     const allowedPages: string[] | null = colaborador?.paginas_permitidas || null
     const isAdmin = userRole === 'ADMIN'
-    const cargoAtual = (colaborador?.cargo_atual || '').toLowerCase()
-    const isGerente = cargoAtual.includes('gerente')
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
 
     const filteredMemberItems = (isAdmin || !allowedPages
         ? memberItems

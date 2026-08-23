@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { isCargoGerencial } from "@/lib/cargos"
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface Projeto { id: string; nome: string }
-interface Colaborador { id: string; nome: string; cargo_atual: string }
+interface Colaborador { id: string; nome: string; cargo_atual: string; nucleo_atual?: string }
 
 interface GerenteData {
     gerente_id: string
@@ -185,7 +186,7 @@ export default function NPSProjetoPage() {
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
-    const isGerente = cargoAtual.toLowerCase().includes("gerente") && !cargoAtual.toLowerCase().includes("assessor")
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     // Anyone who is NOT a manager should evaluate the manager
     const isConsultor = !isGerente
 
@@ -252,7 +253,7 @@ export default function NPSProjetoPage() {
                 setLoadingConfig(false)
             }
 
-            const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual')
+            const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
             if (c) setColaboradores(c)
         }
         fetchData()
@@ -287,8 +288,7 @@ export default function NPSProjetoPage() {
     // Helpers
     const EXTRA_GERENTE_IDS = ['89251a1b-a1e7-491c-80ed-d64895370fad']
     const gerentes = colaboradores.filter(c =>
-        (c.cargo_atual?.toLowerCase().includes("gerente") && !c.cargo_atual?.toLowerCase().includes("assessor"))
-        || EXTRA_GERENTE_IDS.includes(c.id)
+        isCargoGerencial(c.cargo_atual, c.nucleo_atual) || EXTRA_GERENTE_IDS.includes(c.id)
     ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id

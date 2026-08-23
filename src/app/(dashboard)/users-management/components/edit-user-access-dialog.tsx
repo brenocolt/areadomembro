@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
 import { useSession } from "next-auth/react"
 import { CARGOS } from "@/lib/cargos"
+import { NUCLEOS } from "@/lib/nucleos"
 
 const ALL_PAGES = [
     { label: "Início", path: "/" },
@@ -50,7 +51,7 @@ interface EditUserAccessDialogProps {
 const EDITABLE_FIELDS = [
     { key: 'nome', label: 'Nome', type: 'text' },
     { key: 'cargo_atual', label: 'Cargo', type: 'select', options: [...CARGOS] },
-    { key: 'nucleo_atual', label: 'Núcleo', type: 'text' },
+    { key: 'nucleo_atual', label: 'Núcleo', type: 'select', options: [...NUCLEOS] },
     { key: 'nivel_consultor', label: 'Nível do Consultor', type: 'select', options: ['Júnior', 'Pleno', 'Sênior'] },
     { key: 'matricula', label: 'Matrícula', type: 'text' },
     { key: 'email_corporativo', label: 'Email Corporativo', type: 'email' },
@@ -223,16 +224,29 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                     {/* INFO TAB */}
                     <TabsContent value="info" className="space-y-4 mt-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {EDITABLE_FIELDS.map(field => (
+                            {EDITABLE_FIELDS.map(field => {
+                                // Cargo e Núcleo agora são listas fechadas (dropdown), mas um
+                                // registro antigo pode ter um valor fora dela (cargo legado não
+                                // migrado, ou núcleo em texto livre — ver src/lib/nucleos.ts).
+                                // Nesses casos, mostra o valor real como uma opção extra em vez
+                                // de esconder o dado — assim ele só muda se alguém escolher
+                                // outra opção explicitamente.
+                                const currentValue = formData[field.key]
+                                const options = field.type === 'select' && field.options
+                                    ? (currentValue && !field.options.includes(currentValue)
+                                        ? [currentValue, ...field.options]
+                                        : field.options)
+                                    : null
+                                return (
                                 <div key={field.key} className="space-y-1.5">
                                     <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">{field.label}</Label>
-                                    {field.type === 'select' && field.options ? (
+                                    {options ? (
                                         <select
                                             value={formData[field.key] ?? ''}
                                             onChange={e => updateField(field.key, e.target.value)}
                                             className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none h-9"
                                         >
-                                            {field.options.map(opt => (
+                                            {options.map(opt => (
                                                 <option key={opt} value={opt}>{opt}</option>
                                             ))}
                                         </select>
@@ -245,7 +259,8 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                         />
                                     )}
                                 </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </TabsContent>
 

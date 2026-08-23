@@ -1,35 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
+import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from '@/lib/pipj-cargo-rules'
 import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
 
-// Business Rules Constants
+// Business Rules Constants — indexadas pela chave resolvida por
+// resolvePipjCargoKey (cargo simplificado + núcleo), não mais diretamente
+// por cargo_atual. Ver src/lib/pipj-cargo-rules.ts.
 const FIXED_VALUES: Record<string, number> = {
-  'Consultor': 100,
-  'Assessor': 100,
-  'SDR': 100,
-  'Closer': 150,
-  'Diretor': 250,
-  'Gerente de Projetos': 150,
-  'Gerente de Inovação': 150,
-  'Gerente de Operações': 150,
-  'Gerente de CS': 150,
-  'Gerente de Gente': 150,
-  'Gerente Institucional': 150,
+  [K.OPERACIONAL]: 100,
+  [K.TATICO_MARKETING]: 150,
+  [K.ESTRATEGICO]: 250,
+  [K.TATICO_PROJETOS]: 150,
+  [K.TATICO_GERAL]: 150,
 }
 
 const VARIABLE_PER_PROJECT: Record<string, number> = {
-  'Consultor': 15,
-  'Assessor': 15,
-  'SDR': 15,
-  // Gerente de Projetos ganha um adicional por projeto menor que os demais
-  // cargos de gerência — os outros seguem a mesma taxa de Consultor/Assessor.
-  'Gerente de Projetos': 5,
-  'Gerente de Inovação': 15,
-  'Gerente de Operações': 15,
-  'Gerente de CS': 15,
-  'Gerente de Gente': 15,
-  'Gerente Institucional': 15,
+  [K.OPERACIONAL]: 15,
+  // Tático (Projetos) — equivalente ao antigo Gerente de Projetos — ganha um
+  // adicional por projeto menor que os demais cargos de gerência.
+  [K.TATICO_PROJETOS]: 5,
+  [K.TATICO_GERAL]: 15,
+  // Tático (Marketing) — equivalente ao antigo Closer — não tem bônus por projeto.
 }
 
 // "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
@@ -38,25 +30,15 @@ const VARIABLE_PER_PROJECT: Record<string, number> = {
 // fixo nesse cenário (R$115 para Closer/Gerência, R$215 para Diretor).
 const MES_SEM_LUCRO_BASE_MULTIPLIER = 0.70
 const MES_SEM_LUCRO_BASE_FIXO: Record<string, number> = {
-  'Closer': 115,
-  'Gerente de Projetos': 115,
-  'Gerente de Inovação': 115,
-  'Gerente de Operações': 115,
-  'Gerente de CS': 115,
-  'Gerente de Gente': 115,
-  'Gerente Institucional': 115,
-  'Diretor': 215,
+  [K.TATICO_PROJETOS]: 115,
+  [K.TATICO_MARKETING]: 115,
+  [K.TATICO_GERAL]: 115,
+  [K.ESTRATEGICO]: 215,
 }
 const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
-  'Consultor': 10,
-  'Assessor': 10,
-  'SDR': 10,
-  'Gerente de Projetos': 5,
-  'Gerente de Inovação': 10,
-  'Gerente de Operações': 10,
-  'Gerente de CS': 10,
-  'Gerente de Gente': 10,
-  'Gerente Institucional': 10,
+  [K.OPERACIONAL]: 10,
+  [K.TATICO_PROJETOS]: 5,
+  [K.TATICO_GERAL]: 10,
 }
 
 const LEVEL_BONUS: Record<string, number> = {
@@ -81,10 +63,8 @@ const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
 
 // Roles that get exclusive role bonus (no level bonus)
-const EXCLUSIVE_ROLES = [
-  'Diretor', 'Closer',
-  'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
-  'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
+const EXCLUSIVE_ROLES: string[] = [
+  K.ESTRATEGICO, K.TATICO_MARKETING, K.TATICO_PROJETOS, K.TATICO_GERAL,
 ]
 
 function getBusinessDaysInMonth(year: number, month: number): number {
@@ -137,7 +117,7 @@ export async function POST(req: NextRequest) {
     // fantasma de administrador não recebem PIPJ nos lançamentos)
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
-      .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .select('id, nome, cargo_atual, nucleo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
       .eq('status', 'Ativo')
       .neq('cargo_atual', CARGO_FANTASMA)
       .order('nome', { ascending: true })
@@ -287,27 +267,28 @@ export async function POST(req: NextRequest) {
     let totalLancado = 0
 
     for (const colab of colaboradores) {
-      const cargo = colab.cargo_atual || 'Assessor'
+      const cargo = colab.cargo_atual || 'Operacional'
+      const pipjCargoKey = resolvePipjCargoKey(cargo, colab.nucleo_atual)
       const nivel = colab.nivel_consultor || 'Júnior'
       const projetos = projetosHistoricoMap.has(colab.id) ? projetosHistoricoMap.get(colab.id)! : (colab.projetos || 0)
       const pontosNegativosAtual = colab.pontos_negativos || 0
       const pontosNegativos = Math.max(0, pontosNegativosAtual - (adicoesFuturasMap.get(colab.id) || 0) + (remocoesFuturasMap.get(colab.id) || 0))
 
       // 1. Fixed base value (reduzido 30% em mês sem lucro)
-      const baseCargoIntegral = FIXED_VALUES[cargo] || 100
+      const baseCargoIntegral = FIXED_VALUES[pipjCargoKey] || 100
       const baseCargo = mesSemLucro
-        ? (MES_SEM_LUCRO_BASE_FIXO[cargo] ?? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100)
+        ? (MES_SEM_LUCRO_BASE_FIXO[pipjCargoKey] ?? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100)
         : baseCargoIntegral
       let subtotal = baseCargo
 
       // 2. Variable per project (only Consultor/Gerente/SDR/Assessor; valor
       // reduzido de R$15 para R$10 em mês sem lucro)
       const tabelaPorProjeto = mesSemLucro ? VARIABLE_PER_PROJECT_MES_SEM_LUCRO : VARIABLE_PER_PROJECT
-      const bonusProjetos = tabelaPorProjeto[cargo] ? tabelaPorProjeto[cargo] * projetos : 0
+      const bonusProjetos = tabelaPorProjeto[pipjCargoKey] ? tabelaPorProjeto[pipjCargoKey] * projetos : 0
       subtotal += bonusProjetos
 
       // 3. Level bonus (only for non-exclusive roles)
-      const bonusNivel = !EXCLUSIVE_ROLES.includes(cargo) ? (LEVEL_BONUS[nivel] || 0) : 0
+      const bonusNivel = !EXCLUSIVE_ROLES.includes(pipjCargoKey) ? (LEVEL_BONUS[nivel] || 0) : 0
       subtotal += bonusNivel
 
       // 4. Punishment deduction
@@ -393,7 +374,11 @@ export async function POST(req: NextRequest) {
         bonus_reconhecimento: bonusReconhecimento,
         ajuste_manual: ajusteManual,
         motivo_ajuste: motivoAjuste,
-        mes_sem_lucro: mesSemLucro
+        mes_sem_lucro: mesSemLucro,
+        // Chave usada para achar os valores nas tabelas acima — ver
+        // resolvePipjCargoKey. Só para depuração/auditoria; "cargo_no_periodo"
+        // abaixo continua guardando o cargo real do colaborador.
+        pipj_cargo_key: pipjCargoKey,
       }
 
       detalhes.push({

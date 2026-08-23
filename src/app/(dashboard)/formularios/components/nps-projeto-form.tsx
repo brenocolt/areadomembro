@@ -12,10 +12,11 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { isCargoGerencial } from "@/lib/cargos"
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface Projeto { id: string; nome: string }
-interface Colaborador { id: string; nome: string; cargo_atual: string }
+interface Colaborador { id: string; nome: string; cargo_atual: string; nucleo_atual?: string }
 
 interface GerenteData {
     gerente_id: string
@@ -179,8 +180,8 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
 
     // Role detection
     const cargoAtual = colaborador?.cargo_atual || ""
-    const isConsultor = cargoAtual.toLowerCase().includes("consultor")
-    const isGerente = cargoAtual.toLowerCase().includes("gerente") || cargoAtual.toLowerCase().includes("assessor")
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
+    const isConsultor = !isGerente
 
     // Build step names based on role
     const buildSteps = useCallback(() => {
@@ -227,7 +228,7 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
                 console.error('Error fetching projects:', error)
             }
 
-            const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual')
+            const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
             if (c) setColaboradores(c)
         }
         fetchData()
@@ -235,7 +236,7 @@ export default function NPSProjetoForm({ onBack }: { onBack?: () => void }) {
 
     // Helpers
     const gerentes = colaboradores.filter(c =>
-        c.cargo_atual?.toLowerCase().includes("gerente") || c.cargo_atual?.toLowerCase().includes("assessor")
+        isCargoGerencial(c.cargo_atual, c.nucleo_atual)
     ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     const consultoresDisponiveis = colaboradores.filter(c =>
         c.id !== colaborador?.id

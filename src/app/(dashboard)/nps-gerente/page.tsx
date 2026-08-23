@@ -7,6 +7,7 @@ import { MessageSquare, HeartHandshake, LifeBuoy, Crown, ShieldAlert, Star } fro
 import { ImportNpsDialog } from "@/components/import-nps-dialog"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { isCargoGerencial, isCargoDiretoria } from "@/lib/cargos"
 
 export default function NPSGerentePage() {
     const { colaborador, colaboradorId, loading: loadingColab } = useColaborador()
@@ -14,9 +15,8 @@ export default function NPSGerentePage() {
     const router = useRouter()
     const userRole = (session?.user as any)?.role
     const isAdmin = userRole === 'ADMIN'
-    const cargoAtual = (colaborador?.cargo_atual || '').toLowerCase()
-    const isGerente = cargoAtual.includes('gerente')
-    const isAdministrador = cargoAtual.includes('administrador') || cargoAtual.includes('diretor')
+    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
+    const isAdministrador = isCargoDiretoria(colaborador?.cargo_atual)
 
     const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
         column: 'colaborador_id',

@@ -29,7 +29,7 @@ export async function POST() {
         email_corporativo: adminEmail,
         matricula: 'ADM-001',
         cargo_atual: 'Administrador',
-        nucleo_atual: 'Gestão',
+        nucleo_atual: 'Gestão de Pessoas',
         pontos_acumulados: 0,
         milhas: 0,
         nivel_consultor: 'Admin',
