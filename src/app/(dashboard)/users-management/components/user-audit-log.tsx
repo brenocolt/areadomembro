@@ -16,7 +16,8 @@ interface AuditLog {
 
 const FIELD_LABELS: Record<string, string> = {
     nome: "Nome",
-    cargo_atual: "Cargo",
+    nivel_cargo: "Cargo",
+    cargo_atual: "Função",
     nucleo_atual: "Núcleo",
     matricula: "Matrícula",
     email_corporativo: "Email",

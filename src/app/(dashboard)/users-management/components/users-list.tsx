@@ -151,7 +151,7 @@ export function UsersList() {
                                             <span className="text-sm font-mono text-slate-700 dark:text-slate-300">{c.cpf || '—'}</span>
                                         </TableCell>
                                         <TableCell className="py-3 px-6">
-                                            <p className="text-sm font-medium">{c.cargo_atual}</p>
+                                            <p className="text-sm font-medium">{c.nivel_cargo || c.cargo_atual}</p>
                                             <p className="text-xs text-slate-500">{c.nucleo_atual}</p>
                                         </TableCell>
                                         <TableCell className="py-3 px-6">

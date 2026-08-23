@@ -2,70 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
 import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
+import { PIPJ_LEVEL_BONUS, pipjBaseCargo, pipjTaxaPorProjeto, pipjTemBonusNivel } from '@/lib/pipj-niveis'
 
-// Business Rules Constants
-const FIXED_VALUES: Record<string, number> = {
-  'Consultor': 100,
-  'Assessor': 100,
-  'SDR': 100,
-  'Closer': 150,
-  'Diretor': 250,
-  'Gerente de Projetos': 150,
-  'Gerente de Inovação': 150,
-  'Gerente de Operações': 150,
-  'Gerente de CS': 150,
-  'Gerente de Gente': 150,
-  'Gerente Institucional': 150,
-}
-
-const VARIABLE_PER_PROJECT: Record<string, number> = {
-  'Consultor': 15,
-  'Assessor': 15,
-  'SDR': 15,
-  // Gerente de Projetos ganha um adicional por projeto menor que os demais
-  // cargos de gerência — os outros seguem a mesma taxa de Consultor/Assessor.
-  'Gerente de Projetos': 5,
-  'Gerente de Inovação': 15,
-  'Gerente de Operações': 15,
-  'Gerente de CS': 15,
-  'Gerente de Gente': 15,
-  'Gerente Institucional': 15,
-}
-
-// "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
-// projeto de R$15 para R$10, aplicado a todos os colaboradores. Closer, os
-// cargos de Gerência e Diretor fogem da regra percentual — têm valor base
-// fixo nesse cenário (R$115 para Closer/Gerência, R$215 para Diretor).
-const MES_SEM_LUCRO_BASE_MULTIPLIER = 0.70
-const MES_SEM_LUCRO_BASE_FIXO: Record<string, number> = {
-  'Closer': 115,
-  'Gerente de Projetos': 115,
-  'Gerente de Inovação': 115,
-  'Gerente de Operações': 115,
-  'Gerente de CS': 115,
-  'Gerente de Gente': 115,
-  'Gerente Institucional': 115,
-  'Diretor': 215,
-}
-const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
-  'Consultor': 10,
-  'Assessor': 10,
-  'SDR': 10,
-  'Gerente de Projetos': 5,
-  'Gerente de Inovação': 10,
-  'Gerente de Operações': 10,
-  'Gerente de CS': 10,
-  'Gerente de Gente': 10,
-  'Gerente Institucional': 10,
-}
-
-const LEVEL_BONUS: Record<string, number> = {
-  'Júnior': 0,
-  'Junior': 0,
-  'Pleno': 15,
-  'Sênior': 30,
-  'Senior': 30,
-}
+const LEVEL_BONUS = PIPJ_LEVEL_BONUS
 
 const PUNISHMENT_PER_POINT = 10
 const NPS_THRESHOLD = 4
@@ -79,13 +18,6 @@ const NPS_CSAT_BONUS_PERCENT = 0.10
 // acima, nem é reduzido/limitado por eles.
 const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
-
-// Roles that get exclusive role bonus (no level bonus)
-const EXCLUSIVE_ROLES = [
-  'Diretor', 'Closer',
-  'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
-  'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
-]
 
 function getBusinessDaysInMonth(year: number, month: number): number {
   let count = 0
@@ -137,7 +69,7 @@ export async function POST(req: NextRequest) {
     // fantasma de administrador não recebem PIPJ nos lançamentos)
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
-      .select('id, nome, cargo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .select('id, nome, cargo_atual, nivel_cargo, nucleo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
       .eq('status', 'Ativo')
       .neq('cargo_atual', CARGO_FANTASMA)
       .order('nome', { ascending: true })
@@ -288,26 +220,25 @@ export async function POST(req: NextRequest) {
 
     for (const colab of colaboradores) {
       const cargo = colab.cargo_atual || 'Assessor'
+      const nivelCargo = colab.nivel_cargo || 'Operacional'
+      const nucleo = colab.nucleo_atual || ''
       const nivel = colab.nivel_consultor || 'Júnior'
       const projetos = projetosHistoricoMap.has(colab.id) ? projetosHistoricoMap.get(colab.id)! : (colab.projetos || 0)
       const pontosNegativosAtual = colab.pontos_negativos || 0
       const pontosNegativos = Math.max(0, pontosNegativosAtual - (adicoesFuturasMap.get(colab.id) || 0) + (remocoesFuturasMap.get(colab.id) || 0))
 
-      // 1. Fixed base value (reduzido 30% em mês sem lucro)
-      const baseCargoIntegral = FIXED_VALUES[cargo] || 100
-      const baseCargo = mesSemLucro
-        ? (MES_SEM_LUCRO_BASE_FIXO[cargo] ?? Math.round(baseCargoIntegral * MES_SEM_LUCRO_BASE_MULTIPLIER * 100) / 100)
-        : baseCargoIntegral
+      // 1. Fixed base value (reduzido em mês sem lucro)
+      const baseCargo = pipjBaseCargo(nivelCargo, mesSemLucro)
       let subtotal = baseCargo
 
-      // 2. Variable per project (only Consultor/Gerente/SDR/Assessor; valor
-      // reduzido de R$15 para R$10 em mês sem lucro)
-      const tabelaPorProjeto = mesSemLucro ? VARIABLE_PER_PROJECT_MES_SEM_LUCRO : VARIABLE_PER_PROJECT
-      const bonusProjetos = tabelaPorProjeto[cargo] ? tabelaPorProjeto[cargo] * projetos : 0
+      // 2. Variable per project (Tático no núcleo Projetos segue taxa
+      // reduzida; valor reduzido de R$15 para R$10 em mês sem lucro)
+      const taxaPorProjeto = pipjTaxaPorProjeto(nivelCargo, nucleo, mesSemLucro)
+      const bonusProjetos = taxaPorProjeto * projetos
       subtotal += bonusProjetos
 
-      // 3. Level bonus (only for non-exclusive roles)
-      const bonusNivel = !EXCLUSIVE_ROLES.includes(cargo) ? (LEVEL_BONUS[nivel] || 0) : 0
+      // 3. Level bonus (only for Operacional)
+      const bonusNivel = pipjTemBonusNivel(nivelCargo) ? (LEVEL_BONUS[nivel] || 0) : 0
       subtotal += bonusNivel
 
       // 4. Punishment deduction

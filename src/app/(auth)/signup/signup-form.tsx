@@ -19,6 +19,7 @@ import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { CARGOS_AUTOCADASTRO } from '@/lib/cargos';
+import { NUCLEOS } from '@/lib/nucleos';
 
 const formSchema = z.object({
     nome: z.string().min(3, { message: 'Informe seu nome completo' }),
@@ -164,11 +165,9 @@ export function SignupForm() {
                                             <SelectValue placeholder="Selecione o núcleo" />
                                         </SelectTrigger>
                                         <SelectContent className="bg-slate-900 border-slate-700 text-white">
-                                            <SelectItem value="Marketing">Marketing</SelectItem>
-                                            <SelectItem value="Projetos">Projetos</SelectItem>
-                                            <SelectItem value="Gestão de Pessoas">Gestão de Pessoas</SelectItem>
-                                            <SelectItem value="Presidência">Presidência</SelectItem>
-                                            <SelectItem value="Vice-Presidência">Vice-Presidência</SelectItem>
+                                            {NUCLEOS.map(n => (
+                                                <SelectItem key={n} value={n}>{n}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </FormControl><FormMessage /></FormItem>
