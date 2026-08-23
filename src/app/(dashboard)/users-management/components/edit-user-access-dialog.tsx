@@ -11,7 +11,8 @@ import { Loader2, Shield, UserCog, History } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
 import { useSession } from "next-auth/react"
-import { CARGOS } from "@/lib/cargos"
+import { CARGOS, NIVEIS_CARGO, cargoParaNivel } from "@/lib/cargos"
+import { NUCLEOS } from "@/lib/nucleos"
 
 const ALL_PAGES = [
     { label: "Início", path: "/" },
@@ -49,8 +50,15 @@ interface EditUserAccessDialogProps {
 
 const EDITABLE_FIELDS = [
     { key: 'nome', label: 'Nome', type: 'text' },
-    { key: 'cargo_atual', label: 'Cargo', type: 'select', options: [...CARGOS] },
-    { key: 'nucleo_atual', label: 'Núcleo', type: 'text' },
+    // Cargo simplificado (Operacional/Tático/Estratégico/Administrador) —
+    // é o que aparece na listagem de Gestão de Usuários. Pré-preenchido a
+    // partir da Função quando ela muda, mas pode ser ajustado manualmente.
+    { key: 'nivel_cargo', label: 'Cargo', type: 'select', options: [...NIVEIS_CARGO] },
+    // Função específica (Assessor, Consultor, SDR, Closer, cada Gerente,
+    // Diretor...) — mantida para páginas que dependem dela (NPS Gerente/
+    // Projeto, Agente de Feedback, menu lateral).
+    { key: 'cargo_atual', label: 'Função', type: 'select', options: [...CARGOS] },
+    { key: 'nucleo_atual', label: 'Núcleo', type: 'select', options: [...NUCLEOS] },
     { key: 'nivel_consultor', label: 'Nível do Consultor', type: 'select', options: ['Júnior', 'Pleno', 'Sênior'] },
     { key: 'matricula', label: 'Matrícula', type: 'text' },
     { key: 'email_corporativo', label: 'Email Corporativo', type: 'email' },
@@ -92,7 +100,16 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
     }, [open, colaborador, userRole])
 
     function updateField(key: string, value: any) {
-        setFormData(prev => ({ ...prev, [key]: value }))
+        setFormData(prev => {
+            const next = { ...prev, [key]: value }
+            // Ao trocar a Função específica, sugere o Cargo (nível)
+            // correspondente automaticamente — o admin ainda pode ajustar
+            // manualmente o Cargo depois, se precisar.
+            if (key === 'cargo_atual') {
+                next.nivel_cargo = cargoParaNivel(value)
+            }
+            return next
+        })
     }
 
     function togglePage(path: string) {
@@ -232,6 +249,13 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                             onChange={e => updateField(field.key, e.target.value)}
                                             className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none h-9"
                                         >
+                                            {/* Preserva um valor antigo/fora da lista (ex.: núcleo digitado
+                                                livremente antes de virar dropdown) em vez de trocá-lo
+                                                silenciosamente pela primeira opção — quem tem acesso decide
+                                                se corrige para um valor padrão. */}
+                                            {formData[field.key] && !field.options.includes(formData[field.key]) && (
+                                                <option value={formData[field.key]}>{formData[field.key]} (atual)</option>
+                                            )}
                                             {field.options.map(opt => (
                                                 <option key={opt} value={opt}>{opt}</option>
                                             ))}

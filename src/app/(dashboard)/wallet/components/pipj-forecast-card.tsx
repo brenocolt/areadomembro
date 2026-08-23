@@ -5,49 +5,14 @@ import { Calculator, Briefcase, Star, AlertTriangle, FolderKanban, Calendar, Tre
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect } from "react"
+import { PIPJ_LEVEL_BONUS, pipjBaseCargo, pipjTaxaPorProjeto, pipjTemBonusNivel } from "@/lib/pipj-niveis"
 
-// Same constants as the API
-const FIXED_VALUES: Record<string, number> = {
-    'Consultor': 100,
-    'Assessor': 100,
-    'SDR': 100,
-    'Closer': 150,
-    'Diretor': 250,
-    'Gerente de Projetos': 150,
-    'Gerente de Inovação': 150,
-    'Gerente de Operações': 150,
-    'Gerente de CS': 150,
-    'Gerente de Gente': 150,
-    'Gerente Institucional': 150,
-}
-
-const VARIABLE_PER_PROJECT: Record<string, number> = {
-    'Consultor': 15,
-    'Assessor': 15,
-    'SDR': 15,
-    'Gerente de Projetos': 5,
-    'Gerente de Inovação': 15,
-    'Gerente de Operações': 15,
-    'Gerente de CS': 15,
-    'Gerente de Gente': 15,
-    'Gerente Institucional': 15,
-}
-
-const LEVEL_BONUS: Record<string, number> = {
-    'Júnior': 0,
-    'Junior': 0,
-    'Pleno': 15,
-    'Sênior': 30,
-    'Senior': 30,
-}
+// Mesmas regras da API (src/lib/pipj-niveis.ts) — nunca duplicar os valores
+// aqui, senão a prévia diverge do cálculo real.
+const LEVEL_BONUS = PIPJ_LEVEL_BONUS
 
 const PUNISHMENT_PER_POINT = 10
 const MAX_PER_PERSON = 300
-const EXCLUSIVE_ROLES = [
-    'Diretor', 'Closer',
-    'Gerente de Projetos', 'Gerente de Inovação', 'Gerente de Operações',
-    'Gerente de CS', 'Gerente de Gente', 'Gerente Institucional',
-]
 const NPS_THRESHOLD = 4
 const NPS_BONUS_PERCENT = 0.10
 
@@ -140,18 +105,21 @@ export function PipjForecastCard() {
     if (loading) return <Card className="h-64 animate-pulse bg-slate-800 rounded-3xl border-none" />
 
     const cargo = colaborador?.cargo_atual || 'Assessor'
+    const nivelCargo = colaborador?.nivel_cargo || 'Operacional'
+    const nucleo = colaborador?.nucleo_atual || ''
     const nivel = colaborador?.nivel_consultor || 'Júnior'
     const projetos = colaborador?.projetos || 0
     const pontosNegativos = colaborador?.pontos_negativos || 0
 
     // 1. Fixed base
-    const baseCargo = FIXED_VALUES[cargo] || 100
+    const baseCargo = pipjBaseCargo(nivelCargo, false)
 
     // 2. Variable per project
-    const bonusProjetos = VARIABLE_PER_PROJECT[cargo] ? VARIABLE_PER_PROJECT[cargo] * projetos : 0
+    const taxaPorProjeto = pipjTaxaPorProjeto(nivelCargo, nucleo, false)
+    const bonusProjetos = taxaPorProjeto * projetos
 
     // 3. Level bonus
-    const bonusNivel = !EXCLUSIVE_ROLES.includes(cargo) ? (LEVEL_BONUS[nivel] || 0) : 0
+    const bonusNivel = pipjTemBonusNivel(nivelCargo) ? (LEVEL_BONUS[nivel] || 0) : 0
 
     // 4. Punishment deduction
     const descontoPunicao = PUNISHMENT_PER_POINT * pontosNegativos
@@ -180,7 +148,7 @@ export function PipjForecastCard() {
 
     const items = [
         { label: "Base do Cargo", value: `+ R$ ${baseCargo.toFixed(2).replace('.', ',')}`, detail: cargo, icon: Briefcase, color: "text-blue-400" },
-        { label: "Bônus Projetos", value: bonusProjetos > 0 ? `+ R$ ${bonusProjetos.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${projetos} projeto(s) × R$ ${VARIABLE_PER_PROJECT[cargo] || 0}`, icon: FolderKanban, color: "text-cyan-400" },
+        { label: "Bônus Projetos", value: bonusProjetos > 0 ? `+ R$ ${bonusProjetos.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${projetos} projeto(s) × R$ ${taxaPorProjeto}`, icon: FolderKanban, color: "text-cyan-400" },
         { label: "Bônus Nível", value: bonusNivel > 0 ? `+ R$ ${bonusNivel.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: nivel, icon: Star, color: "text-amber-400" },
         { label: "Desc. Punições", value: descontoPunicao > 0 ? `- R$ ${descontoPunicao.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${pontosNegativos} pt(s) × R$ ${PUNISHMENT_PER_POINT}`, icon: AlertTriangle, color: descontoPunicao > 0 ? "text-red-400" : "text-slate-500" },
         { label: "Desc. Ausências", value: descontoAusencia > 0 ? `- R$ ${descontoAusencia.toFixed(2).replace('.', ',')}` : "R$ 0,00", detail: `${absenceDays} dia(s) de ${businessDays}`, icon: Calendar, color: descontoAusencia > 0 ? "text-red-400" : "text-slate-500" },

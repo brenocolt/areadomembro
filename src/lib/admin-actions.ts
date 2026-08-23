@@ -2,6 +2,7 @@
 
 import bcrypt from 'bcryptjs';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { cargoParaNivel } from '@/lib/cargos';
 
 export async function approveAccountRequest(id: string) {
     const supabase = createServerSupabaseClient();
@@ -84,6 +85,7 @@ export async function approveAccountRequest(id: string) {
         .insert({
             nome: req.nome,
             cargo_atual: req.cargo,
+            nivel_cargo: cargoParaNivel(req.cargo),
             nucleo_atual: req.nucleo,
             safra: req.safra,
             semestre_ingresso: req.semestre_ingresso,

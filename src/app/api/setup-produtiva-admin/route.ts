@@ -29,6 +29,7 @@ export async function POST() {
         email_corporativo: adminEmail,
         matricula: 'ADM-PROD',
         cargo_atual: 'Administrador',
+        nivel_cargo: 'Administrador',
         nucleo_atual: 'Presidência',
         safra: '2026.1',
         semestre_ingresso: '2026.1',
