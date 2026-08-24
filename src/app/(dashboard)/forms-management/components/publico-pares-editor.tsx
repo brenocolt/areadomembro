@@ -52,14 +52,14 @@ export function PublicoParesEditor({ pares, onChange, defaultLabel, addLabel, co
     const alcancadosTotal = contarNoPublico(colaboradores, pares)
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0">
             {pares.map((p, i) => {
                 const alcancados = contarNoPublico(colaboradores, [p])
                 return (
-                    <div key={i} className="space-y-1">
-                        <div className="flex items-center gap-2">
+                    <div key={i} className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                             <Select value={p.cargo} onValueChange={(v) => updatePar(i, 'cargo', v)}>
-                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg flex-1">
+                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg flex-1 min-w-0">
                                     <SelectValue placeholder="Cargo" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
@@ -69,7 +69,7 @@ export function PublicoParesEditor({ pares, onChange, defaultLabel, addLabel, co
                                 </SelectContent>
                             </Select>
                             <Select value={p.nucleo} onValueChange={(v) => updatePar(i, 'nucleo', v)}>
-                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg flex-1">
+                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg flex-1 min-w-0">
                                     <SelectValue placeholder="Núcleo" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
@@ -83,12 +83,18 @@ export function PublicoParesEditor({ pares, onChange, defaultLabel, addLabel, co
                             </button>
                         </div>
                         {alcancados.length === 0 ? (
-                            <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 pl-1">
-                                <AlertTriangle className="w-3 h-3 shrink-0" />
-                                Nenhum colaborador com esse cargo e núcleo — confira o cadastro em Gestão de Usuários.
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-start gap-1 pl-1 min-w-0">
+                                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                                <span className="min-w-0">Nenhum colaborador com esse cargo e núcleo — confira o cadastro em Gestão de Usuários.</span>
                             </p>
                         ) : (
-                            <p className="text-[11px] text-slate-400 pl-1 truncate" title={alcancados.map(c => c.nome).join(', ')}>
+                            // A lista de nomes quebra linha (line-clamp) em vez de
+                            // ficar em linha única (truncate). `truncate` aplica
+                            // white-space: nowrap, e a largura mínima do texto
+                            // corrido subia por toda a árvore até estourar o
+                            // max-width do diálogo, empurrando a aba "Público"
+                            // inteira para fora do enquadramento.
+                            <p className="text-[11px] text-slate-400 pl-1 min-w-0 break-words line-clamp-2" title={alcancados.map(c => c.nome).join(', ')}>
                                 {alcancados.length} pessoa{alcancados.length !== 1 ? 's' : ''}: {alcancados.map(c => c.nome).join(', ')}
                             </p>
                         )}

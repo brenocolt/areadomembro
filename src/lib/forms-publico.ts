@@ -10,6 +10,7 @@
 // próprio respondente). Essa é a formatação básica de todo formulário já
 // existente, que não tem nenhuma linha salva nessas tabelas.
 import { supabase } from '@/lib/supabase'
+import { isSchemaDesatualizado, type ErroPostgrest } from '@/lib/db-compat'
 
 export interface PublicoPar {
     cargo: string
@@ -35,6 +36,15 @@ function normalizar(valor?: string | null): string {
         .replace(/[^a-z0-9]/g, '')
 }
 
+// As tabelas de público vêm da migração 20260824. Sem ela, o erro cru do
+// PostgREST não diz o que fazer — esta mensagem diz.
+function erroPublico(error: ErroPostgrest, acao: string): string {
+    if (isSchemaDesatualizado(error)) {
+        return 'O banco ainda não tem as tabelas de público (formulario_publico_responde/recebe). Aplique a migração supabase/migrations/20260824_formularios_publico.sql e tente de novo.'
+    }
+    return `Erro ao ${acao}: ${error.message}`
+}
+
 export async function loadFormularioPublico(formularioId: string): Promise<FormularioPublico> {
     const [{ data: responde }, { data: recebe }] = await Promise.all([
         supabase.from('formulario_publico_responde').select('cargo, nucleo').eq('formulario_id', formularioId),
@@ -57,7 +67,7 @@ export async function saveFormularioPublico(formularioId: string, publico: Formu
         supabase.from('formulario_publico_recebe').delete().eq('formulario_id', formularioId),
     ])
     for (const { error } of deletes) {
-        if (error) throw new Error(`Erro ao limpar o público anterior do formulário: ${error.message}`)
+        if (error) throw new Error(erroPublico(error, 'limpar o público anterior do formulário'))
     }
 
     const inserts: PromiseLike<{ error: { message: string } | null }>[] = []
@@ -72,7 +82,7 @@ export async function saveFormularioPublico(formularioId: string, publico: Formu
         ))
     }
     for (const { error } of await Promise.all(inserts)) {
-        if (error) throw new Error(`Erro ao salvar o público do formulário: ${error.message}`)
+        if (error) throw new Error(erroPublico(error, 'salvar o público do formulário'))
     }
 }
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { mesReferenciaFromDate } from "@/lib/nps-period"
 import { competenciaLabel } from "@/lib/forms-runtime"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { MessageSquare, Zap, Award, FolderKanban, Star, TrendingUp } from "lucide-react"
@@ -61,14 +62,25 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
         async function fetchData() {
             setLoading(true)
 
-            const { data: perguntas } = await supabase
+            // `competencia` só passa a existir com a migração 20260825.
+            // Enquanto ela não roda, pedir a coluna faz o PostgREST recusar a
+            // leitura inteira, e a tela dizia "não tem perguntas de escala" —
+            // escondendo todo o histórico já respondido. Sem a coluna,
+            // competenciaLabel() cai de volta no título da pergunta.
+            const perguntasQuery = (colunas: string) => supabase
                 .from('formulario_perguntas')
-                .select('id, tipo, titulo, competencia, ordem')
+                .select(colunas)
                 .eq('formulario_id', formularioId)
                 .order('ordem', { ascending: true })
 
-            const escalaPerguntas = (perguntas || []).filter(p => p.tipo === 'escala')
-            const avaliadoPergunta = (perguntas || []).find(p => p.tipo === 'colaborador_unico')
+            const perguntasComCompetencia = await perguntasQuery('id, tipo, titulo, competencia, ordem')
+            const perguntas = isSchemaDesatualizado(perguntasComCompetencia.error)
+                ? (await perguntasQuery('id, tipo, titulo, ordem')).data
+                : perguntasComCompetencia.data
+
+            const listaPerguntas = (perguntas || []) as unknown as { id: string, tipo: string, titulo: string, competencia?: string | null }[]
+            const escalaPerguntas = listaPerguntas.filter(p => p.tipo === 'escala')
+            const avaliadoPergunta = listaPerguntas.find(p => p.tipo === 'colaborador_unico')
 
             if (escalaPerguntas.length === 0) {
                 setMetrics([]); setEvaluations([]); setLoading(false); return
@@ -76,14 +88,23 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
 
             setMetrics(escalaPerguntas.map(p => ({ id: p.id, titulo: competenciaLabel(p) })))
 
-            const { data: respostas } = await supabase
+            // Mesmo raciocínio para `alvo_colaborador_id` (migração 20260824):
+            // sem a coluna, restam as respostas do modelo antigo, em que quem
+            // foi avaliado vem na pergunta do tipo colaborador_unico.
+            const respostasQuery = (colunas: string) => supabase
                 .from('formulario_respostas')
-                .select('id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
+                .select(colunas)
                 .eq('formulario_id', formularioId)
                 .order('enviado_em', { ascending: true })
 
+            const respostasComAlvo = await respostasQuery('id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
+            const respostasData = isSchemaDesatualizado(respostasComAlvo.error)
+                ? (await respostasQuery('id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')).data
+                : respostasComAlvo.data
+            const respostas = (respostasData || []) as unknown as { id: string, enviado_em: string, alvo_colaborador_id?: string | null }[]
+
             const evals: Avaliacao[] = []
-            for (const r of respostas || []) {
+            for (const r of respostas) {
                 const items = (r as any).formulario_respostas_itens || []
 
                 // A resposta é sobre o colaborador logado?

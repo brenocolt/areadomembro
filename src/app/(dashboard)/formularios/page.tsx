@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
 import { PerguntaInput } from "@/components/forms/pergunta-input"
 
@@ -156,14 +157,23 @@ export default function FormulariosPage() {
 
             // Busca apenas respostas do mês atual — respostas de meses anteriores
             // não devem marcar o formulário como "já respondido" no novo mês.
-            const { data: rData } = await supabase
+            const respostasQuery = (colunas: string) => supabase
                 .from('formulario_respostas')
-                .select('formulario_id, enviado_em, alvo_colaborador_id')
+                .select(colunas)
                 .eq('colaborador_id', colaborador.id)
                 .gte('enviado_em', firstDayOfMonth)
                 .lte('enviado_em', lastDayOfMonth)
                 .order('enviado_em', { ascending: false })
-            if (rData) setRespostasFeitas(rData)
+
+            // Sem a coluna alvo_colaborador_id (migração 20260824) a leitura
+            // inteira seria recusada e nenhum formulário apareceria como já
+            // respondido. Sem ela, resta o comportamento antigo: uma resposta
+            // por formulário, sem alvo.
+            const respostasComAlvo = await respostasQuery('formulario_id, enviado_em, alvo_colaborador_id')
+            const rData = isSchemaDesatualizado(respostasComAlvo.error)
+                ? (await respostasQuery('formulario_id, enviado_em')).data
+                : respostasComAlvo.data
+            if (rData) setRespostasFeitas(rData as unknown[])
 
             const { data: configData } = await supabase
                 .from('configuracoes')
