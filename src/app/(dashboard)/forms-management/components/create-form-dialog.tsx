@@ -15,6 +15,50 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import { CSS } from '@dnd-kit/utilities';
 import { PublicoParesEditor } from "./publico-pares-editor"
 import { saveFormularioPublico, type PublicoPar } from "@/lib/forms-publico"
+import { isSchemaDesatualizado, semColunas, type ErroPostgrest } from "@/lib/db-compat"
+
+// Colunas criadas pela migração 20260825 (competência, "Não avaliar" e
+// sub-aba). Enquanto ela não for aplicada, o banco recusa a gravação INTEIRA
+// só por causa delas — ou seja, ninguém consegue criar ou editar formulário
+// nenhum, nem os que não usam esses recursos.
+const COLUNAS_MIGRACAO_20260825 = ['gerar_subaba', 'competencia', 'permite_nao_avaliar']
+
+function mensagemErroGravacao(error: { message?: string, details?: string } | null): string {
+    const msg = `${error?.message || ''} ${error?.details || ''}`
+    if (COLUNAS_MIGRACAO_20260825.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem as colunas de competência/sub-aba. Aplique a migração supabase/migrations/20260825_formularios_subabas_competencias.sql e tente de novo.'
+    }
+    return error?.message || 'Erro desconhecido'
+}
+
+// Grava tentando primeiro com as colunas da migração 20260825 e, se o banco
+// ainda não as tiver, repete sem elas. O formulário é salvo do mesmo jeito;
+// só os extras (competência, "Não avaliar", sub-aba em Performance) ficam de
+// fora até a migração rodar — em vez de a gravação inteira ser recusada.
+// `degradado` diz se caímos nesse segundo caminho, para avisar quem salvou.
+type PayloadGravacao = Record<string, unknown>
+
+async function gravarComFallback<T>(
+    executar: (payload: PayloadGravacao | PayloadGravacao[]) => PromiseLike<{ data: T | null, error: ErroPostgrest | null }>,
+    payload: PayloadGravacao | PayloadGravacao[],
+): Promise<{ data: T | null, error: ErroPostgrest | null, degradado: boolean }> {
+    const tentativa = await executar(payload)
+    if (!tentativa.error || !isSchemaDesatualizado(tentativa.error)) {
+        return { ...tentativa, degradado: false }
+    }
+    const semExtras = Array.isArray(payload)
+        ? payload.map(p => semColunas(p, COLUNAS_MIGRACAO_20260825))
+        : semColunas(payload, COLUNAS_MIGRACAO_20260825)
+    const repeticao = await executar(semExtras)
+    return { ...repeticao, degradado: !repeticao.error }
+}
+
+// Salvou, mas o banco recusou as colunas novas: quem salvou precisa saber
+// que competência, "Não avaliar" e sub-aba não foram gravadas.
+function avisarSemExtras(degradado: boolean) {
+    if (!degradado) return
+    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba: o banco ainda não tem essas colunas. Rode a migração 20260825_formularios_subabas_competencias.sql e salve de novo para aplicá-las.', { duration: 10000 })
+}
 
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
     if (!local) return null
@@ -725,6 +769,10 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         // há sobre quem montar a visualização de competências.
         const subabaEfetiva = quemRecebe.length > 0 && gerarSubaba
 
+        // Vira true se alguma gravação só passou depois de tirar as colunas
+        // da migração 20260825 — o formulário foi salvo, mas sem os extras.
+        let salvouSemExtras = false
+
         let finalBannerUrl: string | null = existingBannerUrl || null
 
         if (bannerFile) {
@@ -740,18 +788,22 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         }
 
         if (editMode && initialData?.id) {
-            const { error: updateError } = await supabase.from('formularios').update({
-                titulo,
-                descricao,
-                data_prazo: localDatetimeInputToIso(dataPrazo),
-                tipo_formulario: tipoFormulario,
-                pagina_destino: paginaDestino || null,
-                banner_url: finalBannerUrl,
-                gerar_subaba: subabaEfetiva,
-            }).eq('id', initialData.id)
+            const { error: updateError, degradado: updateDegradado } = await gravarComFallback(
+                (payload) => supabase.from('formularios').update(payload).eq('id', initialData.id!).select('id').maybeSingle(),
+                {
+                    titulo,
+                    descricao,
+                    data_prazo: localDatetimeInputToIso(dataPrazo),
+                    tipo_formulario: tipoFormulario,
+                    pagina_destino: paginaDestino || null,
+                    banner_url: finalBannerUrl,
+                    gerar_subaba: subabaEfetiva,
+                },
+            )
+            salvouSemExtras = salvouSemExtras || updateDegradado
 
             if (updateError) {
-                toast.error("Erro ao atualizar formulário")
+                toast.error("Erro ao atualizar formulário: " + mensagemErroGravacao(updateError))
                 setLoading(false)
                 return
             }
@@ -779,25 +831,26 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     permite_nao_avaliar: p.tipo === 'escala' ? !!p.permite_nao_avaliar : false,
                 }
                 if (p.id && isUuid(p.id) && existingIds.has(p.id)) {
-                    const { error: upErr } = await supabase
-                        .from('formulario_perguntas')
-                        .update(payload)
-                        .eq('id', p.id)
+                    const { error: upErr, degradado: upDegradado } = await gravarComFallback(
+                        (corpo) => supabase.from('formulario_perguntas').update(corpo).eq('id', p.id).select('id').maybeSingle(),
+                        payload,
+                    )
+                    salvouSemExtras = salvouSemExtras || upDegradado
                     if (upErr) {
-                        toast.error('Erro ao atualizar pergunta: ' + upErr.message)
+                        toast.error('Erro ao atualizar pergunta: ' + mensagemErroGravacao(upErr))
                         setLoading(false)
                         return
                     }
                     idMap.set(p.id, p.id)
                     keptIds.push(p.id)
                 } else {
-                    const { data: insData, error: insErr } = await supabase
-                        .from('formulario_perguntas')
-                        .insert({ formulario_id: initialData.id!, ...payload })
-                        .select('id')
-                        .single()
+                    const { data: insData, error: insErr, degradado: insDegradado } = await gravarComFallback<{ id: string }>(
+                        (corpo) => supabase.from('formulario_perguntas').insert(corpo).select('id').single(),
+                        { formulario_id: initialData.id!, ...payload },
+                    )
+                    salvouSemExtras = salvouSemExtras || insDegradado
                     if (insErr || !insData) {
-                        toast.error('Erro ao criar pergunta: ' + (insErr?.message || ''))
+                        toast.error('Erro ao criar pergunta: ' + mensagemErroGravacao(insErr))
                         setLoading(false)
                         return
                     }
@@ -820,22 +873,27 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }
 
             toast.success("Formulário atualizado com sucesso!")
+            avisarSemExtras(salvouSemExtras)
         } else {
-            const { data: formData, error: formError } = await supabase.from('formularios').insert({
-                titulo,
-                descricao,
-                status,
-                data_prazo: localDatetimeInputToIso(dataPrazo),
-                data_prazo_original: localDatetimeInputToIso(dataPrazo),
-                data_inicio: status === 'ativo' ? new Date().toISOString() : null,
-                tipo_formulario: tipoFormulario,
-                pagina_destino: paginaDestino || null,
-                banner_url: finalBannerUrl,
-                gerar_subaba: subabaEfetiva,
-            }).select().single()
+            const { data: formData, error: formError, degradado: formDegradado } = await gravarComFallback<{ id: string }>(
+                (payload) => supabase.from('formularios').insert(payload).select().single(),
+                {
+                    titulo,
+                    descricao,
+                    status,
+                    data_prazo: localDatetimeInputToIso(dataPrazo),
+                    data_prazo_original: localDatetimeInputToIso(dataPrazo),
+                    data_inicio: status === 'ativo' ? new Date().toISOString() : null,
+                    tipo_formulario: tipoFormulario,
+                    pagina_destino: paginaDestino || null,
+                    banner_url: finalBannerUrl,
+                    gerar_subaba: subabaEfetiva,
+                },
+            )
+            salvouSemExtras = salvouSemExtras || formDegradado
 
             if (formError || !formData) {
-                toast.error("Erro ao criar formulário")
+                toast.error("Erro ao criar formulário: " + mensagemErroGravacao(formError))
                 setLoading(false)
                 return
             }
@@ -852,13 +910,14 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 permite_nao_avaliar: p.tipo === 'escala' ? !!p.permite_nao_avaliar : false,
             }))
 
-            const { data: insertedPerguntas, error: perguntasError } = await supabase
-                .from('formulario_perguntas')
-                .insert(perguntasToInsert)
-                .select('id')
+            const { data: insertedPerguntas, error: perguntasError, degradado: perguntasDegradado } = await gravarComFallback<{ id: string }[]>(
+                (payload) => supabase.from('formulario_perguntas').insert(payload).select('id'),
+                perguntasToInsert,
+            )
+            salvouSemExtras = salvouSemExtras || perguntasDegradado
 
             if (perguntasError || !insertedPerguntas) {
-                toast.error('Erro ao criar perguntas: ' + (perguntasError?.message || ''))
+                toast.error('Erro ao criar perguntas: ' + mensagemErroGravacao(perguntasError))
                 setLoading(false)
                 return
             }
@@ -877,6 +936,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             }
 
             toast.success("Formulário criado com sucesso!")
+            avisarSemExtras(salvouSemExtras)
         }
 
         setLoading(false)
@@ -910,7 +970,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     </DialogHeader>
                 </div>
 
-                <Tabs defaultValue="detalhes" className="w-full">
+                <Tabs defaultValue="detalhes" className="w-full min-w-0">
                     <div className="px-8">
                         <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl w-full">
                             <TabsTrigger value="detalhes" className="flex-1 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold text-xs">
@@ -922,7 +982,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         </TabsList>
                     </div>
 
-                <TabsContent value="detalhes" className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar mt-4">
+                <TabsContent value="detalhes" className="px-8 pb-4 space-y-6 max-h-[60vh] min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar mt-4">
                     <div className="space-y-4">
                         {/* Banner upload */}
                         <div className="space-y-2">
@@ -1086,7 +1146,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     </div>
                 </TabsContent>
 
-                <TabsContent value="publico" className="px-8 pb-4 space-y-6 max-h-[60vh] overflow-y-auto custom-scrollbar mt-4">
+                <TabsContent value="publico" className="px-8 pb-4 space-y-6 max-h-[60vh] min-w-0 overflow-y-auto overflow-x-hidden custom-scrollbar mt-4">
                     <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                         Por padrão, o formulário é comum: aparece para <strong>Todos</strong> e cada resposta é sobre o próprio respondente
                         (<strong>Ninguém</strong> é recebido). Se você selecionar cargo + núcleo em qualquer uma das seções abaixo, a lógica muda.

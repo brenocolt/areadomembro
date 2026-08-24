@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
 import { PerguntaInput } from "@/components/forms/pergunta-input"
 
@@ -76,11 +77,15 @@ export default function FormulariosPage() {
             .lt('data_prazo', new Date().toISOString())
             .not('data_prazo', 'is', null)
 
-        const { data: formsData } = await supabase
+        const { data: formsData, error: formsError } = await supabase
             .from('formularios')
             .select('*')
             .eq('status', 'ativo')
             .order('created_at', { ascending: false })
+        if (formsError) {
+            console.error('Erro ao carregar formulários ativos:', formsError)
+            toast.error('Erro ao carregar os formulários: ' + formsError.message)
+        }
 
         // Colaboradores com cargo/núcleo — usado tanto para as perguntas do
         // tipo "Selecionar Colaborador" quanto para resolver o público de
@@ -93,11 +98,19 @@ export default function FormulariosPage() {
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
 
         if (visibleForms.length > 0 && colaborador) {
+          // Se a resolução de público falhar (ex.: migração pendente), o
+          // formulário deve continuar aparecendo como um formulário comum.
+          // Esconder tudo por causa de um erro de leitura seria pior do que
+          // mostrar um formulário sem direcionamento.
+          try {
             const formIds = visibleForms.map(f => f.id)
-            const [{ data: respondeRows }, { data: recebeRows }] = await Promise.all([
+            const [{ data: respondeRows, error: erroResponde }, { data: recebeRows, error: erroRecebe }] = await Promise.all([
                 supabase.from('formulario_publico_responde').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
                 supabase.from('formulario_publico_recebe').select('formulario_id, cargo, nucleo').in('formulario_id', formIds),
             ])
+            if (erroResponde || erroRecebe) {
+                throw new Error((erroResponde || erroRecebe)!.message)
+            }
 
             const groupByForm = (rows: any[] | null) => {
                 const map = new Map<string, PublicoPar[]>()
@@ -129,6 +142,9 @@ export default function FormulariosPage() {
                 }
                 return true
             })
+          } catch (err) {
+            console.error('Erro ao resolver o público dos formulários — exibindo todos sem direcionamento:', err)
+          }
         }
 
         setForms(visibleForms)
@@ -141,14 +157,23 @@ export default function FormulariosPage() {
 
             // Busca apenas respostas do mês atual — respostas de meses anteriores
             // não devem marcar o formulário como "já respondido" no novo mês.
-            const { data: rData } = await supabase
+            const respostasQuery = (colunas: string) => supabase
                 .from('formulario_respostas')
-                .select('formulario_id, enviado_em, alvo_colaborador_id')
+                .select(colunas)
                 .eq('colaborador_id', colaborador.id)
                 .gte('enviado_em', firstDayOfMonth)
                 .lte('enviado_em', lastDayOfMonth)
                 .order('enviado_em', { ascending: false })
-            if (rData) setRespostasFeitas(rData)
+
+            // Sem a coluna alvo_colaborador_id (migração 20260824) a leitura
+            // inteira seria recusada e nenhum formulário apareceria como já
+            // respondido. Sem ela, resta o comportamento antigo: uma resposta
+            // por formulário, sem alvo.
+            const respostasComAlvo = await respostasQuery('formulario_id, enviado_em, alvo_colaborador_id')
+            const rData = isSchemaDesatualizado(respostasComAlvo.error)
+                ? (await respostasQuery('formulario_id, enviado_em')).data
+                : respostasComAlvo.data
+            if (rData) setRespostasFeitas(rData as unknown[])
 
             const { data: configData } = await supabase
                 .from('configuracoes')

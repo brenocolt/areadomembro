@@ -29,6 +29,27 @@ function localDatetimeInputToIso(local: string | null | undefined): string | nul
     return d.toISOString()
 }
 
+// Contagem exata de uma relação por formulário, isolada em uma query só
+// dela. Cada relação é pedida separadamente de propósito: um embed que não
+// resolve (tabela criada por migração ainda não aplicada, ou cache de schema
+// do PostgREST desatualizado) faz o PostgREST recusar a requisição inteira,
+// então juntar as três num select só significava perder a LISTA por causa de
+// uma contagem. Devolve null quando a contagem não pôde ser lida — quem
+// mostra precisa distinguir "não sei" de "zero".
+async function contarRelacao(relacao: string): Promise<Map<string, number> | null> {
+    const { data, error } = await supabase.from('formularios').select(`id, ${relacao}(count)`)
+    if (error || !data) {
+        console.error(`Não foi possível contar ${relacao}:`, error)
+        return null
+    }
+    const contagens = new Map<string, number>()
+    for (const linha of data as unknown as Record<string, unknown>[]) {
+        const embutido = linha[relacao] as { count?: number }[] | undefined
+        contagens.set(linha.id as string, embutido?.[0]?.count || 0)
+    }
+    return contagens
+}
+
 function statusBadge(status: string) {
     const map: Record<string, { label: string, class: string }> = {
         rascunho: { label: "Rascunho", class: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
@@ -182,21 +203,60 @@ export default function FormsManagementPage() {
             .not('data_prazo', 'is', null)
 
         if (expired && expired.length > 0) {
-            await supabase
-                .from('formularios')
-                .update({ status: 'encerrado' })
-                .in('id', expired.map(e => e.id))
+            // Isolado: uma falha aqui (ex.: pré-pontuação) não pode impedir a
+            // listagem dos formulários mais abaixo.
+            try {
+                await supabase
+                    .from('formularios')
+                    .update({ status: 'encerrado' })
+                    .in('id', expired.map(e => e.id))
 
-            for (const form of expired) {
-                await prePontuarNaoRespondentes(form)
+                for (const form of expired) {
+                    await prePontuarNaoRespondentes(form)
+                }
+            } catch (err) {
+                console.error('Falha ao encerrar formulários vencidos / pré-pontuar:', err)
             }
         }
 
-        const { data } = await supabase
+        // A listagem não depende de relação nenhuma: só a própria tabela de
+        // formulários. Antes as contagens vinham embutidas neste mesmo select
+        // (`formulario_perguntas(count), formulario_respostas(count), ...`) e
+        // bastava UMA relação não resolver — migração pendente ou cache de
+        // schema desatualizado — para o PostgREST recusar a query inteira e a
+        // tela mostrar "Nenhum formulário encontrado", com todos os
+        // formulários intactos no banco.
+        const { data: lista, error: erroLista } = await supabase
             .from('formularios')
-            .select('*, formulario_perguntas(count), formulario_respostas(count), formulario_publico_recebe(count)')
+            .select('*')
             .order('created_at', { ascending: false })
-        if (data) setForms(data)
+
+        if (!lista) {
+            console.error('Erro ao listar formulários:', erroLista)
+            toast.error('Erro ao carregar os formulários: ' + (erroLista?.message || 'erro desconhecido'))
+            return
+        }
+
+        // Cada contagem é lida em uma query própria, isolando as relações umas
+        // das outras: uma tabela ausente custa só a sua contagem, e nunca a
+        // lista. Contagem desconhecida vira `null` (exibida como "—") — dizer
+        // 0 seria mentira.
+        const [cPerguntas, cRespostas, cRecebe] = await Promise.all([
+            contarRelacao('formulario_perguntas'),
+            contarRelacao('formulario_respostas'),
+            contarRelacao('formulario_publico_recebe'),
+        ])
+
+        setForms(lista.map(f => ({
+            ...f,
+            _cPerguntas: cPerguntas ? (cPerguntas.get(f.id) ?? 0) : null,
+            _cRespostas: cRespostas ? (cRespostas.get(f.id) ?? 0) : null,
+            _cRecebe: cRecebe ? (cRecebe.get(f.id) ?? 0) : null,
+        })))
+
+        if (!cPerguntas || !cRespostas || !cRecebe) {
+            toast.warning('Os formulários carregaram, mas algumas contagens não — provavelmente falta aplicar uma migração do banco.')
+        }
 
         const { data: configRows } = await supabase
             .from('configuracoes')
@@ -426,7 +486,9 @@ export default function FormsManagementPage() {
                         </div>
                         <div>
                             <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {forms.reduce((acc, f) => acc + (f.formulario_respostas?.[0]?.count || 0), 0)}
+                                {forms.some(f => f._cRespostas === null)
+                                    ? '—'
+                                    : forms.reduce((acc, f) => acc + (f._cRespostas || 0), 0)}
                             </p>
                             <p className="text-xs text-slate-500">Total de Respostas</p>
                         </div>
@@ -519,7 +581,7 @@ export default function FormsManagementPage() {
                                                     → {form.pagina_destino === 'performance' ? 'Performance' : 'NPS Gerente'}
                                                 </Badge>
                                             )}
-                                            {(form.formulario_publico_recebe?.[0]?.count || 0) > 0 && (
+                                            {(form._cRecebe || 0) > 0 && (
                                                 <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
                                                     Direcionado
                                                 </Badge>
@@ -531,11 +593,11 @@ export default function FormsManagementPage() {
                                         <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400">
                                             <span className="flex items-center gap-1">
                                                 <BarChart3 className="h-3 w-3" />
-                                                {form.formulario_perguntas?.[0]?.count || 0} perguntas
+                                                {form._cPerguntas === null ? '—' : form._cPerguntas} perguntas
                                             </span>
                                             <span className="flex items-center gap-1">
                                                 <Users className="h-3 w-3" />
-                                                {form.formulario_respostas?.[0]?.count || 0} respostas
+                                                {form._cRespostas === null ? '—' : form._cRespostas} respostas
                                             </span>
                                             {form.data_prazo && (
                                                 <span className="flex items-center gap-1">
