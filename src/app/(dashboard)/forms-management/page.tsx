@@ -10,6 +10,7 @@ import { CreateFormDialog, FormInitialData } from "./components/create-form-dial
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { SimularFormularioDialog } from "./components/simular-formulario-dialog"
 import { PastaInsights } from "./components/pasta-insights"
+import { NpsProjetoPerguntasDialog } from "./components/nps-projeto-perguntas-dialog"
 import { toast } from "sonner"
 import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
 
@@ -209,6 +210,7 @@ export default function FormsManagementPage() {
     const [dialogEditMode, setDialogEditMode] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [simularForm, setSimularForm] = useState<{ id: string, titulo: string } | null>(null)
+    const [npsPerguntasOpen, setNpsPerguntasOpen] = useState(false)
 
 
 
@@ -613,6 +615,8 @@ export default function FormsManagementPage() {
                 onOpenChange={(o) => { if (!o) setSimularForm(null) }}
             />
 
+            <NpsProjetoPerguntasDialog open={npsPerguntasOpen} onOpenChange={setNpsPerguntasOpen} />
+
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm">
@@ -667,11 +671,21 @@ export default function FormsManagementPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.location.href = '/nps-projeto'}
+                            onClick={() => setNpsPerguntasOpen(true)}
                             className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
                         >
                             <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                            Editar / Visualizar NPS Projetos
+                            Editar Perguntas
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = '/nps-projeto'}
+                            className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
+                            title="Como admin, você visualiza e preenche mesmo com o formulário fechado."
+                        >
+                            <Eye className="h-3.5 w-3.5 mr-1.5" />
+                            Visualizar NPS Projetos
                         </Button>
                         <span className={`text-sm font-bold ${npsAberto ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {npsAberto ? 'Aberto para respostas' : 'Fechado'}

@@ -13,6 +13,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { isCargoGerencial } from "@/lib/cargos"
+import {
+    GERENTE_CAMPOS, CONSULTOR_CAMPOS, CRITERIOS_PADRAO, loadNpsProjetoConfig, resolverPergunta,
+    type NpsProjetoConfig,
+} from "@/lib/nps-projeto-config"
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface Projeto { id: string; nome: string }
@@ -44,14 +48,6 @@ interface ConsultorData {
     ha_outro: string
 }
 
-const SCALE_LABELS: Record<number, string> = {
-    1: "Abaixo das expectativas",
-    2: "Pode melhorar",
-    3: "Razoável/Neutro",
-    4: "Satisfatório",
-    5: "Acima das expectativas",
-}
-
 const MESES = [
     "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
@@ -69,9 +65,14 @@ const emptyConsultorData = (): ConsultorData => ({
 })
 
 // ─── Scale Picker Component ─────────────────────────────────────────────
-function ScalePicker({ value, onChange, label, required, obs }: {
+// `criterios` é o texto de cada nota (1 a 5) — editável em Gestão de
+// Formulários (botão "Editar Perguntas") e, por padrão, o mesmo critério
+// genérico que já existia (CRITERIOS_PADRAO) até alguém personalizar.
+function ScalePicker({ value, onChange, label, required, obs, criterios }: {
     value: string; onChange: (v: string) => void; label: string; required?: boolean; obs?: string
+    criterios?: Record<number, string>
 }) {
+    const crit = criterios || CRITERIOS_PADRAO
     return (
         <div className="space-y-2">
             <label className="text-sm font-bold text-slate-900 dark:text-slate-200 leading-snug block">
@@ -89,15 +90,23 @@ function ScalePicker({ value, onChange, label, required, obs }: {
                     >
                         {v}
                         <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                            {SCALE_LABELS[v]}
+                            {crit[v]}
                         </span>
                     </button>
                 ))}
             </div>
             <div className="flex justify-between text-[9px] text-slate-400 px-1 mt-1">
-                <span>Abaixo das expectativas</span>
-                <span>Acima das expectativas</span>
+                <span>{crit[1]}</span>
+                <span>{crit[5]}</span>
             </div>
+            {/* Critério da nota já escolhida, sempre visível (não só no hover) —
+                importante em telas de toque. */}
+            {value && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 rounded-lg px-3 py-2">
+                    <span className="font-bold text-violet-600 dark:text-violet-400">{value}: </span>
+                    {crit[Number(value)]}
+                </p>
+            )}
         </div>
     )
 }
@@ -155,11 +164,16 @@ function StepIndicator({ steps, current }: { steps: string[]; current: number })
 // Main Page Component
 // ═══════════════════════════════════════════════════════════════════════════
 export default function NPSProjetoPage() {
-    const { colaborador } = useColaborador()
+    const { colaborador, role } = useColaborador()
+    // Admin não é bloqueado pelo formulário fechado — precisa poder
+    // visualizar/preencher a qualquer momento (ver botão "Visualizar NPS
+    // Projetos" em Gestão de Formulários).
+    const isAdmin = (role ?? '').toUpperCase() === 'ADMIN'
 
     // Data
     const [projetos, setProjetos] = useState<Projeto[]>([])
     const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+    const [npsConfig, setNpsConfig] = useState<NpsProjetoConfig>({})
 
     // Step Tracking
     const [step, setStep] = useState(0) // 0=Identificação, 1=NPS Gerente, 2+=NPS Consultor(es), last=Concluído
@@ -189,6 +203,16 @@ export default function NPSProjetoPage() {
     const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     // Anyone who is NOT a manager should evaluate the manager
     const isConsultor = !isGerente
+
+    // Título + critério (1 a 5) efetivos de cada pergunta — personalizados
+    // em "Editar Perguntas" (Gestão de Formulários) ou, por padrão, o texto
+    // que já existia hardcoded (ver src/lib/nps-projeto-config.ts).
+    const gerentePerguntas = Object.fromEntries(
+        GERENTE_CAMPOS.map(c => [c.campo, { ...resolverPergunta(npsConfig, 'gerente', c.campo, c.tituloPadrao), obs: c.obs }])
+    )
+    const consultorPerguntas = Object.fromEntries(
+        CONSULTOR_CAMPOS.map(c => [c.campo, { ...resolverPergunta(npsConfig, 'consultor', c.campo, c.tituloPadrao), obs: c.obs }])
+    )
 
     // Build step names based on role
     const buildSteps = useCallback(() => {
@@ -255,6 +279,8 @@ export default function NPSProjetoPage() {
 
             const { data: c } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
             if (c) setColaboradores(c)
+
+            setNpsConfig(await loadNpsProjetoConfig())
         }
         fetchData()
     }, [])
@@ -267,7 +293,7 @@ export default function NPSProjetoPage() {
         )
     }
 
-    if (isFormClosed) {
+    if (isFormClosed && !isAdmin) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-md mx-auto">
                 <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
@@ -492,6 +518,14 @@ export default function NPSProjetoPage() {
                 </div>
             </div>
 
+            {/* Fechado para os demais, mas admin visualiza/preenche do mesmo jeito. */}
+            {isFormClosed && isAdmin && (
+                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl px-4 py-3 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    <Star className="h-4 w-4 shrink-0" />
+                    Este formulário está fechado para os demais membros — você está vendo/preenchendo como administrador.
+                </div>
+            )}
+
             {/* Steps */}
             <StepIndicator steps={steps} current={step} />
 
@@ -587,19 +621,19 @@ export default function NPSProjetoPage() {
                             </Select>
                         </div>
 
-                        <ScalePicker label="Quão clara foi a COMUNICAÇÃO do seu gerente, tanto na escuta quanto na fala, neste mês?"
+                        <ScalePicker label={gerentePerguntas.comunicacao.titulo} criterios={gerentePerguntas.comunicacao.criterios}
                             value={gerenteData.comunicacao} onChange={v => updateGerente("comunicacao", v)} required />
 
-                        <ScalePicker label="Avalie o quão você ficou satisfeito(a) com o SUPORTE do seu gerente em relação à EXECUÇÃO do projeto durante esse mês."
+                        <ScalePicker label={gerentePerguntas.suporte.titulo} criterios={gerentePerguntas.suporte.criterios}
                             value={gerenteData.suporte} onChange={v => updateGerente("suporte", v)} required />
 
-                        <ScalePicker label="Avalie o quão você ficou satisfeito(a) com o RELACIONAMENTO do seu gerente em relação à EQUIPE do projeto durante esse mês."
+                        <ScalePicker label={gerentePerguntas.relacionamento.titulo} criterios={gerentePerguntas.relacionamento.criterios}
                             value={gerenteData.relacionamento} onChange={v => updateGerente("relacionamento", v)} required />
 
-                        <ScalePicker label="Avalie o nível de RESOLUTIVIDADE do seu gerente do projeto durante esse mês."
+                        <ScalePicker label={gerentePerguntas.resolutividade.titulo} criterios={gerentePerguntas.resolutividade.criterios}
                             value={gerenteData.resolutividade} onChange={v => updateGerente("resolutividade", v)} required />
 
-                        <ScalePicker label="Avalie o quão satisfeito(a) você ficou com a LIDERANÇA do seu gerente em relação ao projeto neste mês."
+                        <ScalePicker label={gerentePerguntas.lideranca.titulo} criterios={gerentePerguntas.lideranca.criterios}
                             value={gerenteData.lideranca} onChange={v => updateGerente("lideranca", v)} required />
 
                         <div className="space-y-2">
@@ -674,29 +708,29 @@ export default function NPSProjetoPage() {
                                 </Select>
                             </div>
 
-                            <ScalePicker label="O quão eficaz foi a COMUNICAÇÃO do(a) consultor(a) com a equipe esse mês?"
+                            <ScalePicker label={consultorPerguntas.comunicacao.titulo} criterios={consultorPerguntas.comunicacao.criterios}
                                 value={d.comunicacao} onChange={v => updateConsultor(consultorIdx, "comunicacao", v)} required />
 
-                            <ScalePicker label="Avalie o quanto o(a) consultor(a) SE DEDICOU ao projeto esse mês:"
+                            <ScalePicker label={consultorPerguntas.dedicacao.titulo} criterios={consultorPerguntas.dedicacao.criterios}
                                 value={d.dedicacao} onChange={v => updateConsultor(consultorIdx, "dedicacao", v)} required />
 
-                            <ScalePicker label="Avalie o quanto você tem CONFIANÇA no trabalho deste(a) consultor(a) no projeto esse mês:"
+                            <ScalePicker label={consultorPerguntas.confianca.titulo} criterios={consultorPerguntas.confianca.criterios}
                                 value={d.confianca} onChange={v => updateConsultor(consultorIdx, "confianca", v)} required />
 
-                            <ScalePicker label="O quanto esse(a) consultor(a) foi PONTUAL durante o mês?"
+                            <ScalePicker label={consultorPerguntas.pontualidade.titulo} criterios={consultorPerguntas.pontualidade.criterios}
                                 value={d.pontualidade} onChange={v => updateConsultor(consultorIdx, "pontualidade", v)} required
-                                obs="Lembrando que Pontualidade não é só em reuniões com o cliente, mas também em reuniões internas, como sprints e construções, e cumprimento de prazos com as entregas." />
+                                obs={consultorPerguntas.pontualidade.obs} />
 
-                            <ScalePicker label="O quanto esse(a) consultor(a) foi ORGANIZADO durante esse mês?"
+                            <ScalePicker label={consultorPerguntas.organizacao.titulo} criterios={consultorPerguntas.organizacao.criterios}
                                 value={d.organizacao} onChange={v => updateConsultor(consultorIdx, "organizacao", v)} required />
 
-                            <ScalePicker label="O quanto esse(a) consultor(a) foi PROATIVO durante esse mês?"
+                            <ScalePicker label={consultorPerguntas.proatividade.titulo} criterios={consultorPerguntas.proatividade.criterios}
                                 value={d.proatividade} onChange={v => updateConsultor(consultorIdx, "proatividade", v)} required />
 
-                            <ScalePicker label="Como você se sentiu em relação à QUALIDADE das ENTREGAS desse(a) consultor(a) nesse último mês?"
+                            <ScalePicker label={consultorPerguntas.qualidade_entregas.titulo} criterios={consultorPerguntas.qualidade_entregas.criterios}
                                 value={d.qualidade_entregas} onChange={v => updateConsultor(consultorIdx, "qualidade_entregas", v)} required />
 
-                            <ScalePicker label="Como você avalia o DOMÍNIO TÉCNICO desse(a) consultor(a) durante o último mês?"
+                            <ScalePicker label={consultorPerguntas.dominio_tecnico.titulo} criterios={consultorPerguntas.dominio_tecnico.criterios}
                                 value={d.dominio_tecnico} onChange={v => updateConsultor(consultorIdx, "dominio_tecnico", v)} required />
 
                             <div className="space-y-2">
