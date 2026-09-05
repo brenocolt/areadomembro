@@ -1311,6 +1311,12 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             separada para quem está respondendo (a própria pessoa nunca aparece como aba de si mesma).
                         </p>
                         <PublicoParesEditor pares={quemRecebe} onChange={setQuemRecebe} defaultLabel="Ninguém" addLabel="Direcionar a um grupo" colaboradores={colaboradores} />
+                        {quemRecebe.length === 0 && hasColaboradorUnico && (
+                            <p className="text-[11px] text-violet-600 dark:text-violet-400 bg-violet-50/50 dark:bg-violet-500/10 border border-violet-100 dark:border-violet-500/20 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                                <Users className="h-3 w-3 shrink-0 mt-0.5" />
+                                <span>Este formulário tem uma pergunta &quot;Selecionar 1 Colaborador&quot; — sem grupo definido aqui, o alvo de cada resposta já é quem for escolhido nessa pergunta (não precisa configurar Quem Recebe pra isso).</span>
+                            </p>
+                        )}
                     </div>
 
                     {permiteSubaba && (
