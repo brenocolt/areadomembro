@@ -2,11 +2,10 @@
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
-import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Star, Loader2, Lock, Pencil } from "lucide-react"
+import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Loader2, Lock, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
 import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
@@ -73,16 +72,11 @@ export default function FormulariosPage() {
         setSectionHistoryPorAlvo(prev => ({ ...prev, [currentAlvoKey]: updater(prev[currentAlvoKey] || []) }))
     }
 
-    const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
     // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
     // (ex.: NPS Projetos).
     const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
-
-    const [npsCount, setNpsCount] = useState(0)
-    const [npsLastDate, setNpsLastDate] = useState<Date | null>(null)
-    const [npsAberto, setNpsAberto] = useState(true)
 
     const fetchData = async () => {
         await supabase
@@ -206,31 +200,6 @@ export default function FormulariosPage() {
                 ? (await respostasTotaisQuery('id, formulario_id, enviado_em')).data
                 : respostasTotaisComAlvo.data
             if (rtData) setRespostasTotais(rtData as unknown[])
-
-            const { data: configData } = await supabase
-                .from('configuracoes')
-                .select('valor')
-                .eq('chave', 'nps_projeto_ativo')
-                .single();
-            if (configData) {
-                setNpsAberto(configData.valor === true || configData.valor === 'true');
-            }
-
-            const { data: npsData, count } = await supabase
-                .from('nps_projeto_submissoes')
-                .select('created_at', { count: 'exact' })
-                .eq('avaliador_id', colaborador.id)
-                .gte('created_at', firstDayOfMonth)
-                .lte('created_at', lastDayOfMonth)
-                .order('created_at', { ascending: false })
-
-            if (npsData && npsData.length > 0) {
-                setNpsCount(count || npsData.length)
-                setNpsLastDate(new Date(npsData[0].created_at))
-            } else {
-                setNpsCount(0)
-                setNpsLastDate(null)
-            }
         }
     }
 
@@ -559,7 +528,6 @@ export default function FormulariosPage() {
 
     const pendentes = forms.filter(f => !hasResponded(f.id))
     const jaRespondidos = forms.filter(f => hasResponded(f.id))
-    const npsSubmitted = npsCount > 0
 
     if (activeFormId) {
         const form = forms.find(f => f.id === activeFormId)
@@ -718,56 +686,6 @@ export default function FormulariosPage() {
                 </div>
             </div>
 
-            <div className="space-y-3">
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Star className="h-5 w-5 text-violet-500" /> NPS Projeto
-                </h2>
-                <div
-                    onClick={() => { if(npsAberto) router.push('/nps-projeto') }}
-                    className={`bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm transition-all group ${
-                        npsAberto ? 'cursor-pointer hover:border-violet-300 dark:hover:border-violet-600' : 'opacity-70 cursor-not-allowed'
-                    }`}
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${!npsAberto ? 'bg-slate-50 dark:bg-slate-800' : npsSubmitted ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10'}`}>
-                                {!npsAberto
-                                    ? <Star className="h-5 w-5 text-slate-400" />
-                                    : npsSubmitted
-                                    ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                                    : <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                                }
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white">Avaliação NPS do Projeto</h3>
-                                <p className="text-sm text-slate-500 mt-0.5">Avaliação mensal de desempenho por projeto</p>
-                                {npsSubmitted && npsLastDate && (
-                                    <div className="flex items-center gap-3 mt-0.5">
-                                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                            ✓ Respondido {npsCount}x este mês
-                                        </p>
-                                        <span className="text-xs text-slate-400">
-                                            Última: {npsLastDate.toLocaleDateString('pt-BR')} às {npsLastDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                )}
-                                {!npsAberto && (
-                                    <p className="text-xs text-rose-500 font-medium mt-1">Este formulário está fechado para respostas no momento.</p>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {npsAberto && npsSubmitted && (
-                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none">
-                                    Responder novamente
-                                </Badge>
-                            )}
-                            {npsAberto && <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {pendentes.length > 0 && (
                 <div className="space-y-3">
                     <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -889,7 +807,7 @@ export default function FormulariosPage() {
                 </div>
             )}
 
-            {forms.length === 0 && !npsSubmitted && (
+            {forms.length === 0 && (
                 <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-12 border border-slate-100 dark:border-slate-800/50 shadow-sm text-center">
                     <FileQuestion className="h-12 w-12 mx-auto mb-3 text-slate-300" />
                     <p className="text-lg font-bold text-slate-400">Nenhum formulário adicional disponível</p>

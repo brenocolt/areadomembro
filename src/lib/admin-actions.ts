@@ -74,7 +74,7 @@ export async function approveAccountRequest(id: string) {
 
     // Default member pages that every new account should have access to
     const defaultMemberPages = [
-        '/', '/profile', '/performance', '/nps-gerente', '/nps-projeto',
+        '/', '/profile', '/performance', '/nps-gerente',
         '/wallet', '/formularios', '/milhas', '/punishments'
     ];
 

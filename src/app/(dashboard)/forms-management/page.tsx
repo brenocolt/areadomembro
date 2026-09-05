@@ -1,16 +1,14 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, FlaskConical, FolderKanban } from "lucide-react"
+import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, FlaskConical, FolderKanban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { SimularFormularioDialog } from "./components/simular-formulario-dialog"
 import { PastaInsights } from "./components/pasta-insights"
-import { NpsProjetoPerguntasDialog } from "./components/nps-projeto-perguntas-dialog"
 import { toast } from "sonner"
 import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
 import { isSchemaDesatualizado } from "@/lib/db-compat"
@@ -22,14 +20,6 @@ function isoToLocalDatetimeInput(iso: string | null | undefined): string {
     if (isNaN(d.getTime())) return ''
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-// Convert "YYYY-MM-DDTHH:mm" (interpreted as local) -> ISO UTC string.
-function localDatetimeInputToIso(local: string | null | undefined): string | null {
-    if (!local) return null
-    const d = new Date(local)
-    if (isNaN(d.getTime())) return null
-    return d.toISOString()
 }
 
 // Contagem exata de uma relação por formulário, isolada em uma query só
@@ -203,58 +193,13 @@ export default function FormsManagementPage() {
     // Pasta = Tipo do Formulário (ver "Tipo do Formulário" em CreateFormDialog).
     // Aberta por padrão; guarda só quem foi explicitamente fechado.
     const [expandedPastas, setExpandedPastas] = useState<Record<string, boolean>>({})
-    const [npsAberto, setNpsAberto] = useState(true)
-    const [npsPrazo, setNpsPrazo] = useState<string>("")
 
     // Copy / Edit dialog state
     const [dialogData, setDialogData] = useState<FormInitialData | null>(null)
     const [dialogEditMode, setDialogEditMode] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [simularForm, setSimularForm] = useState<{ id: string, titulo: string } | null>(null)
-    const [npsPerguntasOpen, setNpsPerguntasOpen] = useState(false)
 
-
-
-    // Sinaliza colaboradores que não submeteram NPS Projeto no período corrente.
-    // Idempotente: dedup pela descrição (que inclui mês/ano).
-    const prePontuarNaoRespondentesNps = async () => {
-        const now = new Date()
-        const mes = now.getMonth() + 1
-        const ano = now.getFullYear()
-        const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-        const descricao = `Não envio do NPS Projeto: ${MESES[mes - 1]}/${ano}`
-
-        const { data: allColabs } = await supabase.from('colaboradores').select('id')
-        const { data: subs } = await supabase
-            .from('nps_projeto_submissoes')
-            .select('avaliador_id')
-            .eq('mes', mes)
-            .eq('ano', ano)
-
-        const submeteu = new Set((subs || []).map((s: any) => s.avaliador_id))
-        const naoSubmeteu = (allColabs || []).filter((c: any) => !submeteu.has(c.id))
-        if (naoSubmeteu.length === 0) return 0
-
-        const { data: existing } = await supabase
-            .from('pontos_pre_pontuacao')
-            .select('colaborador_id')
-            .eq('descricao', descricao)
-            .eq('status', 'PENDENTE')
-        const jaCadastrados = new Set((existing || []).map((e: any) => e.colaborador_id))
-
-        const rows = naoSubmeteu
-            .filter((c: any) => !jaCadastrados.has(c.id))
-            .map((c: any) => ({
-                colaborador_id: c.id,
-                formulario_id: null,
-                descricao,
-                origem: 'auto',
-                status: 'PENDENTE',
-            }))
-        if (rows.length === 0) return 0
-        await supabase.from('pontos_pre_pontuacao').insert(rows)
-        return rows.length
-    }
 
     // Sinaliza colaboradores que não responderam um formulário encerrado no mês atual.
     // Idempotente: pula quem já está como PENDENTE com a mesma descrição (inclui Mês/Ano).
@@ -397,28 +342,6 @@ export default function FormsManagementPage() {
         if (!cPerguntas || !cRespostas || !cRecebe) {
             toast.warning('Os formulários carregaram, mas algumas contagens não — provavelmente falta aplicar uma migração do banco.')
         }
-
-        const { data: configRows } = await supabase
-            .from('configuracoes')
-            .select('chave, valor')
-            .in('chave', ['nps_projeto_ativo', 'nps_projeto_prazo'])
-
-        const configMap: Record<string, any> = {}
-        for (const r of configRows || []) configMap[r.chave] = r.valor
-
-        const aberto = configMap.nps_projeto_ativo === true || configMap.nps_projeto_ativo === 'true'
-        const prazoIso = typeof configMap.nps_projeto_prazo === 'string' ? configMap.nps_projeto_prazo : ''
-
-        // Auto-close NPS Projeto quando o prazo passou
-        if (aberto && prazoIso && new Date(prazoIso) < new Date()) {
-            await supabase.from('configuracoes').upsert({ chave: 'nps_projeto_ativo', valor: false })
-            await prePontuarNaoRespondentesNps()
-            setNpsAberto(false)
-        } else {
-            setNpsAberto(aberto)
-        }
-
-        setNpsPrazo(isoToLocalDatetimeInput(prazoIso))
     }
 
     useEffect(() => { fetchForms() }, [])
@@ -509,27 +432,6 @@ export default function FormsManagementPage() {
             toast.success('Formulário ativado!')
         }
 
-        fetchForms()
-    }
-
-    const handleToggleNps = async () => {
-        const novoValor = !npsAberto
-        await supabase.from('configuracoes').upsert({ chave: 'nps_projeto_ativo', valor: novoValor })
-        setNpsAberto(novoValor)
-        if (!novoValor) {
-            const count = await prePontuarNaoRespondentesNps()
-            if (count > 0) {
-                toast.success(`NPS Projetos fechado. ${count} colaborador${count !== 1 ? 'es' : ''} sinalizado${count !== 1 ? 's' : ''} como pré pontuado${count !== 1 ? 's' : ''}.`)
-                return
-            }
-        }
-        toast.success(`NPS Projetos ${novoValor ? 'Aberto' : 'Fechado'} para respostas.`)
-    }
-
-    const handleSaveNpsPrazo = async () => {
-        const iso = localDatetimeInputToIso(npsPrazo)
-        await supabase.from('configuracoes').upsert({ chave: 'nps_projeto_prazo', valor: iso })
-        toast.success(iso ? 'Prazo do NPS Projeto agendado.' : 'Agendamento removido.')
         fetchForms()
     }
 
@@ -627,8 +529,6 @@ export default function FormsManagementPage() {
                 onOpenChange={(o) => { if (!o) setSimularForm(null) }}
             />
 
-            <NpsProjetoPerguntasDialog open={npsPerguntasOpen} onOpenChange={setNpsPerguntasOpen} />
-
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm">
@@ -670,67 +570,9 @@ export default function FormsManagementPage() {
                 </div>
             </div>
 
-            {/* NPS Global Config Card */}
-            <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50 flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                             Controle do NPS Projetos
-                        </h2>
-                        <p className="text-sm text-slate-500 mt-1">Habilite ou desabilite os envios do formulário de NPS Projetos.</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setNpsPerguntasOpen(true)}
-                            className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
-                        >
-                            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                            Editar Perguntas
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.location.href = '/nps-projeto'}
-                            className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
-                            title="Como admin, você visualiza e preenche mesmo com o formulário fechado."
-                        >
-                            <Eye className="h-3.5 w-3.5 mr-1.5" />
-                            Visualizar NPS Projetos
-                        </Button>
-                        <span className={`text-sm font-bold ${npsAberto ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {npsAberto ? 'Aberto para respostas' : 'Fechado'}
-                        </span>
-                        <Switch checked={npsAberto} onCheckedChange={handleToggleNps} />
-                    </div>
-                </div>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/60">
-                    <div>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Agendar Fechamento</h3>
-                        <p className="text-xs text-slate-500 mt-1 max-w-md">No prazo, o NPS Projeto é fechado automaticamente e quem não submeteu nesse mês vai para "Usuários Pré Pontuados" como "Não envio do NPS Projeto: Mês/Ano".</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input
-                            type="datetime-local"
-                            value={npsPrazo}
-                            onChange={(e) => setNpsPrazo(e.target.value)}
-                            className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-9 w-auto text-xs"
-                        />
-                        <Button
-                            onClick={handleSaveNpsPrazo}
-                            size="sm"
-                            className="rounded-xl h-9 px-4 text-xs font-bold bg-violet-600 hover:bg-violet-700 text-white"
-                        >
-                            Salvar
-                        </Button>
-                    </div>
-                </div>
-            </div>
-
             {/* Pastas de Formulários — cada Tipo do Formulário vira sua própria
-                sessão (mesma ideia de "Controle do NPS Projetos" acima), com
-                as médias recebidas pelos membros daquele tipo antes da lista. */}
+                sessão, com as médias recebidas pelos membros daquele tipo
+                antes da lista. */}
             {filtered.length === 0 ? (
                 <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
                     <div className="text-center py-12 text-slate-400">
