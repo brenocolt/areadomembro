@@ -1,13 +1,14 @@
 "use client"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { NAO_AVALIAR } from "@/lib/forms-runtime"
+import { colaboradorNoPublico } from "@/lib/forms-publico"
+import { EscalaPicker } from "@/components/forms/escala-picker"
 
 interface PerguntaInputProps {
     pergunta: any
     valor: any
     onChange: (valor: any) => void
-    colaboradores: { id: string, nome: string }[]
+    colaboradores: { id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]
     selfId?: string | null
     numero: number
 }
@@ -26,7 +27,15 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, sel
         )
     }
 
-    const outros = colaboradores.filter(c => c.id !== selfId).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    // Filtro por cargo/núcleo desta pergunta (colaborador_unico/multiplo) —
+    // ver "Restringir colaboradores por cargo/núcleo" em CreateFormDialog.
+    // Lista vazia = sem filtro, mostra todo mundo (mesma convenção da aba
+    // "Público").
+    const filtroPares = p.opcoes?.filtroPares
+    const outros = colaboradores
+        .filter(c => c.id !== selfId)
+        .filter(c => !Array.isArray(filtroPares) || filtroPares.length === 0 || colaboradorNoPublico(c, filtroPares))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 
     return (
         <div className="space-y-2">
@@ -84,43 +93,14 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, sel
             )}
 
             {p.tipo === 'escala' && (
-                <div className="space-y-2">
-                    <div className="flex justify-between text-[10px] text-slate-400 px-1">
-                        <span>{p.opcoes?.labelMin || '1'}</span>
-                        <span>{p.opcoes?.labelMax || '5'}</span>
-                    </div>
-                    <div className="flex gap-2">
-                        {[1, 2, 3, 4, 5].map(v => (
-                            <button
-                                key={v}
-                                type="button"
-                                onClick={() => onChange(v.toString())}
-                                className={`flex-1 h-11 rounded-xl font-bold text-sm transition-all ${
-                                    valor === v.toString()
-                                        ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20'
-                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-violet-500/10'
-                                }`}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                    </div>
-                    {/* "Não avaliar": para quem não tem insumo para julgar. A
-                        resposta não é gravada, então não entra em nenhuma média. */}
-                    {p.permite_nao_avaliar && (
-                        <button
-                            type="button"
-                            onClick={() => onChange(valor === NAO_AVALIAR ? '' : NAO_AVALIAR)}
-                            className={`w-full h-9 rounded-xl text-xs font-bold transition-all border border-dashed ${
-                                valor === NAO_AVALIAR
-                                    ? 'bg-slate-700 text-white border-slate-700 dark:bg-slate-600 dark:border-slate-600'
-                                    : 'bg-transparent text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'
-                            }`}
-                        >
-                            Não avaliar {valor === NAO_AVALIAR ? '(selecionado — não entra na média)' : '— não tenho insumo para avaliar'}
-                        </button>
-                    )}
-                </div>
+                <EscalaPicker
+                    value={valor || ''}
+                    onChange={onChange}
+                    criterios={p.opcoes?.criterios}
+                    labelMin={p.opcoes?.labelMin}
+                    labelMax={p.opcoes?.labelMax}
+                    permiteNaoAvaliar={p.permite_nao_avaliar}
+                />
             )}
 
             {p.tipo === 'colaborador_unico' && (

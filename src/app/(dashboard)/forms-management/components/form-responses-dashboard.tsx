@@ -428,7 +428,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 const pct = values.length > 0 ? (count / values.length) * 100 : 0
                                                 return (
                                                     <div key={v} className={`group relative flex items-center gap-3 ${count > 0 ? 'cursor-default' : ''}`}>
-                                                        <span className="text-xs font-bold w-4 text-slate-500">{v}</span>
+                                                        <span className="text-xs font-bold w-4 text-slate-500" title={[p.opcoes?.criterios?.[v]?.titulo, p.opcoes?.criterios?.[v]?.descricao].filter(Boolean).join(' — ') || undefined}>{v}</span>
                                                         <div className="flex-1 h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                             <div className={`h-full ${v >= 4 ? 'bg-emerald-500' : v === 3 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${pct}%` }}></div>
                                                         </div>

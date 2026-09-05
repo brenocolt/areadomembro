@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
+import { getNpsInternoFormId } from '@/lib/pipj-nps-interno'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -67,18 +68,15 @@ async function gatherNps(supabase: ReturnType<typeof createServerSupabaseClient>
         }
     } catch { /* fonte opcional */ }
 
-    // ── NPS Interno (formulário "Piloto de Elite") — o usuário é o AVALIADO ──
+    // ── NPS Interno (formulário marcado com nps_interno) — o usuário é o AVALIADO ──
     const internoMap = new Map<string, MonthBucket>()
     let internoTotal = 0
     try {
-        const { data: forms } = await supabase
-            .from('formularios').select('id, titulo')
-            .or('titulo.ilike.%piloto%,titulo.ilike.%elite%')
-        const form = (forms || [])[0]
-        if (form) {
+        const formId = await getNpsInternoFormId(supabase)
+        if (formId) {
             const { data: perguntas } = await supabase
                 .from('formulario_perguntas').select('id, tipo, titulo, ordem')
-                .eq('formulario_id', form.id).order('ordem', { ascending: true })
+                .eq('formulario_id', formId).order('ordem', { ascending: true })
             const avaliadoPergunta = (perguntas || []).find(p => p.tipo === 'colaborador_unico')
             const escalaPerguntas = (perguntas || []).filter(p => p.tipo === 'escala')
             const textoPerguntas = (perguntas || []).filter(p => ['texto', 'texto_longo', 'paragrafo'].includes(p.tipo))
@@ -86,7 +84,7 @@ async function gatherNps(supabase: ReturnType<typeof createServerSupabaseClient>
                 const { data: respostas } = await supabase
                     .from('formulario_respostas')
                     .select('id, enviado_em, formulario_respostas_itens(pergunta_id, valor, valores)')
-                    .eq('formulario_id', form.id)
+                    .eq('formulario_id', formId)
                 for (const r of respostas || []) {
                     const items = (r as any).formulario_respostas_itens || []
                     const avaliadoItem = items.find((it: any) => it.pergunta_id === avaliadoPergunta.id)
@@ -161,41 +159,6 @@ async function gatherTarefas(supabase: ReturnType<typeof createServerSupabaseCli
     }
 }
 
-// ──────────────────────────────────────────────────────────── PDI
-async function gatherPdi(supabase: ReturnType<typeof createServerSupabaseClient>, ownId: string) {
-    try {
-        const { data: planos } = await supabase
-            .from('pdi_planos').select('id, titulo, descricao, data_prazo, progresso, status')
-            .eq('colaborador_id', ownId)
-        if (!planos || planos.length === 0) return { total: 0, planos: [] }
-        const ids = planos.map(p => p.id)
-        const { data: tarefas } = await supabase
-            .from('pdi_tarefas').select('plano_id, titulo, tipo, status, data_conclusao')
-            .in('plano_id', ids)
-        const porPlano = new Map<string, any[]>()
-        for (const t of tarefas || []) {
-            if (!porPlano.has(t.plano_id)) porPlano.set(t.plano_id, [])
-            porPlano.get(t.plano_id)!.push(t)
-        }
-        return {
-            total: planos.length,
-            planos: planos.map(p => {
-                const ts = porPlano.get(p.id) || []
-                const pendentes = ts.filter(t => String(t.status).toUpperCase() !== 'CONCLUIDO')
-                return {
-                    titulo: p.titulo,
-                    prazo: p.data_prazo || null,
-                    progresso: p.progresso ?? null,
-                    status: p.status || null,
-                    tarefas_pendentes: pendentes.map(t => ({ titulo: t.titulo, tipo: t.tipo, status: t.status })),
-                }
-            }),
-        }
-    } catch {
-        return { total: 0, planos: [] }
-    }
-}
-
 // ──────────────────────────────────────────────────────────── FORMULÁRIOS pendentes
 async function gatherFormularios(supabase: ReturnType<typeof createServerSupabaseClient>, ownId: string, now: Date) {
     try {
@@ -240,9 +203,8 @@ export async function POST(request: Request) {
 
         const { data: eu } = await supabase.from('colaboradores').select('nome, cargo_atual, nucleo_atual').eq('id', ownId).single()
 
-        const [tarefas, pdi, formularios, nps] = await Promise.all([
+        const [tarefas, formularios, nps] = await Promise.all([
             gatherTarefas(supabase, ownId, hojeISO),
-            gatherPdi(supabase, ownId),
             gatherFormularios(supabase, ownId, now),
             gatherNps(supabase, ownId),
         ])
@@ -250,7 +212,6 @@ export async function POST(request: Request) {
         const dados = {
             hoje: `${diaSemana}, ${hojeISO}`,
             tarefas,
-            pdi,
             formularios,
             feedbacks: nps,
         }
@@ -261,10 +222,10 @@ export async function POST(request: Request) {
 
 DATA DE HOJE: ${diaSemana}, ${hojeISO}.
 
-O QUE VOCÊ CONHECE (apenas desta pessoa): tarefas do "Minhas Prioridades", planos de PDI e seus prazos, formulários pendentes, e os feedbacks de NPS recebidos.
+O QUE VOCÊ CONHECE (apenas desta pessoa): tarefas do "Minhas Prioridades", formulários pendentes, e os feedbacks de NPS recebidos.
 
 COMO RESPONDER:
-- "O que devo fazer hoje?" → olhe as tarefas vencidas e as com prazo de hoje, tarefas de PDI ainda pendentes cujo prazo se aproxima, e formulários ainda não respondidos. Monte um roteiro curto e priorizado para o dia.
+- "O que devo fazer hoje?" → olhe as tarefas vencidas e as com prazo de hoje, e formulários ainda não respondidos. Monte um roteiro curto e priorizado para o dia.
 - "O que devo priorizar?" → combine urgência/importância (matriz), prioridade e a estimativa de tempo de cada tarefa. Sugira começar pelas urgentes+importantes e encaixar tarefas curtas nos intervalos.
 - Seja conciso. Use listas curtas e markdown leve (## títulos, **negrito**, listas). Nada de enrolação.
 - Nunca invente dados. Se algo não existe, diga com naturalidade.

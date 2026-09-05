@@ -4,6 +4,7 @@ import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
 import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
+import { getNpsInternoFormId } from '@/lib/pipj-nps-interno'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -91,20 +92,16 @@ async function gatherEvaluations(targetId: string) {
         }
     } catch (e) { /* fonte opcional */ }
 
-    // ── NPS Interno (formulário "Piloto de Elite") ──────────────────────────
+    // ── NPS Interno (formulário marcado com nps_interno) ────────────────────
     const internoMap = new Map<string, MonthBucket>()
     let internoTotal = 0
     try {
-        const { data: forms } = await supabase
-            .from('formularios')
-            .select('id, titulo')
-            .or('titulo.ilike.%piloto%,titulo.ilike.%elite%')
-        const form = (forms || [])[0]
-        if (form) {
+        const formId = await getNpsInternoFormId(supabase)
+        if (formId) {
             const { data: perguntas } = await supabase
                 .from('formulario_perguntas')
                 .select('id, tipo, titulo, ordem')
-                .eq('formulario_id', form.id)
+                .eq('formulario_id', formId)
                 .order('ordem', { ascending: true })
             const avaliadoPergunta = (perguntas || []).find(p => p.tipo === 'colaborador_unico')
             const escalaPerguntas = (perguntas || []).filter(p => p.tipo === 'escala')
@@ -114,7 +111,7 @@ async function gatherEvaluations(targetId: string) {
                 const { data: respostas } = await supabase
                     .from('formulario_respostas')
                     .select('id, enviado_em, formulario_respostas_itens(pergunta_id, valor, valores)')
-                    .eq('formulario_id', form.id)
+                    .eq('formulario_id', formId)
                 for (const r of respostas || []) {
                     const items = (r as any).formulario_respostas_itens || []
                     const avaliadoItem = items.find((it: any) => it.pergunta_id === avaliadoPergunta.id)

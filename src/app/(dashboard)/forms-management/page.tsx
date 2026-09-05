@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, FlaskConical } from "lucide-react"
+import { FileQuestion, Search, PlusCircle, Copy, BarChart3, Clock, CheckCircle2, FileEdit, Trash2, Eye, Users, ChevronDown, ChevronUp, RefreshCw, Pencil, FlaskConical, FolderKanban } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch"
 import { CreateFormDialog, FormInitialData } from "./components/create-form-dialog"
 import { FormResponsesDashboard } from "./components/form-responses-dashboard"
 import { SimularFormularioDialog } from "./components/simular-formulario-dialog"
+import { PastaInsights } from "./components/pasta-insights"
+import { NpsProjetoPerguntasDialog } from "./components/nps-projeto-perguntas-dialog"
 import { toast } from "sonner"
 import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
 
@@ -50,6 +52,139 @@ async function contarRelacao(relacao: string): Promise<Map<string, number> | nul
     return contagens
 }
 
+// Uma linha de formulário na listagem — extraída para ser reaproveitada
+// dentro de cada "Pasta" (ver mais abaixo) sem duplicar o JSX inteiro.
+function FormRow({ form, expandedId, setExpandedId, handleToggleStatus, handleReenviar, setSimularForm, handleEdit, handleCopy, handleDelete }: {
+    form: any
+    expandedId: string | null
+    setExpandedId: (id: string | null) => void
+    handleToggleStatus: (form: any) => void
+    handleReenviar: (form: any) => void
+    setSimularForm: (v: { id: string, titulo: string } | null) => void
+    handleEdit: (form: any) => void
+    handleCopy: (form: any) => void
+    handleDelete: (id: string) => void
+}) {
+    return (
+        <div className="border border-slate-100 dark:border-slate-800/50 rounded-2xl overflow-hidden transition-all">
+            <div
+                className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
+                onClick={() => setExpandedId(expandedId === form.id ? null : form.id)}
+            >
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="p-2 bg-violet-50 dark:bg-violet-500/10 rounded-xl shrink-0">
+                        <FileQuestion className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-bold text-slate-900 dark:text-white truncate">{form.titulo}</h3>
+                            {statusBadge(form.status)}
+                            {form.pagina_destino && (
+                                <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
+                                    → {form.pagina_destino === 'performance' ? 'Performance' : 'NPS Gerente'}
+                                </Badge>
+                            )}
+                            {(form._cRecebe || 0) > 0 && (
+                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
+                                    Direcionado
+                                </Badge>
+                            )}
+                        </div>
+                        {form.descricao && (
+                            <p className="text-sm text-slate-500 line-clamp-2 mt-0.5 whitespace-normal break-words" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>
+                        )}
+                        <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400">
+                            <span className="flex items-center gap-1">
+                                <BarChart3 className="h-3 w-3" />
+                                {form._cPerguntas === null ? '—' : form._cPerguntas} perguntas
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {form._cRespostas === null ? '—' : form._cRespostas} respostas
+                            </span>
+                            {form.data_prazo && (
+                                <span className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    Prazo: {new Date(form.data_prazo).toLocaleDateString('pt-BR')}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(form) }}
+                        className="h-8 px-3 text-xs font-bold rounded-lg"
+                    >
+                        {form.status === 'ativo' ? 'Encerrar' : 'Ativar'}
+                    </Button>
+                    {(form.status === 'encerrado') && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleReenviar(form) }}
+                            className="h-8 px-3 text-xs font-bold rounded-lg text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10"
+                            title="Reenviar para responderem novamente"
+                        >
+                            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reenviar
+                        </Button>
+                    )}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); setSimularForm({ id: form.id, titulo: form.titulo }) }}
+                        className="h-8 w-8 text-slate-400 hover:text-violet-600"
+                        title="Simular resposta (nada é salvo)"
+                    >
+                        <FlaskConical className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); handleEdit(form) }}
+                        className="h-8 w-8 text-slate-400 hover:text-amber-600"
+                        title="Editar"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); handleCopy(form) }}
+                        className="h-8 w-8 text-slate-400 hover:text-violet-600"
+                        title="Copiar"
+                    >
+                        <Copy className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(form.id) }}
+                        className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                        title="Excluir"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                    {expandedId === form.id ? (
+                        <ChevronUp className="h-4 w-4 text-slate-400" />
+                    ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
+                </div>
+            </div>
+
+            {expandedId === form.id && (
+                <div className="border-t border-slate-100 dark:border-slate-800/50">
+                    <FormResponsesDashboard formularioId={form.id} />
+                </div>
+            )}
+        </div>
+    )
+}
+
 function statusBadge(status: string) {
     const map: Record<string, { label: string, class: string }> = {
         rascunho: { label: "Rascunho", class: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
@@ -64,6 +199,9 @@ export default function FormsManagementPage() {
     const [forms, setForms] = useState<any[]>([])
     const [search, setSearch] = useState("")
     const [expandedId, setExpandedId] = useState<string | null>(null)
+    // Pasta = Tipo do Formulário (ver "Tipo do Formulário" em CreateFormDialog).
+    // Aberta por padrão; guarda só quem foi explicitamente fechado.
+    const [expandedPastas, setExpandedPastas] = useState<Record<string, boolean>>({})
     const [npsAberto, setNpsAberto] = useState(true)
     const [npsPrazo, setNpsPrazo] = useState<string>("")
 
@@ -72,6 +210,7 @@ export default function FormsManagementPage() {
     const [dialogEditMode, setDialogEditMode] = useState(false)
     const [dialogOpen, setDialogOpen] = useState(false)
     const [simularForm, setSimularForm] = useState<{ id: string, titulo: string } | null>(null)
+    const [npsPerguntasOpen, setNpsPerguntasOpen] = useState(false)
 
 
 
@@ -311,12 +450,16 @@ export default function FormsManagementPage() {
             quemResponde: publico.quemResponde,
             quemRecebe: publico.quemRecebe,
             gerarSubaba: !!form.gerar_subaba,
+            subabaNome: form.subaba_nome || null,
+            npsInterno: !!form.nps_interno,
         }
     }
 
     const handleCopy = async (form: any) => {
         const data = await loadFormWithQuestions(form)
-        setDialogData(data)
+        // Uma cópia nunca nasce marcada como "o" NPS Interno — copiar não deve
+        // roubar silenciosamente essa marca do formulário original ao salvar.
+        setDialogData({ ...data, npsInterno: false })
         setDialogEditMode(false)
         setDialogOpen(true)
     }
@@ -405,6 +548,27 @@ export default function FormsManagementPage() {
         f.titulo.toLowerCase().includes(search.toLowerCase())
     )
 
+    // Agrupa a listagem em "Pastas de Formulários" — uma por Tipo do
+    // Formulário (mesmo campo usado no dropdown de CreateFormDialog).
+    // Formulário sem tipo definido cai numa pasta "Sem tipo" só para não
+    // sumir da lista. Ordenado alfabeticamente, exceto "Sem tipo" que sempre
+    // fica por último (é o balde de exceção, não um tipo de verdade).
+    const SEM_TIPO = 'Sem tipo'
+    const pastasMap = new Map<string, any[]>()
+    for (const f of filtered) {
+        const nome = (f.tipo_formulario || '').trim() || SEM_TIPO
+        const arr = pastasMap.get(nome) || []
+        arr.push(f)
+        pastasMap.set(nome, arr)
+    }
+    const pastas = Array.from(pastasMap.entries())
+        .map(([nome, forms]) => ({ nome, forms }))
+        .sort((a, b) => {
+            if (a.nome === SEM_TIPO) return 1
+            if (b.nome === SEM_TIPO) return -1
+            return a.nome.localeCompare(b.nome, 'pt-BR')
+        })
+
     return (
         <div className="flex flex-col gap-8 pb-8">
             {/* Header */}
@@ -454,6 +618,8 @@ export default function FormsManagementPage() {
                 open={!!simularForm}
                 onOpenChange={(o) => { if (!o) setSimularForm(null) }}
             />
+
+            <NpsProjetoPerguntasDialog open={npsPerguntasOpen} onOpenChange={setNpsPerguntasOpen} />
 
             {/* Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -509,11 +675,21 @@ export default function FormsManagementPage() {
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.location.href = '/nps-projeto'}
+                            onClick={() => setNpsPerguntasOpen(true)}
                             className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
                         >
                             <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                            Editar / Visualizar NPS Projetos
+                            Editar Perguntas
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.location.href = '/nps-projeto'}
+                            className="rounded-xl h-9 px-4 text-xs font-bold border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-50"
+                            title="Como admin, você visualiza e preenche mesmo com o formulário fechado."
+                        >
+                            <Eye className="h-3.5 w-3.5 mr-1.5" />
+                            Visualizar NPS Projetos
                         </Button>
                         <span className={`text-sm font-bold ${npsAberto ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {npsAberto ? 'Aberto para respostas' : 'Fechado'}
@@ -544,144 +720,63 @@ export default function FormsManagementPage() {
                 </div>
             </div>
 
-            {/* Forms List */}
-            <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Formulários</h2>
-                        <p className="text-sm text-slate-500">Clique em um formulário para ver as respostas.</p>
+            {/* Pastas de Formulários — cada Tipo do Formulário vira sua própria
+                sessão (mesma ideia de "Controle do NPS Projetos" acima), com
+                as médias recebidas pelos membros daquele tipo antes da lista. */}
+            {filtered.length === 0 ? (
+                <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
+                    <div className="text-center py-12 text-slate-400">
+                        <FileQuestion className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">Nenhum formulário encontrado</p>
+                        <p className="text-sm">Crie o primeiro formulário clicando no botão acima.</p>
                     </div>
                 </div>
-
-                <div className="space-y-3">
-                    {filtered.length === 0 && (
-                        <div className="text-center py-12 text-slate-400">
-                            <FileQuestion className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                            <p className="font-medium">Nenhum formulário encontrado</p>
-                            <p className="text-sm">Crie o primeiro formulário clicando no botão acima.</p>
-                        </div>
-                    )}
-
-                    {filtered.map(form => (
-                        <div key={form.id} className="border border-slate-100 dark:border-slate-800/50 rounded-2xl overflow-hidden transition-all">
+            ) : (
+                pastas.map(pasta => {
+                    const aberta = expandedPastas[pasta.nome] ?? true
+                    return (
+                        <div key={pasta.nome} className="bg-white dark:bg-[#0F172A] rounded-3xl p-6 shadow-sm border border-slate-100 dark:border-slate-800/50">
                             <div
-                                className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
-                                onClick={() => setExpandedId(expandedId === form.id ? null : form.id)}
+                                className="flex items-center justify-between mb-6 cursor-pointer select-none"
+                                onClick={() => setExpandedPastas(prev => ({ ...prev, [pasta.nome]: !aberta }))}
                             >
-                                <div className="flex items-center gap-4 flex-1 min-w-0">
-                                    <div className="p-2 bg-violet-50 dark:bg-violet-500/10 rounded-xl shrink-0">
-                                        <FileQuestion className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-violet-50 dark:bg-violet-500/10 p-2 rounded-xl border border-violet-100 dark:border-violet-500/20">
+                                        <FolderKanban className="h-5 w-5 text-violet-600 dark:text-violet-400" />
                                     </div>
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <h3 className="font-bold text-slate-900 dark:text-white truncate">{form.titulo}</h3>
-                                            {statusBadge(form.status)}
-                                            {form.pagina_destino && (
-                                                <Badge className="bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
-                                                    → {form.pagina_destino === 'performance' ? 'Performance' : 'NPS Gerente'}
-                                                </Badge>
-                                            )}
-                                            {(form._cRecebe || 0) > 0 && (
-                                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 font-bold text-[10px] uppercase tracking-wider border-none shrink-0">
-                                                    Direcionado
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        {form.descricao && (
-                                            <p className="text-sm text-slate-500 line-clamp-2 mt-0.5 whitespace-normal break-words" dangerouslySetInnerHTML={{ __html: form.descricao }}></p>
-                                        )}
-                                        <div className="flex items-center gap-4 mt-1.5 text-xs text-slate-400">
-                                            <span className="flex items-center gap-1">
-                                                <BarChart3 className="h-3 w-3" />
-                                                {form._cPerguntas === null ? '—' : form._cPerguntas} perguntas
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <Users className="h-3 w-3" />
-                                                {form._cRespostas === null ? '—' : form._cRespostas} respostas
-                                            </span>
-                                            {form.data_prazo && (
-                                                <span className="flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />
-                                                    Prazo: {new Date(form.data_prazo).toLocaleDateString('pt-BR')}
-                                                </span>
-                                            )}
-                                        </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{pasta.nome}</h2>
+                                        <p className="text-sm text-slate-500">{pasta.forms.length} formulário{pasta.forms.length !== 1 ? 's' : ''} — clique em um para ver as respostas.</p>
                                     </div>
                                 </div>
-
-                                <div className="flex items-center gap-2 shrink-0 ml-4">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(form) }}
-                                        className="h-8 px-3 text-xs font-bold rounded-lg"
-                                    >
-                                        {form.status === 'ativo' ? 'Encerrar' : 'Ativar'}
-                                    </Button>
-                                    {(form.status === 'encerrado') && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={(e) => { e.stopPropagation(); handleReenviar(form) }}
-                                            className="h-8 px-3 text-xs font-bold rounded-lg text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10"
-                                            title="Reenviar para responderem novamente"
-                                        >
-                                            <RefreshCw className="h-3.5 w-3.5 mr-1" /> Reenviar
-                                        </Button>
-                                    )}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => { e.stopPropagation(); setSimularForm({ id: form.id, titulo: form.titulo }) }}
-                                        className="h-8 w-8 text-slate-400 hover:text-violet-600"
-                                        title="Simular resposta (nada é salvo)"
-                                    >
-                                        <FlaskConical className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => { e.stopPropagation(); handleEdit(form) }}
-                                        className="h-8 w-8 text-slate-400 hover:text-amber-600"
-                                        title="Editar"
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => { e.stopPropagation(); handleCopy(form) }}
-                                        className="h-8 w-8 text-slate-400 hover:text-violet-600"
-                                        title="Copiar"
-                                    >
-                                        <Copy className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(form.id) }}
-                                        className="h-8 w-8 text-slate-400 hover:text-rose-600"
-                                        title="Excluir"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    {expandedId === form.id ? (
-                                        <ChevronUp className="h-4 w-4 text-slate-400" />
-                                    ) : (
-                                        <ChevronDown className="h-4 w-4 text-slate-400" />
-                                    )}
-                                </div>
+                                {aberta ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                             </div>
 
-                            {expandedId === form.id && (
-                                <div className="border-t border-slate-100 dark:border-slate-800/50">
-                                    <FormResponsesDashboard formularioId={form.id} />
-                                </div>
+                            {aberta && (
+                                <>
+                                    <PastaInsights formularioIds={pasta.forms.map(f => f.id)} />
+                                    <div className="space-y-3">
+                                        {pasta.forms.map(form => (
+                                            <FormRow
+                                                key={form.id}
+                                                form={form}
+                                                expandedId={expandedId}
+                                                setExpandedId={setExpandedId}
+                                                handleToggleStatus={handleToggleStatus}
+                                                handleReenviar={handleReenviar}
+                                                setSimularForm={setSimularForm}
+                                                handleEdit={handleEdit}
+                                                handleCopy={handleCopy}
+                                                handleDelete={handleDelete}
+                                            />
+                                        ))}
+                                    </div>
+                                </>
                             )}
                         </div>
-                    ))}
-                </div>
-            </div>
+                    )
+                })
+            )}
         </div>
     )
 }

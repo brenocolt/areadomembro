@@ -345,7 +345,7 @@ export function ImportNpsDialog() {
                     <Button
                         disabled={!preview || uploading}
                         onClick={processImport}
-                        className="bg-primary hover:bg-primary/90 text-white font-bold"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
                     >
                         {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirmar Importação

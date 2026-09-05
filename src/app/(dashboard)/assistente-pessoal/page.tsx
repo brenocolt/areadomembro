@@ -98,7 +98,7 @@ export default function AssistentePessoalPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-display font-bold text-slate-900 dark:text-white">Assistente Pessoal</h1>
-                        <p className="text-sm text-slate-500">Seu agente de rotina: prioridades, PDI, formulários e feedbacks — só seus.</p>
+                        <p className="text-sm text-slate-500">Seu agente de rotina: prioridades, formulários e feedbacks — só seus.</p>
                     </div>
                 </div>
                 {firstName && (
@@ -170,7 +170,7 @@ export default function AssistentePessoalPage() {
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send() } }}
-                            placeholder="Pergunte sobre sua rotina, prioridades, PDI ou feedbacks…"
+                            placeholder="Pergunte sobre sua rotina, prioridades ou feedbacks…"
                             rows={1}
                             disabled={loading}
                             className="flex-1 resize-none bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-500/30 max-h-32"

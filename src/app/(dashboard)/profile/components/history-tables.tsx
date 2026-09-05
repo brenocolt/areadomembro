@@ -261,7 +261,7 @@ export function HistoryTables() {
                     </div>
                     <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setCargoOpen(false)} className="dark:border-white/10 dark:text-slate-300">Cancelar</Button>
-                        <Button onClick={saveCargo} disabled={savingCargo} className="bg-primary hover:bg-primary/90 text-white">
+                        <Button onClick={saveCargo} disabled={savingCargo} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                             {savingCargo ? 'Salvando...' : 'Salvar Cargo'}
                         </Button>
                     </div>
@@ -296,7 +296,7 @@ export function HistoryTables() {
                     </div>
                     <div className="flex justify-end gap-2">
                         <Button variant="outline" onClick={() => setProjetoOpen(false)} className="dark:border-white/10 dark:text-slate-300">Cancelar</Button>
-                        <Button onClick={saveProjeto} disabled={savingProjeto} className="bg-primary hover:bg-primary/90 text-white">
+                        <Button onClick={saveProjeto} disabled={savingProjeto} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                             {savingProjeto ? 'Salvando...' : 'Salvar Projeto'}
                         </Button>
                     </div>

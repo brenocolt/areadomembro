@@ -132,7 +132,7 @@ export function AddPointsDialog() {
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/25">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/25">
                     <Plus className="mr-2 h-4 w-4" />
                     Adicionar Pontuação
                 </Button>
@@ -267,7 +267,7 @@ export function AddPointsDialog() {
                         <Button
                             type="submit"
                             disabled={loading || !selectedColaboradorId || !selectedMotivoId}
-                            className="bg-primary hover:bg-primary/90 text-white"
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
                             {loading ? "Adicionando..." : "Confirmar Pontuação"}
                         </Button>

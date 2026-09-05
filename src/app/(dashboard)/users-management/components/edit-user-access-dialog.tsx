@@ -14,21 +14,20 @@ import { useSession } from "next-auth/react"
 import { CARGOS } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 
+// "Perfil" não entra aqui de propósito: /profile agora é sempre acessível a
+// todo mundo (ver RouteGuard), não depende mais de páginas permitidas.
 const ALL_PAGES = [
     { label: "Início", path: "/" },
     { label: "Minhas Atividades", path: "/minhas-prioridades" },
-    { label: "Perfil", path: "/profile" },
     { label: "Performance", path: "/performance" },
     { label: "NPS Gerente", path: "/nps-gerente" },
     { label: "Agente de Feedback", path: "/feedback-agente" },
     { label: "Assistente Pessoal", path: "/assistente-pessoal" },
     { label: "NPS Projeto", path: "/nps-projeto" },
     { label: "Carteira PIPJ", path: "/wallet" },
-    { label: "Meus PDIs", path: "/pdis" },
     { label: "Formulários", path: "/formularios" },
     { label: "Minhas Milhas", path: "/milhas" },
     { label: "Punições", path: "/punishments" },
-    { label: "Gestão de PDIs", path: "/pdis-management" },
     { label: "Gestão de Formulários", path: "/forms-management" },
     { label: "Gestão de Pontos", path: "/points-management" },
     { label: "Pontuar Membros", path: "/pontuar-membros" },
@@ -194,8 +193,8 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
         }
     }
 
-    const memberPages = ALL_PAGES.filter(p => !['/pdis-management', '/forms-management', '/points-management', '/miles-management', '/pipj-management', '/users-management', '/absences-management'].includes(p.path))
-    const managementPages = ALL_PAGES.filter(p => ['/pdis-management', '/forms-management', '/points-management', '/miles-management', '/pipj-management', '/users-management', '/absences-management'].includes(p.path))
+    const memberPages = ALL_PAGES.filter(p => !['/forms-management', '/points-management', '/miles-management', '/pipj-management', '/users-management', '/absences-management'].includes(p.path))
+    const managementPages = ALL_PAGES.filter(p => ['/forms-management', '/points-management', '/miles-management', '/pipj-management', '/users-management', '/absences-management'].includes(p.path))
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -341,7 +340,7 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                     <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:border-white/10 dark:text-slate-300">
                         Cancelar
                     </Button>
-                    <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-white">
+                    <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                         {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : 'Salvar Alterações'}
                     </Button>
                 </DialogFooter>
