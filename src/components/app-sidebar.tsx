@@ -152,7 +152,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarFooter>
                 <div className="p-1">
                     <div className="flex items-center gap-3 p-2 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50 hover:bg-sidebar-accent transition-colors group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
-                        <Link href="/profile" title="Ver perfil" className="flex items-center gap-3 flex-1 min-w-0">
+                        <Link href="/profile" title="Ver perfil" className="flex items-center gap-3 flex-1 min-w-0 group-data-[collapsible=icon]:flex-none group-data-[collapsible=icon]:justify-center">
                             <Avatar className="h-9 w-9 rounded-lg border border-sidebar-border group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
                                 <AvatarImage src={user.foto} />
                                 <AvatarFallback className="bg-primary/10 text-primary font-bold">{user.initials}</AvatarFallback>

@@ -47,7 +47,7 @@ export function ProfileCard() {
     // Foto de perfil: upload direto ao escolher o arquivo (sem precisar abrir
     // o diálogo "Editar Perfil") — mesmo padrão de upload usado no banner de
     // formulários (bucket público + getPublicUrl), ver
-    // supabase/migrations/20260905b_profile_avatars_bucket.sql.
+    // supabase/migrations/20260906_profile_avatars_bucket.sql.
     const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
