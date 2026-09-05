@@ -31,6 +31,7 @@ export function PastaInsights({ formularioIds }: Props) {
         let cancelado = false
         async function carregar() {
             setLoading(true)
+            if (formularioIds.length === 0) { setRanking([]); setLoading(false); return }
             const [{ data: perguntas }, { data: respostas }, { data: colaboradores }] = await Promise.all([
                 supabase.from('formulario_perguntas').select('id, formulario_id, tipo').in('formulario_id', formularioIds),
                 supabase.from('formulario_respostas').select('id, formulario_id, formulario_respostas_itens(pergunta_id, valor)').in('formulario_id', formularioIds),
@@ -85,8 +86,7 @@ export function PastaInsights({ formularioIds }: Props) {
             setRanking(result)
             setLoading(false)
         }
-        if (formularioIds.length > 0) carregar()
-        else { setRanking([]); setLoading(false) }
+        carregar()
         return () => { cancelado = true }
     }, [formularioIds.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
 

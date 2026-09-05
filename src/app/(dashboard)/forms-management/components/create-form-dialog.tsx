@@ -912,13 +912,13 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 },
             )
             salvouSemExtras = salvouSemExtras || updateDegradado
-            await garantirNpsInternoUnico(initialData.id!)
 
             if (updateError) {
                 toast.error("Erro ao atualizar formulário: " + mensagemErroGravacao(updateError))
                 setLoading(false)
                 return
             }
+            await garantirNpsInternoUnico(initialData.id!)
 
             const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
 
