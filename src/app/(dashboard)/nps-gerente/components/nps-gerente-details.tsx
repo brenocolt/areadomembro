@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
+import { getAvaliacoesNpsGenericoSinteticas } from "@/lib/nps-projetos-generico"
 import { useState, useEffect } from "react"
 
 export function NPSGerenteDetails() {
@@ -17,15 +18,22 @@ export function NPSGerenteDetails() {
             return
         }
         async function fetch() {
-            const { data: nps } = await supabase
-                .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, nps_geral, tipo_avaliacao')
-                .eq('colaborador_id', colaboradorId)
-                .eq('tipo_avaliacao', 'gerente')
-                .order('ano', { ascending: false })
-                .order('mes', { ascending: false })
+            // Soma o avaliacoes_nps de sempre com as respostas de
+            // formulários genéricos marcados como fonte do NPS Projetos
+            // (mesmo formato de linha — ver src/lib/nps-projetos-generico.ts).
+            const [{ data: npsFixo }, npsGenerico] = await Promise.all([
+                supabase
+                    .from('avaliacoes_nps')
+                    .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, nps_geral, tipo_avaliacao')
+                    .eq('colaborador_id', colaboradorId)
+                    .eq('tipo_avaliacao', 'gerente')
+                    .order('ano', { ascending: false })
+                    .order('mes', { ascending: false }),
+                getAvaliacoesNpsGenericoSinteticas(supabase),
+            ])
+            const nps = [...(npsFixo || []), ...npsGenerico.filter(r => r.colaborador_id === colaboradorId && r.tipo_avaliacao === 'gerente')]
 
-            if (!nps) {
+            if (nps.length === 0) {
                 setData([])
                 return
             }

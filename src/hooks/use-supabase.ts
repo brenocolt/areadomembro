@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { supabase } from '@/lib/supabase'
+import { getAvaliacoesNpsGenericoSinteticas } from '@/lib/nps-projetos-generico'
 
 export function useColaborador() {
     const { data: session, status } = useSession()
@@ -69,6 +70,50 @@ export function useSupabaseQuery<T>(
         }
         fetch()
     }, [tableName, options?.column, options?.value])
+
+    return { data, loading }
+}
+
+// Igual a useSupabaseQuery, mas específico pra `avaliacoes_nps` (NPS
+// Projetos): soma às linhas de sempre as respostas de formulários genéricos
+// marcados como fonte do NPS Projetos, sintetizadas no mesmo formato de
+// linha (ver src/lib/nps-projetos-generico.ts) — quem já lia essa tabela só
+// troca `useSupabaseQuery('avaliacoes_nps', {...})` por este hook; toda a
+// agregação client-side que já existia continua igual.
+export function useAvaliacoesNpsCombinado<T>(
+    colaboradorId: string | undefined,
+    options?: {
+        select?: string
+        orderBy?: string
+        ascending?: boolean
+        limit?: number
+    }
+) {
+    const [data, setData] = useState<T[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        if (!colaboradorId) { setData([]); setLoading(false); return }
+        let cancelado = false
+
+        async function fetch() {
+            setLoading(true)
+            let query = supabase.from('avaliacoes_nps').select(options?.select || '*').eq('colaborador_id', colaboradorId!)
+            if (options?.orderBy) query = query.order(options.orderBy, { ascending: options?.ascending ?? false })
+            if (options?.limit) query = query.limit(options.limit)
+
+            const [{ data: fixo }, sintetico] = await Promise.all([
+                query,
+                getAvaliacoesNpsGenericoSinteticas(supabase),
+            ])
+            if (cancelado) return
+            const doColaborador = sintetico.filter(r => r.colaborador_id === colaboradorId)
+            setData([...(fixo || []), ...doColaborador] as unknown as T[])
+            setLoading(false)
+        }
+        fetch()
+        return () => { cancelado = true }
+    }, [colaboradorId, options?.select, options?.orderBy, options?.ascending, options?.limit])
 
     return { data, loading }
 }

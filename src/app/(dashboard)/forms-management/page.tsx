@@ -457,15 +457,17 @@ export default function FormsManagementPage() {
             gerarSubaba: !!form.gerar_subaba,
             subabaNome: form.subaba_nome || null,
             npsInterno: !!form.nps_interno,
+            npsProjetosGenerico: !!form.nps_projetos_generico,
             modoResposta: form.modo_resposta || 'multipla',
         }
     }
 
     const handleCopy = async (form: any) => {
         const data = await loadFormWithQuestions(form)
-        // Uma cópia nunca nasce marcada como "o" NPS Interno — copiar não deve
-        // roubar silenciosamente essa marca do formulário original ao salvar.
-        setDialogData({ ...data, npsInterno: false })
+        // Uma cópia nunca nasce marcada como fonte do NPS Interno/Projetos —
+        // copiar não deve inscrever silenciosamente uma segunda fonte ao
+        // salvar, mesmo sem exclusividade entre formulários.
+        setDialogData({ ...data, npsInterno: false, npsProjetosGenerico: false })
         setDialogEditMode(false)
         setDialogOpen(true)
     }

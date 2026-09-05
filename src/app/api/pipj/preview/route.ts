@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
 import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from '@/lib/pipj-cargo-rules'
 import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
+import { getAvaliacoesNpsGenericoSinteticas } from '@/lib/nps-projetos-generico'
 
 // Business Rules Constants — indexadas pela chave resolvida por
 // resolvePipjCargoKey (cargo simplificado + núcleo), não mais diretamente
@@ -147,21 +148,24 @@ export async function GET(req: NextRequest) {
 
     // Fetch NPS evaluations do mês de referência selecionado (não o mais
     // recente disponível) e calcula a média por colaborador.
+    // Soma o avaliacoes_nps de sempre com as respostas de formulários
+    // genéricos marcados como fonte do NPS Projetos (mesmo formato de
+    // linha — ver src/lib/nps-projetos-generico.ts) antes de agrupar.
     const { data: avaliacoesNps } = await supabaseAdmin
       .from('avaliacoes_nps')
       .select('colaborador_id, nps_geral')
       .eq('ano', ano)
       .eq('mes', mes)
+    const npsProjetosGenerico = await getAvaliacoesNpsGenericoSinteticas(supabaseAdmin, { mes, ano })
+    const avaliacoesNpsTotais = [...(avaliacoesNps || []), ...npsProjetosGenerico]
 
     const npsGroupMap = new Map<string, number[]>()
-    if (avaliacoesNps) {
-      for (const nps of avaliacoesNps) {
-        const val = Number(nps.nps_geral)
-        if (isNaN(val)) continue
-        const arr = npsGroupMap.get(nps.colaborador_id) || []
-        arr.push(val)
-        npsGroupMap.set(nps.colaborador_id, arr)
-      }
+    for (const nps of avaliacoesNpsTotais) {
+      const val = Number(nps.nps_geral)
+      if (isNaN(val)) continue
+      const arr = npsGroupMap.get(nps.colaborador_id) || []
+      arr.push(val)
+      npsGroupMap.set(nps.colaborador_id, arr)
     }
 
     const npsMap = new Map<string, number>()

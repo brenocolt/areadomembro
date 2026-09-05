@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { NPSChart } from "./components/nps-chart";
 import { DetailedPerformance } from "./components/detailed-performance";
 import { FormularioCompetenciasView } from "./components/formulario-competencias-view";
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase";
+import { useColaborador, useAvaliacoesNpsCombinado } from "@/hooks/use-supabase";
 import { ImportNpsDialog } from "@/components/import-nps-dialog";
 import { supabase } from "@/lib/supabase";
 import { colaboradorNoPublico, type PublicoPar } from "@/lib/forms-publico";
@@ -171,9 +171,7 @@ export default function PerformancePage() {
 // sub-aba "NPS Projetos".
 function NpsProjetosTab() {
     const { colaboradorId, colaborador } = useColaborador()
-    const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
-        column: 'colaborador_id',
-        value: colaboradorId,
+    const { data: npsData } = useAvaliacoesNpsCombinado<any>(colaboradorId, {
         orderBy: 'ano',
         ascending: false,
         limit: 50,

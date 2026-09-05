@@ -28,10 +28,16 @@ const COLUNAS_MIGRACAO_20260825 = ['gerar_subaba', 'competencia', 'permite_nao_a
 const COLUNAS_MIGRACAO_20260905 = ['subaba_nome', 'nps_interno']
 // Coluna da migração 20260908 (modo de resposta: única/única editável/múltipla).
 const COLUNAS_MIGRACAO_20260908 = ['modo_resposta']
-const COLUNAS_OPCIONAIS = [...COLUNAS_MIGRACAO_20260825, ...COLUNAS_MIGRACAO_20260905, ...COLUNAS_MIGRACAO_20260908]
+// Coluna da migração 20260912 (marcação do formulário como fonte do NPS
+// Projetos genérico — ver src/lib/nps-projetos-generico.ts).
+const COLUNAS_MIGRACAO_20260912 = ['nps_projetos_generico']
+const COLUNAS_OPCIONAIS = [...COLUNAS_MIGRACAO_20260825, ...COLUNAS_MIGRACAO_20260905, ...COLUNAS_MIGRACAO_20260908, ...COLUNAS_MIGRACAO_20260912]
 
 function mensagemErroGravacao(error: { message?: string, details?: string } | null): string {
     const msg = `${error?.message || ''} ${error?.details || ''}`
+    if (COLUNAS_MIGRACAO_20260912.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem a coluna de marcação do NPS Projetos. Aplique a migração supabase/migrations/20260912_formularios_nps_projetos_generico.sql e tente de novo.'
+    }
     if (COLUNAS_MIGRACAO_20260908.some(c => msg.includes(c))) {
         return 'O banco ainda não tem a coluna de modo de resposta. Aplique a migração supabase/migrations/20260908_formularios_modo_resposta.sql e tente de novo.'
     }
@@ -71,7 +77,7 @@ async function gravarComFallback<T>(
 // de NPS Interno não foram gravados.
 function avisarSemExtras(degradado: boolean) {
     if (!degradado) return
-    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba (nome ou marcador de NPS Interno inclusive)/modo de resposta: o banco ainda não tem essas colunas. Rode as migrações 20260825_formularios_subabas_competencias.sql, 20260905_formularios_subaba_nome_nps_interno.sql e 20260908_formularios_modo_resposta.sql e salve de novo para aplicá-las.', { duration: 10000 })
+    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba (nome ou marcador de NPS Interno/NPS Projetos inclusive)/modo de resposta: o banco ainda não tem essas colunas. Rode as migrações 20260825_formularios_subabas_competencias.sql, 20260905_formularios_subaba_nome_nps_interno.sql, 20260908_formularios_modo_resposta.sql e 20260912_formularios_nps_projetos_generico.sql e salve de novo para aplicá-las.', { duration: 10000 })
 }
 
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
@@ -130,6 +136,11 @@ export interface FormInitialData {
     // um por núcleo, um para diretores, um para gerentes) — todos entram
     // somados na mesma aba compartilhada "NPS Interno" em Performance.
     npsInterno?: boolean
+    // Marca este formulário como UMA das fontes do NPS Projetos — ver
+    // src/lib/nps-projetos-generico.ts. Somado ao avaliacoes_nps (fonte
+    // atual) em PIPJ, Performance, NPS Gerente e Wallet; independente do
+    // marcador de NPS Interno (são fontes separadas).
+    npsProjetosGenerico?: boolean
     // Controla quantas vezes cada pessoa pode responder este formulário —
     // ver supabase/migrations/20260908_formularios_modo_resposta.sql.
     // Ausente/'multipla' = comportamento de sempre (ilimitado).
@@ -579,6 +590,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const [gerarSubaba, setGerarSubaba] = useState(false)
     const [subabaNome, setSubabaNome] = useState("")
     const [npsInterno, setNpsInterno] = useState(false)
+    const [npsProjetosGenerico, setNpsProjetosGenerico] = useState(false)
     const [modoResposta, setModoResposta] = useState<'unica' | 'unica_editavel' | 'multipla'>('multipla')
     // Lista de colaboradores só para a prévia de alcance na aba "Público".
     const [colaboradores, setColaboradores] = useState<{ id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]>([])
@@ -606,6 +618,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setGerarSubaba(!!initialData.gerarSubaba)
             setSubabaNome(initialData.subabaNome || "")
             setNpsInterno(!!initialData.npsInterno)
+            setNpsProjetosGenerico(!!initialData.npsProjetosGenerico)
             setModoResposta(initialData.modoResposta || 'multipla')
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
@@ -662,6 +675,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setGerarSubaba(false)
         setSubabaNome("")
         setNpsInterno(false)
+        setNpsProjetosGenerico(false)
         setModoResposta('multipla')
     }
 
@@ -887,6 +901,10 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         // compartilhada "NPS Interno" em Performance, ver
         // performance/page.tsx. Não há mais exclusividade entre formulários.
         const npsInternoEfetivo = permiteSubabaEfetiva && npsInterno
+        // Mesmo raciocínio, mas pro NPS Projetos — fonte separada da de NPS
+        // Interno, somada ao avaliacoes_nps em PIPJ/Performance/NPS
+        // Gerente/Wallet (ver src/lib/nps-projetos-generico.ts).
+        const npsProjetosGenericoEfetivo = permiteSubabaEfetiva && npsProjetosGenerico
 
         // Vira true se alguma gravação só passou depois de tirar as colunas
         // da migração 20260825 — o formulário foi salvo, mas sem os extras.
@@ -919,6 +937,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     gerar_subaba: subabaEfetiva,
                     subaba_nome: subabaNomeEfetivo,
                     nps_interno: npsInternoEfetivo,
+                    nps_projetos_generico: npsProjetosGenericoEfetivo,
                     modo_resposta: modoResposta,
                 },
             )
@@ -1027,6 +1046,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     gerar_subaba: subabaEfetiva,
                     subaba_nome: subabaNomeEfetivo,
                     nps_interno: npsInternoEfetivo,
+                    nps_projetos_generico: npsProjetosGenericoEfetivo,
                     modo_resposta: modoResposta,
                 },
             )
@@ -1400,6 +1420,19 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         &quot;Criar sub-aba&quot; acima — <strong>vários formulários podem estar marcados ao mesmo tempo</strong> (por
                                         exemplo, um por núcleo, mais um para diretores e outro para gerentes): as avaliações de todos eles
                                         entram somadas na página de quem for avaliado.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3 bg-cyan-50/50 dark:bg-cyan-500/5 border border-cyan-100 dark:border-cyan-500/20 rounded-xl px-4 py-3">
+                                <Switch checked={npsProjetosGenerico} onCheckedChange={setNpsProjetosGenerico} className="mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Este formulário alimenta o NPS Projetos</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Marca este formulário como uma das fontes do NPS Projetos — as notas somam com a Avaliação NPS do Projeto
+                                        atual em PIPJ, Performance, NPS Gerente e Wallet. Fonte separada do NPS Interno (o marcador acima);
+                                        vários formulários podem estar marcados ao mesmo tempo. Só faz sentido em pergunta(s) &quot;Selecionar 1
+                                        Colaborador&quot; com competência definida em cada escala (ex.: &quot;Comunicação&quot;, &quot;Pontualidade&quot;).
                                     </p>
                                 </div>
                             </div>

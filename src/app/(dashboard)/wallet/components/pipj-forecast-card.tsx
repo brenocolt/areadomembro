@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Calculator, Briefcase, Star, AlertTriangle, FolderKanban, Calendar, TrendingUp, BarChart3 } from "lucide-react"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
+import { getAvaliacoesNpsGenericoSinteticas } from "@/lib/nps-projetos-generico"
 import { useState, useEffect } from "react"
 import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from "@/lib/pipj-cargo-rules"
 
@@ -99,15 +100,23 @@ export function PipjForecastCard() {
 
             // NPS = média do mês mais recente com avaliações (consistente com
             // wallet/performance-card, wallet/criteria-card e /performance).
-            const { data: npsData } = await supabase
-                .from('avaliacoes_nps')
-                .select('nps_geral, mes, ano')
-                .eq('colaborador_id', colaboradorId)
-                .order('ano', { ascending: false })
-                .order('mes', { ascending: false })
-                .limit(12)
+            // Soma o avaliacoes_nps de sempre com as respostas de
+            // formulários genéricos marcados como fonte do NPS Projetos
+            // (mesmo formato de linha — ver src/lib/nps-projetos-generico.ts).
+            const [{ data: npsFixo }, npsGenerico] = await Promise.all([
+                supabase
+                    .from('avaliacoes_nps')
+                    .select('nps_geral, mes, ano')
+                    .eq('colaborador_id', colaboradorId)
+                    .order('ano', { ascending: false })
+                    .order('mes', { ascending: false })
+                    .limit(12),
+                getAvaliacoesNpsGenericoSinteticas(supabase),
+            ])
+            const npsData = [...(npsFixo || []), ...npsGenerico.filter(r => r.colaborador_id === colaboradorId)]
+                .sort((a, b) => (b.ano - a.ano) || (b.mes - a.mes))
 
-            if (npsData && npsData.length > 0) {
+            if (npsData.length > 0) {
                 const latest = npsData[0]
                 const rows = npsData.filter(n => n.mes === latest.mes && n.ano === latest.ano)
                 const avg = rows.reduce((s, n) => s + Number(n.nps_geral || 0), 0) / rows.length

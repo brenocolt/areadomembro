@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
+import { getAvaliacoesNpsGenericoSinteticas } from "@/lib/nps-projetos-generico"
 import { useState, useEffect } from "react"
 
 const COLORS = {
@@ -35,15 +36,22 @@ export function NPSGerenteChart() {
             return
         }
         async function fetchData() {
-            const { data: nps } = await supabase
-                .from('avaliacoes_nps')
-                .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, tipo_avaliacao')
-                .eq('colaborador_id', colaboradorId)
-                .eq('tipo_avaliacao', 'gerente')
-                .order('ano', { ascending: true })
-                .order('mes', { ascending: true })
+            // Soma o avaliacoes_nps de sempre com as respostas de
+            // formulários genéricos marcados como fonte do NPS Projetos
+            // (mesmo formato de linha — ver src/lib/nps-projetos-generico.ts).
+            const [{ data: npsFixo }, npsGenerico] = await Promise.all([
+                supabase
+                    .from('avaliacoes_nps')
+                    .select('mes, ano, comunicacao, suporte, relacionamento, lideranca, resolutividade, tipo_avaliacao')
+                    .eq('colaborador_id', colaboradorId)
+                    .eq('tipo_avaliacao', 'gerente')
+                    .order('ano', { ascending: true })
+                    .order('mes', { ascending: true }),
+                getAvaliacoesNpsGenericoSinteticas(supabase),
+            ])
+            const nps = [...(npsFixo || []), ...npsGenerico.filter(r => r.colaborador_id === colaboradorId && r.tipo_avaliacao === 'gerente')]
 
-            if (!nps) { setData([]); return }
+            if (nps.length === 0) { setData([]); return }
 
             const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -55,7 +63,10 @@ export function NPSGerenteChart() {
                 groups.get(key)!.push(row)
             }
 
-            const chartData = Array.from(groups.entries()).map(([key, rows]) => {
+            // Ordena pela chave (ano-mes) em vez de confiar na ordem de
+            // inserção — as linhas sintéticas do NPS Projetos genérico podem
+            // chegar fora de ordem em relação às de avaliacoes_nps.
+            const chartData = Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([key, rows]) => {
                 const [ano, mes] = key.split('-').map(Number)
                 const point: any = { name: `${months[mes - 1]}/${ano}` }
                 for (const f of FIELDS) {
