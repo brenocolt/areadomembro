@@ -223,4 +223,12 @@
   ::-webkit-scrollbar-thumb {
     @apply bg-slate-300 dark:bg-slate-700 rounded-full;
   }
+
+  /* Placeholder de um contentEditable (ver RichTextInput) — o browser não dá
+     um `placeholder` de graça pra esse tipo de campo. */
+  .rich-text-input:empty:before {
+    content: attr(data-placeholder);
+    color: #94a3b8;
+    pointer-events: none;
+  }
 }

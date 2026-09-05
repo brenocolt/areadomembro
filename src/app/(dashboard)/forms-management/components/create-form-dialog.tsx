@@ -16,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { PublicoParesEditor } from "./publico-pares-editor"
 import { saveFormularioPublico, type PublicoPar } from "@/lib/forms-publico"
 import { isSchemaDesatualizado, semColunas, type ErroPostgrest } from "@/lib/db-compat"
+import { RichTextInput, aplicarFormatoRichText } from "@/components/forms/rich-text-input"
 
 // Colunas criadas pela migração 20260825 (competência, "Não avaliar" e
 // sub-aba). Enquanto ela não for aplicada, o banco recusa a gravação INTEIRA
@@ -218,18 +219,18 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                 </span>
                 <div className="flex-1 space-y-3">
                     <div className="relative">
-                        <Input
+                        <RichTextInput
                             id={`pergunta-titulo-${p.id}`}
                             value={p.titulo}
-                            onChange={(e) => updatePergunta(p.id, 'titulo', e.target.value)}
-                            className="bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-xl h-10 focus-visible:ring-violet-500 pr-16"
+                            onChange={(html) => updatePergunta(p.id, 'titulo', html)}
+                            className="flex items-center bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-xl h-10 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 pr-16"
                             placeholder="Texto da pergunta"
                         />
                         <div className="absolute right-1.5 top-1.5 flex items-center">
-                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => insertFormatQuestion(p.id, 'bold')} title="Negrito">
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onMouseDown={(e) => e.preventDefault()} onClick={() => aplicarFormatoRichText(`pergunta-titulo-${p.id}`, 'bold')} title="Negrito">
                                 <Bold className="h-3.5 w-3.5" />
                             </Button>
-                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => insertFormatQuestion(p.id, 'italic')} title="Itálico">
+                            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onMouseDown={(e) => e.preventDefault()} onClick={() => aplicarFormatoRichText(`pergunta-titulo-${p.id}`, 'italic')} title="Itálico">
                                 <Italic className="h-3.5 w-3.5" />
                             </Button>
                         </div>
@@ -362,6 +363,44 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                                 <p className="text-[11px] text-slate-400">
                                     Nome curto mostrado na sub-aba de Performance no lugar do texto da pergunta.
                                 </p>
+                            </div>
+
+                            <div className="pl-2 pt-2 mt-1 border-t border-dashed border-slate-200 dark:border-slate-700">
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        checked={!!p.opcoes.criterios}
+                                        onCheckedChange={(v: boolean) => updatePergunta(p.id, 'opcoes', {
+                                            ...p.opcoes,
+                                            criterios: v ? { 1: '', 2: '', 3: '', 4: '', 5: '' } : undefined,
+                                        })}
+                                    />
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                        Definir critério de cada nota (1 a 5), manualmente
+                                    </span>
+                                </div>
+                                {p.opcoes.criterios && (
+                                    <div className="space-y-1.5 mt-2">
+                                        <p className="text-[11px] text-slate-400">
+                                            Aparece para quem responde ao passar o mouse/tocar em cada nota. Deixe em branco a(s) nota(s) sem critério específico.
+                                        </p>
+                                        {[1, 2, 3, 4, 5].map(v => (
+                                            <div key={v} className="flex items-start gap-2">
+                                                <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-1">
+                                                    {v}
+                                                </span>
+                                                <Textarea
+                                                    value={p.opcoes.criterios[v] || ''}
+                                                    onChange={(e) => updatePergunta(p.id, 'opcoes', {
+                                                        ...p.opcoes,
+                                                        criterios: { ...p.opcoes.criterios, [v]: e.target.value },
+                                                    })}
+                                                    className="min-h-[36px] h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg resize-none py-1.5"
+                                                    placeholder={`Critério da nota ${v} (ex: descreva o que caracteriza essa nota)`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -545,46 +584,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         if (bannerInputRef.current) bannerInputRef.current.value = ''
     }
 
-    const insertFormat = (format: 'bold' | 'italic') => {
-        const textarea = document.getElementById('descricao-textarea') as HTMLTextAreaElement;
-        if (!textarea) return;
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selectedText = descricao.substring(start, end);
-        let newText = '';
-        if (format === 'bold') {
-            newText = `${descricao.substring(0, start)}<b>${selectedText}</b>${descricao.substring(end)}`;
-        } else if (format === 'italic') {
-            newText = `${descricao.substring(0, start)}<i>${selectedText}</i>${descricao.substring(end)}`;
-        }
-        setDescricao(newText);
-        setTimeout(() => {
-            textarea.focus();
-            textarea.setSelectionRange(start + 3, end + 3);
-        }, 0);
-    }
-
-    const insertFormatQuestion = (id: string, format: 'bold' | 'italic') => {
-        const input = document.getElementById(`pergunta-titulo-${id}`) as HTMLInputElement;
-        if (!input) return;
-        const start = input.selectionStart || 0;
-        const end = input.selectionEnd || 0;
-        const p = perguntas.find(x => x.id === id);
-        if (!p) return;
-        const text = p.titulo;
-        const selectedText = text.substring(start, end);
-        let newText = '';
-        if (format === 'bold') {
-            newText = `${text.substring(0, start)}<b>${selectedText}</b>${text.substring(end)}`;
-        } else if (format === 'italic') {
-            newText = `${text.substring(0, start)}<i>${selectedText}</i>${text.substring(end)}`;
-        }
-        updatePergunta(id, 'titulo', newText);
-        setTimeout(() => {
-            input.focus();
-            input.setSelectionRange(start + 3, end + 3);
-        }, 0);
-    }
 
     const handleDragEnd = (event: DragEndEvent) => {
         const { active, over } = event;
@@ -1030,20 +1029,21 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             <div className="flex items-center justify-between mb-1">
                                 <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Descrição</label>
                                 <div className="flex items-center gap-1">
-                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => insertFormat('bold')} title="Negrito">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => aplicarFormatoRichText('descricao-textarea', 'bold')} title="Negrito">
                                         <Bold className="h-3.5 w-3.5" />
                                     </Button>
-                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => insertFormat('italic')} title="Itálico">
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 w-7 p-0" onMouseDown={(e) => e.preventDefault()} onClick={() => aplicarFormatoRichText('descricao-textarea', 'italic')} title="Itálico">
                                         <Italic className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
                             </div>
-                            <Textarea
+                            <RichTextInput
                                 id="descricao-textarea"
                                 placeholder="Descreva o objetivo do formulário..."
-                                className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl min-h-[80px] resize-none focus-visible:ring-violet-500"
+                                multiline
+                                className="block w-full bg-transparent border border-slate-200 dark:border-slate-700 rounded-xl min-h-[80px] px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500"
                                 value={descricao}
-                                onChange={(e) => setDescricao(e.target.value)}
+                                onChange={setDescricao}
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">

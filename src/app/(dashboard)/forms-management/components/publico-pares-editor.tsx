@@ -2,6 +2,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Plus, Trash2, AlertTriangle } from "lucide-react"
+import { toast } from "sonner"
 import { CARGOS } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 import { contarNoPublico, type PublicoPar } from "@/lib/forms-publico"
@@ -31,10 +32,40 @@ interface PublicoParesEditorProps {
 // com 0 pessoas é o motivo mais comum de um formulário direcionado não gerar
 // nenhuma aba de preenchimento, então isso precisa ficar visível na hora da
 // configuração, não só depois que alguém abre o formulário.
+// Chave de comparação de um par — dois pares são o "mesmo grupo" quando
+// cargo E núcleo coincidem. Repetir um grupo na mesma lista não faz sentido
+// (é o mesmo recorte de pessoas duas vezes), então isso é bloqueado ao
+// adicionar/editar.
+const parKey = (p: PublicoPar) => `${p.cargo}|${p.nucleo}`
+
 export function PublicoParesEditor({ pares, onChange, defaultLabel, addLabel, colaboradores }: PublicoParesEditorProps) {
-    const addPar = () => onChange([...pares, { cargo: CARGOS[0], nucleo: NUCLEOS[0] }])
+    const addPar = () => {
+        // Começa a partir da 1ª combinação (cargo, núcleo) que ainda não está
+        // nesta lista, para não já nascer como um duplicado óbvio. Se todas as
+        // combinações já estiverem em uso (caso extremo), cai no padrão de
+        // sempre — quem for editar vai trocar o valor de qualquer forma.
+        const usados = new Set(pares.map(parKey))
+        for (const cargo of CARGOS) {
+            for (const nucleo of NUCLEOS) {
+                if (!usados.has(`${cargo}|${nucleo}`)) {
+                    onChange([...pares, { cargo, nucleo }])
+                    return
+                }
+            }
+        }
+        onChange([...pares, { cargo: CARGOS[0], nucleo: NUCLEOS[0] }])
+    }
     const updatePar = (i: number, field: 'cargo' | 'nucleo', value: string) => {
-        onChange(pares.map((p, idx) => idx === i ? { ...p, [field]: value } : p))
+        const proposto = { ...pares[i], [field]: value }
+        const key = parKey(proposto)
+        // Mesmo grupo (cargo + núcleo) já usado em outra linha desta mesma
+        // lista: duas linhas idênticas não alcançam ninguém a mais e só
+        // confundem quem está configurando o público.
+        if (pares.some((p, idx) => idx !== i && parKey(p) === key)) {
+            toast.warning('Esse grupo (cargo + núcleo) já foi adicionado a esta lista.')
+            return
+        }
+        onChange(pares.map((p, idx) => idx === i ? proposto : p))
     }
     const removePar = (i: number) => onChange(pares.filter((_, idx) => idx !== i))
 
