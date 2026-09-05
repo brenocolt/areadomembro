@@ -11,15 +11,16 @@
 // já usada para nps_projeto_ativo/nps_projeto_prazo) — sem precisar de
 // migração nova.
 import { supabase } from '@/lib/supabase'
+import type { CriterioEscala } from '@/components/forms/escala-picker'
 
 export const NPS_PROJETO_CONFIG_CHAVE = 'nps_projeto_perguntas'
 
 export interface NpsProjetoPerguntaConfig {
     titulo?: string
-    // Critério de cada nota, 1 a 5, em texto livre — mesma ideia de
-    // opcoes.criterios das perguntas de escala do motor genérico de
-    // formulários (ver create-form-dialog.tsx / pergunta-input.tsx).
-    criterios?: Partial<Record<'1' | '2' | '3' | '4' | '5', string>>
+    // Critério de cada nota, 1 a 5 — mesmo formato (título curto + descrição)
+    // das perguntas de escala do motor genérico de formulários (ver
+    // create-form-dialog.tsx / escala-picker.tsx).
+    criterios?: Partial<Record<'1' | '2' | '3' | '4' | '5', CriterioEscala>>
 }
 
 export type NpsProjetoBloco = 'gerente' | 'consultor'
@@ -53,12 +54,12 @@ export const CONSULTOR_CAMPOS: { campo: string, tituloPadrao: string, obs?: stri
 // Critério genérico de 1 a 5 que já era usado (igualmente) em TODAS as
 // perguntas de escala do NPS Projeto — fica como padrão de cada pergunta até
 // alguém personalizar especificamente ela.
-export const CRITERIOS_PADRAO: Record<number, string> = {
-    1: 'Abaixo das expectativas',
-    2: 'Pode melhorar',
-    3: 'Razoável/Neutro',
-    4: 'Satisfatório',
-    5: 'Acima das expectativas',
+export const CRITERIOS_PADRAO: Record<number, CriterioEscala> = {
+    1: { titulo: 'Abaixo das expectativas' },
+    2: { titulo: 'Pode melhorar' },
+    3: { titulo: 'Razoável/Neutro' },
+    4: { titulo: 'Satisfatório' },
+    5: { titulo: 'Acima das expectativas' },
 }
 
 export async function loadNpsProjetoConfig(): Promise<NpsProjetoConfig> {
@@ -80,13 +81,15 @@ export async function saveNpsProjetoConfig(config: NpsProjetoConfig): Promise<vo
 // mudado e manter os critérios padrão, ou só um dos 5 critérios preenchido.
 export function resolverPergunta(
     config: NpsProjetoConfig, bloco: NpsProjetoBloco, campo: string, tituloPadrao: string
-): { titulo: string, criterios: Record<number, string> } {
+): { titulo: string, criterios: Record<number, CriterioEscala> } {
     const cfg = config[bloco]?.[campo]
     const titulo = cfg?.titulo?.trim() || tituloPadrao
-    const criterios: Record<number, string> = {}
+    const criterios: Record<number, CriterioEscala> = {}
     for (let v = 1; v <= 5; v++) {
         const chave = String(v) as '1' | '2' | '3' | '4' | '5'
-        criterios[v] = cfg?.criterios?.[chave]?.trim() || CRITERIOS_PADRAO[chave]
+        const personalizado = cfg?.criterios?.[chave]
+        const temPersonalizado = (personalizado?.titulo || '').trim() || (personalizado?.descricao || '').trim()
+        criterios[v] = temPersonalizado ? personalizado! : CRITERIOS_PADRAO[chave]
     }
     return { titulo, criterios }
 }

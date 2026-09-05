@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { isCargoGerencial } from "@/lib/cargos"
+import { EscalaPicker, type CriterioEscala } from "@/components/forms/escala-picker"
 import {
     GERENTE_CAMPOS, CONSULTOR_CAMPOS, CRITERIOS_PADRAO, loadNpsProjetoConfig, resolverPergunta,
     type NpsProjetoConfig,
@@ -65,48 +66,22 @@ const emptyConsultorData = (): ConsultorData => ({
 })
 
 // ─── Scale Picker Component ─────────────────────────────────────────────
-// `criterios` é o texto de cada nota (1 a 5) — editável em Gestão de
+// `criterios` é o critério de cada nota (1 a 5) — editável em Gestão de
 // Formulários (botão "Editar Perguntas") e, por padrão, o mesmo critério
-// genérico que já existia (CRITERIOS_PADRAO) até alguém personalizar.
+// genérico que já existia (CRITERIOS_PADRAO) até alguém personalizar. O
+// controle em si (EscalaPicker) é compartilhado com o resto do sistema, pra
+// ter a mesma cara de qualquer outra pergunta de escala.
 function ScalePicker({ value, onChange, label, required, obs, criterios }: {
     value: string; onChange: (v: string) => void; label: string; required?: boolean; obs?: string
-    criterios?: Record<number, string>
+    criterios?: Record<number, CriterioEscala>
 }) {
-    const crit = criterios || CRITERIOS_PADRAO
     return (
         <div className="space-y-2">
             <label className="text-sm font-bold text-slate-900 dark:text-slate-200 leading-snug block">
                 {label} {required && <span className="text-rose-500">*</span>}
             </label>
             {obs && <p className="text-xs text-slate-400 italic">{obs}</p>}
-            <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map(v => (
-                    <button key={v} type="button" onClick={() => onChange(v.toString())}
-                        className={`flex-1 h-12 rounded-xl font-bold text-sm transition-all relative group ${
-                            value === v.toString()
-                                ? 'bg-violet-600 text-white shadow-lg shadow-violet-500/20 scale-105'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-violet-100 dark:hover:bg-violet-500/10'
-                        }`}
-                    >
-                        {v}
-                        <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                            {crit[v]}
-                        </span>
-                    </button>
-                ))}
-            </div>
-            <div className="flex justify-between text-[9px] text-slate-400 px-1 mt-1">
-                <span>{crit[1]}</span>
-                <span>{crit[5]}</span>
-            </div>
-            {/* Critério da nota já escolhida, sempre visível (não só no hover) —
-                importante em telas de toque. */}
-            {value && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 rounded-lg px-3 py-2">
-                    <span className="font-bold text-violet-600 dark:text-violet-400">{value}: </span>
-                    {crit[Number(value)]}
-                </p>
-            )}
+            <EscalaPicker value={value} onChange={onChange} criterios={criterios || CRITERIOS_PADRAO} />
         </div>
     )
 }

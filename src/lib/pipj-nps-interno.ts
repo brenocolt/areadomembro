@@ -1,7 +1,23 @@
 import { mesReferenciaFromDate } from './nps-period'
+import { isSchemaDesatualizado } from './db-compat'
+
+// Formulário marcado como "o" NPS Interno (formularios.nps_interno) — ver
+// migração 20260905_formularios_subaba_nome_nps_interno.sql. Enquanto ela não
+// tiver rodado, cai de volta na heurística antiga por título ("contém
+// piloto/elite"), que era o único jeito de achar esse formulário antes.
+export async function getNpsInternoFormId(supabaseAdmin: any): Promise<string | null> {
+  const porMarcador = await supabaseAdmin.from('formularios').select('id').eq('nps_interno', true).limit(1)
+  if (!porMarcador.error) {
+    return porMarcador.data && porMarcador.data.length > 0 ? porMarcador.data[0].id : null
+  }
+  if (!isSchemaDesatualizado(porMarcador.error)) return null
+
+  const porHeuristica = await supabaseAdmin.from('formularios').select('id').or('titulo.ilike.%piloto%,titulo.ilike.%elite%').limit(1)
+  return porHeuristica.data && porHeuristica.data.length > 0 ? porHeuristica.data[0].id : null
+}
 
 // Calcula, para o mês de referência informado, a nota média do NPS Interno
-// (respostas do formulário "Piloto de Elite") recebida por cada colaborador
+// (respostas do formulário marcado como tal) recebida por cada colaborador
 // — mesma agregação usada na página NPS Interno (média de todos os valores
 // de todas as perguntas do tipo "escala", em todas as avaliações daquele
 // mês). Usada como uma das duas fontes do NPS do PIPJ, junto com a página
@@ -9,13 +25,8 @@ import { mesReferenciaFromDate } from './nps-period'
 export async function getNpsInternoMap(supabaseAdmin: any, mes: number, ano: number): Promise<Map<string, number>> {
   const result = new Map<string, number>()
 
-  const { data: forms } = await supabaseAdmin
-    .from('formularios')
-    .select('id, titulo')
-    .or('titulo.ilike.%piloto%,titulo.ilike.%elite%')
-
-  if (!forms || forms.length === 0) return result
-  const formId = forms[0].id
+  const formId = await getNpsInternoFormId(supabaseAdmin)
+  if (!formId) return result
 
   const { data: perguntas } = await supabaseAdmin
     .from('formulario_perguntas')

@@ -450,12 +450,16 @@ export default function FormsManagementPage() {
             quemResponde: publico.quemResponde,
             quemRecebe: publico.quemRecebe,
             gerarSubaba: !!form.gerar_subaba,
+            subabaNome: form.subaba_nome || null,
+            npsInterno: !!form.nps_interno,
         }
     }
 
     const handleCopy = async (form: any) => {
         const data = await loadFormWithQuestions(form)
-        setDialogData(data)
+        // Uma cópia nunca nasce marcada como "o" NPS Interno — copiar não deve
+        // roubar silenciosamente essa marca do formulário original ao salvar.
+        setDialogData({ ...data, npsInterno: false })
         setDialogEditMode(false)
         setDialogOpen(true)
     }

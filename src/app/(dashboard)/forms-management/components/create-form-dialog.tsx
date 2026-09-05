@@ -23,20 +23,27 @@ import { RichTextInput, aplicarFormatoRichText } from "@/components/forms/rich-t
 // só por causa delas — ou seja, ninguém consegue criar ou editar formulário
 // nenhum, nem os que não usam esses recursos.
 const COLUNAS_MIGRACAO_20260825 = ['gerar_subaba', 'competencia', 'permite_nao_avaliar']
+// Colunas da migração 20260905 (nome customizado da sub-aba + marcação do
+// formulário do NPS Interno) — mesmo raciocínio acima.
+const COLUNAS_MIGRACAO_20260905 = ['subaba_nome', 'nps_interno']
+const COLUNAS_OPCIONAIS = [...COLUNAS_MIGRACAO_20260825, ...COLUNAS_MIGRACAO_20260905]
 
 function mensagemErroGravacao(error: { message?: string, details?: string } | null): string {
     const msg = `${error?.message || ''} ${error?.details || ''}`
+    if (COLUNAS_MIGRACAO_20260905.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem as colunas de nome da sub-aba/NPS Interno. Aplique a migração supabase/migrations/20260905_formularios_subaba_nome_nps_interno.sql e tente de novo.'
+    }
     if (COLUNAS_MIGRACAO_20260825.some(c => msg.includes(c))) {
         return 'O banco ainda não tem as colunas de competência/sub-aba. Aplique a migração supabase/migrations/20260825_formularios_subabas_competencias.sql e tente de novo.'
     }
     return error?.message || 'Erro desconhecido'
 }
 
-// Grava tentando primeiro com as colunas da migração 20260825 e, se o banco
-// ainda não as tiver, repete sem elas. O formulário é salvo do mesmo jeito;
-// só os extras (competência, "Não avaliar", sub-aba em Performance) ficam de
-// fora até a migração rodar — em vez de a gravação inteira ser recusada.
-// `degradado` diz se caímos nesse segundo caminho, para avisar quem salvou.
+// Grava tentando primeiro com todas as colunas "novas" (das migrações
+// 20260825 e 20260905) e, se o banco ainda não as tiver, repete sem elas. O
+// formulário é salvo do mesmo jeito; só os extras ficam de fora até a
+// migração rodar — em vez de a gravação inteira ser recusada. `degradado`
+// diz se caímos nesse segundo caminho, para avisar quem salvou.
 type PayloadGravacao = Record<string, unknown>
 
 async function gravarComFallback<T>(
@@ -48,17 +55,18 @@ async function gravarComFallback<T>(
         return { ...tentativa, degradado: false }
     }
     const semExtras = Array.isArray(payload)
-        ? payload.map(p => semColunas(p, COLUNAS_MIGRACAO_20260825))
-        : semColunas(payload, COLUNAS_MIGRACAO_20260825)
+        ? payload.map(p => semColunas(p, COLUNAS_OPCIONAIS))
+        : semColunas(payload, COLUNAS_OPCIONAIS)
     const repeticao = await executar(semExtras)
     return { ...repeticao, degradado: !repeticao.error }
 }
 
 // Salvou, mas o banco recusou as colunas novas: quem salvou precisa saber
-// que competência, "Não avaliar" e sub-aba não foram gravadas.
+// que competência, "Não avaliar", sub-aba, nome da sub-aba e/ou o marcador
+// de NPS Interno não foram gravados.
 function avisarSemExtras(degradado: boolean) {
     if (!degradado) return
-    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba: o banco ainda não tem essas colunas. Rode a migração 20260825_formularios_subabas_competencias.sql e salve de novo para aplicá-las.', { duration: 10000 })
+    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba (nome ou marcador de NPS Interno inclusive): o banco ainda não tem essas colunas. Rode as migrações 20260825_formularios_subabas_competencias.sql e 20260905_formularios_subaba_nome_nps_interno.sql e salve de novo para aplicá-las.', { duration: 10000 })
 }
 
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
@@ -102,8 +110,19 @@ export interface FormInitialData {
     quemResponde?: PublicoPar[]
     quemRecebe?: PublicoPar[]
     // Gera uma sub-aba dentro de Performance com a visualização de
-    // competências deste formulário. Só se aplica a formulário direcionado.
+    // competências deste formulário. Se aplica tanto a formulário
+    // direcionado (Quem Recebe) quanto a um formulário comum que tenha uma
+    // pergunta "Selecionar 1 Colaborador" (ver hasColaboradorUnico) — a
+    // sub-aba aparece pra quem foi escolhido nessa pergunta.
     gerarSubaba?: boolean
+    // Nome mostrado na sub-aba de Performance no lugar do título do
+    // formulário (ex.: título "Piloto de Elite" → sub-aba "NPS Interno").
+    // Vazio = usa o título do formulário.
+    subabaNome?: string | null
+    // Marca ESTE formulário como "o" NPS Interno — usado pelo PIPJ, Feedback
+    // Agent e Assistente Pessoal para achar as respostas certas. Só um
+    // formulário deve estar marcado; o salvamento desmarca qualquer outro.
+    npsInterno?: boolean
 }
 
 const TIPOS = [
@@ -125,7 +144,7 @@ interface CreateFormDialogProps {
     hideTrigger?: boolean
 }
 
-function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao, insertFormatQuestion, secoes, updateLogicaCondicional }: any) {
+function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergunta, updateOpcao, addOpcao, removeOpcao, secoes, updateLogicaCondicional, colaboradores, updateFiltroPares }: any) {
     const {
         attributes,
         listeners,
@@ -371,7 +390,7 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                                         checked={!!p.opcoes.criterios}
                                         onCheckedChange={(v: boolean) => updatePergunta(p.id, 'opcoes', {
                                             ...p.opcoes,
-                                            criterios: v ? { 1: '', 2: '', 3: '', 4: '', 5: '' } : undefined,
+                                            criterios: v ? { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} } : undefined,
                                         })}
                                     />
                                     <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
@@ -379,26 +398,38 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                                     </span>
                                 </div>
                                 {p.opcoes.criterios && (
-                                    <div className="space-y-1.5 mt-2">
+                                    <div className="space-y-2.5 mt-2">
                                         <p className="text-[11px] text-slate-400">
-                                            Aparece para quem responde ao passar o mouse/tocar em cada nota. Deixe em branco a(s) nota(s) sem critério específico.
+                                            Quem responde vê a lista de critérios em vez dos botões 1-5. Deixe em branco a(s) nota(s) sem critério específico (aí a pergunta continua com o desenho compacto).
                                         </p>
-                                        {[1, 2, 3, 4, 5].map(v => (
-                                            <div key={v} className="flex items-start gap-2">
-                                                <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-1">
-                                                    {v}
-                                                </span>
-                                                <Textarea
-                                                    value={p.opcoes.criterios[v] || ''}
-                                                    onChange={(e) => updatePergunta(p.id, 'opcoes', {
-                                                        ...p.opcoes,
-                                                        criterios: { ...p.opcoes.criterios, [v]: e.target.value },
-                                                    })}
-                                                    className="min-h-[36px] h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg resize-none py-1.5"
-                                                    placeholder={`Critério da nota ${v} (ex: descreva o que caracteriza essa nota)`}
-                                                />
-                                            </div>
-                                        ))}
+                                        {[1, 2, 3, 4, 5].map(v => {
+                                            const criterio = p.opcoes.criterios[v] || {}
+                                            const setCriterio = (patch: { titulo?: string, descricao?: string }) => updatePergunta(p.id, 'opcoes', {
+                                                ...p.opcoes,
+                                                criterios: { ...p.opcoes.criterios, [v]: { ...criterio, ...patch } },
+                                            })
+                                            return (
+                                                <div key={v} className="flex items-start gap-2">
+                                                    <span className="text-xs font-bold text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-500/20 rounded-full w-5 h-5 flex items-center justify-center shrink-0 mt-1.5">
+                                                        {v}
+                                                    </span>
+                                                    <div className="flex-1 space-y-1">
+                                                        <Input
+                                                            value={criterio.titulo || ''}
+                                                            onChange={(e) => setCriterio({ titulo: e.target.value })}
+                                                            className="h-8 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg font-bold"
+                                                            placeholder={`Rótulo curto da nota ${v} (ex: Muito ruim)`}
+                                                        />
+                                                        <Textarea
+                                                            value={criterio.descricao || ''}
+                                                            onChange={(e) => setCriterio({ descricao: e.target.value })}
+                                                            className="min-h-[36px] h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg resize-none py-1.5"
+                                                            placeholder="Descrição (opcional)"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -467,6 +498,24 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                             </div>
                         </div>
                     )}
+
+                    {(p.tipo === 'colaborador_unico' || p.tipo === 'colaborador_multiplo') && (
+                        <div className="pl-2 pt-2 mt-1 border-t border-dashed border-slate-200 dark:border-slate-700 space-y-2">
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                                Restringir colaboradores por cargo/núcleo
+                            </span>
+                            <p className="text-[11px] text-slate-400">
+                                Só quem bater com um dos grupos abaixo aparece pra escolher nesta pergunta (ex.: só Estratégico, pra avaliar diretores). Sem grupo definido, aparecem todos.
+                            </p>
+                            <PublicoParesEditor
+                                pares={p.opcoes?.filtroPares || []}
+                                onChange={(pares: PublicoPar[]) => updateFiltroPares(p.id, pares)}
+                                defaultLabel="Todos"
+                                addLabel="Restringir a um grupo"
+                                colaboradores={colaboradores}
+                            />
+                        </div>
+                    )}
                 </div>
                 <div className="flex flex-col gap-2 mt-1">
                     <button type="button" onClick={() => duplicatePergunta(p.id)} className="text-slate-400 hover:text-violet-500 p-1" title="Duplicar">
@@ -515,6 +564,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const [quemResponde, setQuemResponde] = useState<PublicoPar[]>([])
     const [quemRecebe, setQuemRecebe] = useState<PublicoPar[]>([])
     const [gerarSubaba, setGerarSubaba] = useState(false)
+    const [subabaNome, setSubabaNome] = useState("")
+    const [npsInterno, setNpsInterno] = useState(false)
     // Lista de colaboradores só para a prévia de alcance na aba "Público".
     const [colaboradores, setColaboradores] = useState<{ id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]>([])
 
@@ -539,6 +590,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setQuemResponde(initialData.quemResponde || [])
             setQuemRecebe(initialData.quemRecebe || [])
             setGerarSubaba(!!initialData.gerarSubaba)
+            setSubabaNome(initialData.subabaNome || "")
+            setNpsInterno(!!initialData.npsInterno)
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
                     ...p,
@@ -592,6 +645,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setQuemResponde([])
         setQuemRecebe([])
         setGerarSubaba(false)
+        setSubabaNome("")
+        setNpsInterno(false)
     }
 
     const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -678,6 +733,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     updated.opcoes = updated.opcoes?.min ? updated.opcoes : { min: 1, max: 5, labelMin: "Muito Insatisfeito", labelMax: "Muito Satisfeito" }
                 } else if (value === 'grade_multipla_escolha') {
                     updated.opcoes = { linhas: ['Linha 1', 'Linha 2'], colunas: ['Coluna 1', 'Coluna 2', 'Coluna 3'] }
+                } else if (value === 'colaborador_unico' || value === 'colaborador_multiplo') {
+                    updated.opcoes = Array.isArray(updated.opcoes?.filtroPares) ? updated.opcoes : { filtroPares: [] }
                 } else {
                     updated.opcoes = null
                 }
@@ -705,6 +762,17 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             if (target === 'continuar') delete logica[optionIndex]
             else logica[optionIndex] = target
             return { ...p, logica_condicional: logica }
+        }))
+    }
+
+    // Filtro por cargo/núcleo de quem aparece pra escolher numa pergunta
+    // "Selecionar 1/Múltiplos Colaboradores" — mesma lista de pares (cargo,
+    // núcleo) da aba "Público", só que aplicada a ESTA pergunta específica.
+    // Vazia = mostra todo mundo (igual ao padrão de "Quem Responde"/"Quem Recebe").
+    const updateFiltroPares = (perguntaId: string, pares: PublicoPar[]) => {
+        setPerguntas(perguntas.map(p => {
+            if (p.id !== perguntaId) return p
+            return { ...p, opcoes: { ...p.opcoes, filtroPares: pares } }
         }))
     }
 
@@ -788,9 +856,27 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
         setLoading(true)
 
-        // Sub-aba só existe em formulário direcionado — sem "Quem Recebe" não
-        // há sobre quem montar a visualização de competências.
-        const subabaEfetiva = quemRecebe.length > 0 && gerarSubaba
+        // Sub-aba só faz sentido quando existe uma forma de saber SOBRE QUEM
+        // é cada resposta: formulário direcionado (Quem Recebe) ou uma
+        // pergunta "Selecionar 1 Colaborador" (modelo do Piloto de Elite /
+        // NPS Interno — quem responde escolhe livremente quem está
+        // avaliando, sem depender de cargo/núcleo).
+        const hasColaboradorUnico = validPerguntas.some(p => p.tipo === 'colaborador_unico')
+        const subabaEfetiva = (quemRecebe.length > 0 || hasColaboradorUnico) && gerarSubaba
+        const subabaNomeEfetivo = subabaEfetiva ? (subabaNome.trim() || null) : null
+        const npsInternoEfetivo = subabaEfetiva && npsInterno
+
+        // Só um formulário pode estar marcado como "o" NPS Interno — ao
+        // marcar este, desmarca qualquer outro que já estivesse. Best-effort:
+        // se a coluna ainda não existir (migração pendente), simplesmente
+        // não faz nada aqui (o aviso principal de "salvo sem extras" já cobre
+        // isso).
+        const garantirNpsInternoUnico = async (formularioId: string) => {
+            if (!npsInternoEfetivo) return
+            try {
+                await supabase.from('formularios').update({ nps_interno: false }).eq('nps_interno', true).neq('id', formularioId)
+            } catch { /* coluna ainda não existe — nada a fazer */ }
+        }
 
         // Vira true se alguma gravação só passou depois de tirar as colunas
         // da migração 20260825 — o formulário foi salvo, mas sem os extras.
@@ -821,9 +907,12 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     pagina_destino: paginaDestino || null,
                     banner_url: finalBannerUrl,
                     gerar_subaba: subabaEfetiva,
+                    subaba_nome: subabaNomeEfetivo,
+                    nps_interno: npsInternoEfetivo,
                 },
             )
             salvouSemExtras = salvouSemExtras || updateDegradado
+            await garantirNpsInternoUnico(initialData.id!)
 
             if (updateError) {
                 toast.error("Erro ao atualizar formulário: " + mensagemErroGravacao(updateError))
@@ -911,6 +1000,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     pagina_destino: paginaDestino || null,
                     banner_url: finalBannerUrl,
                     gerar_subaba: subabaEfetiva,
+                    subaba_nome: subabaNomeEfetivo,
+                    nps_interno: npsInternoEfetivo,
                 },
             )
             salvouSemExtras = salvouSemExtras || formDegradado
@@ -920,6 +1011,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 setLoading(false)
                 return
             }
+            await garantirNpsInternoUnico(formData.id)
 
             const perguntasToInsert = validPerguntas.map((p, i) => ({
                 formulario_id: formData.id,
@@ -967,6 +1059,13 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         resetForm()
         onSuccess?.()
     }
+
+    // Habilita a seção "Sub-aba em Performance" tanto para formulário
+    // direcionado (Quem Recebe) quanto para um formulário comum com uma
+    // pergunta "Selecionar 1 Colaborador" — modelo do Piloto de Elite / NPS
+    // Interno, em que quem responde escolhe livremente quem está avaliando.
+    const hasColaboradorUnico = perguntas.some(p => p.tipo === 'colaborador_unico')
+    const permiteSubaba = quemRecebe.length > 0 || hasColaboradorUnico
 
     const dialogTitle = editMode ? "Editar Formulário" : (initialData ? "Copiar Formulário" : "Novo Formulário")
     const dialogDesc = editMode ? "Edite os dados e perguntas do formulário." : "Monte as perguntas do seu formulário."
@@ -1158,6 +1257,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         removeOpcao={removeOpcao}
                                         secoes={perguntas.filter(x => x.tipo === 'secao' && x.id !== p.id)}
                                         updateLogicaCondicional={updateLogicaCondicional}
+                                        colaboradores={colaboradores}
+                                        updateFiltroPares={updateFiltroPares}
                                     />
                                 ))}
                             </SortableContext>
@@ -1212,7 +1313,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         <PublicoParesEditor pares={quemRecebe} onChange={setQuemRecebe} defaultLabel="Ninguém" addLabel="Direcionar a um grupo" colaboradores={colaboradores} />
                     </div>
 
-                    {quemRecebe.length > 0 && (
+                    {permiteSubaba && (
                         <div className="space-y-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-700">
                             <label className="text-sm font-bold text-slate-900 dark:text-slate-200 mt-4 block">3. Sub-aba em Performance</label>
                             <div className="flex items-start gap-3 bg-violet-50/50 dark:bg-violet-500/5 border border-violet-100 dark:border-violet-500/20 rounded-xl px-4 py-3">
@@ -1223,9 +1324,39 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         Quem é avaliado passa a ver, dentro de Performance, uma sub-aba com as notas por competência
                                         (média, nº de avaliações, evolução no tempo e detalhamento) — sem quantidade de projetos.
                                         Defina a <strong>competência</strong> de cada pergunta de escala na aba Detalhes.
+                                        {quemRecebe.length === 0 && hasColaboradorUnico && (
+                                            <> A sub-aba aparece pra quem for escolhido na pergunta &quot;Selecionar 1 Colaborador&quot;.</>
+                                        )}
                                     </p>
                                 </div>
                             </div>
+
+                            {gerarSubaba && (
+                                <div className="space-y-3 pl-1">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nome da sub-aba (opcional)</label>
+                                        <Input
+                                            value={subabaNome}
+                                            onChange={(e) => setSubabaNome(e.target.value)}
+                                            placeholder={titulo || 'Usa o título do formulário'}
+                                            className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                        />
+                                        <p className="text-[11px] text-slate-400">Deixe em branco para usar o título do formulário na aba.</p>
+                                    </div>
+
+                                    <div className="flex items-start gap-3 bg-amber-50/50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/20 rounded-xl px-4 py-3">
+                                        <Switch checked={npsInterno} onCheckedChange={setNpsInterno} className="mt-0.5" />
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Este é o formulário do NPS Interno</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                                Marca este formulário como a fonte do NPS Interno usada no cálculo de PIPJ, no Feedback Agent
+                                                e no Assistente Pessoal. Só um formulário deve ter isso marcado — marcar aqui desmarca
+                                                automaticamente qualquer outro que já estivesse.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </TabsContent>
