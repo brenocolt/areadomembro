@@ -9,7 +9,6 @@ import {
     AlertTriangle,
     Ticket,
     ClipboardList,
-    Target,
     CalendarDays,
     FileQuestion,
     Crown,
@@ -44,19 +43,16 @@ import { isCargoGerencial } from "@/lib/cargos"
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
     { title: "Minhas Atividades", url: "/minhas-prioridades", icon: ListChecks },
-    { title: "Perfil", url: "/profile", icon: User },
     { title: "Performance", url: "/performance", icon: TrendingUp },
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
     { title: "Assistente Pessoal", url: "/assistente-pessoal", icon: Bot },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
-    { title: "Meus PDIs", url: "/pdis", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
     { title: "Minhas Milhas", url: "/milhas", icon: Ticket },
     { title: "Punições", url: "/punishments", icon: AlertTriangle },
 ]
 
 const managementItems = [
-    { title: "Gestão de PDIs", url: "/pdis-management", icon: Target },
     { title: "Gestão de Formulários", url: "/forms-management", icon: FileQuestion },
     { title: "Gestão de Pontos", url: "/points-management", icon: ClipboardList },
     { title: "Pontuar Membros", url: "/pontuar-membros", icon: UserPlus },
@@ -104,6 +100,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const user = {
         name: colaborador?.nome || "Carregando...",
         role: colaborador?.cargo_atual || "",
+        foto: colaborador?.foto || "",
         initials: colaborador?.nome ? colaborador.nome.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : "..."
     }
 
@@ -155,14 +152,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarFooter>
                 <div className="p-1">
                     <div className="flex items-center gap-3 p-2 rounded-xl bg-sidebar-accent/50 border border-sidebar-border/50 hover:bg-sidebar-accent transition-colors group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:bg-transparent group-data-[collapsible=icon]:border-none">
-                        <Avatar className="h-9 w-9 rounded-lg border border-sidebar-border group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
-                            <AvatarImage src="/placeholder-user.jpg" />
-                            <AvatarFallback className="bg-primary/10 text-primary font-bold">{user.initials}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex flex-col text-sm truncate group-data-[collapsible=icon]:hidden flex-1 min-w-0">
-                            <span className="font-semibold text-sidebar-foreground">{user.name}</span>
-                            <span className="text-xs text-muted-foreground">{user.role}</span>
-                        </div>
+                        <Link href="/profile" title="Ver perfil" className="flex items-center gap-3 flex-1 min-w-0">
+                            <Avatar className="h-9 w-9 rounded-lg border border-sidebar-border group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8">
+                                <AvatarImage src={user.foto} />
+                                <AvatarFallback className="bg-primary/10 text-primary font-bold">{user.initials}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col text-sm truncate group-data-[collapsible=icon]:hidden flex-1 min-w-0">
+                                <span className="font-semibold text-sidebar-foreground">{user.name}</span>
+                                <span className="text-xs text-muted-foreground">{user.role}</span>
+                            </div>
+                        </Link>
                         <button
                             onClick={() => signOut({ callbackUrl: '/login' })}
                             title="Sair da conta"

@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Edit, Image as ImageIcon, Save, Loader2, KeyRound } from "lucide-react"
+import { Edit, Image as ImageIcon, Save, Loader2, KeyRound, Camera } from "lucide-react"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { changePasswordLocal } from "@/lib/actions"
@@ -21,6 +21,9 @@ export function ProfileCard() {
     const [isChangingPassword, setIsChangingPassword] = useState(false)
     const [newPassword, setNewPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
+    const [fotoUrl, setFotoUrl] = useState("")
+    const [uploadingFoto, setUploadingFoto] = useState(false)
+    const fotoInputRef = useRef<HTMLInputElement>(null)
     const [formData, setFormData] = useState({
         nome: "", telefone: "", emailPessoal: "", endereco: "",
         hobby: "", chocolate: "", serieFilme: ""
@@ -37,8 +40,44 @@ export function ProfileCard() {
                 chocolate: colaborador.chocolate_favorito || "",
                 serieFilme: colaborador.serie_filme_favorito || ""
             })
+            setFotoUrl(colaborador.foto || "")
         }
     }, [colaborador])
+
+    // Foto de perfil: upload direto ao escolher o arquivo (sem precisar abrir
+    // o diálogo "Editar Perfil") — mesmo padrão de upload usado no banner de
+    // formulários (bucket público + getPublicUrl), ver
+    // supabase/migrations/20260905b_profile_avatars_bucket.sql.
+    const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        if (!file.type.startsWith('image/')) {
+            toast.error("Selecione um arquivo de imagem.")
+            return
+        }
+
+        const preview = URL.createObjectURL(file)
+        setFotoUrl(preview)
+        setUploadingFoto(true)
+        try {
+            const fileName = `${colaboradorId}_${Date.now()}_${file.name}`
+            const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+            if (uploadError) throw uploadError
+
+            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
+            const { error: updateError } = await supabase.from('colaboradores').update({ foto: urlData.publicUrl }).eq('id', colaboradorId)
+            if (updateError) throw updateError
+
+            setFotoUrl(urlData.publicUrl)
+            toast.success("Foto de perfil atualizada!")
+        } catch (err: any) {
+            toast.error("Erro ao enviar a foto: " + (err?.message || 'erro desconhecido'))
+            setFotoUrl(colaborador?.foto || "")
+        } finally {
+            setUploadingFoto(false)
+            if (fotoInputRef.current) fotoInputRef.current.value = ''
+        }
+    }
 
     const handleSave = async () => {
         setIsLoading(true)
@@ -89,10 +128,28 @@ export function ProfileCard() {
             <div className="h-28 bg-[#001a41] relative"></div>
             <CardContent className="pt-0 relative px-6 pb-6">
                 <div className="flex flex-col items-center -mt-12">
-                    <Avatar className="h-24 w-24 border-4 border-white dark:border-[#0F172A] shadow-md bg-white">
-                        <AvatarImage src="" />
-                        <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-400"><ImageIcon className="h-8 w-8" /></AvatarFallback>
-                    </Avatar>
+                    <div className="relative">
+                        <input
+                            ref={fotoInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleFotoSelect}
+                        />
+                        <Avatar className="h-24 w-24 border-4 border-white dark:border-[#0F172A] shadow-md bg-white">
+                            <AvatarImage src={fotoUrl} className="object-cover" />
+                            <AvatarFallback className="bg-slate-100 dark:bg-slate-800 text-slate-400"><ImageIcon className="h-8 w-8" /></AvatarFallback>
+                        </Avatar>
+                        <button
+                            type="button"
+                            onClick={() => fotoInputRef.current?.click()}
+                            disabled={uploadingFoto}
+                            title="Alterar foto de perfil"
+                            className="absolute bottom-0 right-0 h-8 w-8 rounded-full bg-primary text-primary-foreground border-2 border-white dark:border-[#0F172A] shadow-md flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-60"
+                        >
+                            {uploadingFoto ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                        </button>
+                    </div>
 
                     <h2 className="mt-4 text-2xl font-display font-bold text-center">{formData.nome}</h2>
                     <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">

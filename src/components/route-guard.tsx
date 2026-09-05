@@ -27,9 +27,12 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     })()
 
     const isAllowed =
-        isAdmin ||           // admin bypass total
-        !allowedPages ||     // sem restrições configuradas → libera
-        impliedByParent ||   // rota implícita por outra rota permitida
+        isAdmin ||             // admin bypass total
+        pathname === '/profile' || // a própria página de perfil é sempre acessível,
+                                    // não depende de paginas_permitidas — é a página
+                                    // "minha conta", acessada pelo rodapé do menu
+        !allowedPages ||       // sem restrições configuradas → libera
+        impliedByParent ||     // rota implícita por outra rota permitida
         allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
 
     useEffect(() => {
