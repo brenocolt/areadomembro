@@ -267,7 +267,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
                     </div>
                 )}
 
-                <Button onClick={handleSubmit} disabled={isPending} className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 rounded-xl">
+                <Button onClick={handleSubmit} disabled={isPending} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-12 rounded-xl">
                     {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ArrowUpRight className="h-4 w-4 mr-2" />}
                     Enviar Solicitação
                 </Button>

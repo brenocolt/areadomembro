@@ -144,26 +144,13 @@
   --popover: #0F172A;
   --popover-foreground: #F8FAFC;
 
+  /* Navy (--primary claro) fica ilegível sobre o fundo escuro — mesmo
+     problema que já era tratado em --accent/--sidebar-primary (ambos viram
+     ciano no dark). Espelha o mesmo par aqui: qualquer texto/borda/switch
+     que use text-primary, bg-primary ou border-primary passa a ter
+     contraste de verdade no dark, sem precisar de override por componente. */
   --primary: #00D1FF;
-  /* In Dark Mode, consider making accent the primary or keep Navy? 
-                        Prompt says primary is #001a41 even in config. 
-                        But standard accessible dark mode usually inverts brand.
-                        However, prompt explicitly sets primary: #001a41.
-                        I will set Primary to #00D1FF (Cyan) in dark mode for visibility 
-                        OR keep #001a41 but ensure borders are bright?
-                        Wait, "Buttons Primary: bg-primary". Dark blue button on dark bg is bad.
-                        I will stick to Prompt Consts first. 
-                        Let's use #001a41 but add a border? 
-                        Actually, I'll switch Primary to Accent color for Dark Mode for better UX, 
-                        OR I'll keep it Navy but use a lighter shade?
-                        Let's USE THE PROMPT'S CONFIG:
-                        "colors: { primary: "#001a41", ... }" implies constant.
-                        I will use #001a41 for Primary even in Dark Mode, but I'll trust the 
-                        components (Shadcn) to handle it or the user to accept it.
-                        User said "Sistema... com suporte a dark/light... design consistently".
-                        I will keep specific hexes. */
-  --primary: #001a41;
-  --primary-foreground: #FFFFFF;
+  --primary-foreground: #001a41;
 
   --secondary: #1E293B;
   /* Slate-800 */
@@ -230,5 +217,14 @@
     content: attr(data-placeholder);
     color: #94a3b8;
     pointer-events: none;
+  }
+
+  /* Sombra de seleção de texto — sem isso o browser usa a cor padrão do
+     sistema, que em muitos casos não aparece de jeito nenhum sobre o fundo
+     escuro. Usa o mesmo par primary/primary-foreground do tema (navy no
+     claro, ciano no escuro), então acompanha o modo automaticamente. */
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
   }
 }

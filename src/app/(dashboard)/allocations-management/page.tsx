@@ -267,7 +267,7 @@ export default function AllocationsManagementPage() {
                                                 disabled={!changed || isSaving}
                                                 className={`h-8 px-4 rounded-xl text-xs font-bold transition-all ${
                                                     changed
-                                                        ? 'bg-primary hover:bg-primary/90 text-white shadow-sm'
+                                                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm'
                                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                                                 }`}
                                             >

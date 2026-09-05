@@ -376,7 +376,7 @@ export function QuickActions() {
             </CardHeader>
             <CardContent className="p-6 space-y-3">
                 <Link href="/wallet" className="block">
-                    <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-white font-bold shadow-md shadow-primary/20">
+                    <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md shadow-primary/20">
                         <div className="h-6 w-6 rounded bg-white/20 flex items-center justify-center">
                             <Wallet className="h-4 w-4" />
                         </div>
@@ -385,7 +385,7 @@ export function QuickActions() {
                 </Link>
 
                 <Link href="/performance" className="block">
-                    <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-white font-bold shadow-md shadow-primary/20">
+                    <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md shadow-primary/20">
                         <div className="h-6 w-6 rounded bg-white/20 flex items-center justify-center">
                             <TrendingUp className="h-4 w-4" />
                         </div>
@@ -395,7 +395,7 @@ export function QuickActions() {
 
                 <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setAusenciaMsg(null) }}>
                     <DialogTrigger asChild>
-                        <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-white font-bold shadow-md shadow-primary/20">
+                        <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md shadow-primary/20">
                             <div className="h-6 w-6 rounded bg-white/20 flex items-center justify-center">
                                 <MapPin className="h-4 w-4" />
                             </div>
@@ -461,7 +461,7 @@ export function QuickActions() {
                             <Button
                                 onClick={handleAusenciaSubmit}
                                 disabled={isPending}
-                                className="w-full h-11 bg-primary hover:bg-primary/90 text-white font-bold"
+                                className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
                             >
                                 {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                 Registrar Ausência
