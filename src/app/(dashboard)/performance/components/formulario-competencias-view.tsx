@@ -34,7 +34,12 @@ function avgOf(vals: number[]): number | null {
 }
 
 interface Props {
-    formularioId: string
+    // Um ou mais formulários-fonte. Mais de um é o caso do NPS Interno, que
+    // pode vir de vários formulários ao mesmo tempo (um por núcleo, um para
+    // diretores, um para gerentes etc.) — todos entram somados na mesma
+    // visualização, agrupados por competência (mesmo nome de competência em
+    // formulários diferentes vira UMA métrica só).
+    formularioIds: string[]
     colaboradorId: string | undefined
     // Agrupa pelo mês de referência (mês anterior ao envio) em vez do mês do
     // envio. Usado pelo NPS Interno, que sempre avaliou o mês anterior.
@@ -42,22 +47,31 @@ interface Props {
     emptyMessage?: string
 }
 
-// Visualização de competências de um formulário, do ponto de vista de quem
-// FOI avaliado: cards por competência, média, evolução mensal e detalhamento.
-// É a mesma leitura da aba de Performance, sem quantidade de projetos (que
-// não faz sentido fora do NPS de Projetos).
+// Visualização de competências de um ou mais formulários, do ponto de vista
+// de quem FOI avaliado: cards por competência, média, evolução mensal e
+// detalhamento. É a mesma leitura da aba de Performance, sem quantidade de
+// projetos (que não faz sentido fora do NPS de Projetos).
 //
 // Aceita as duas formas de "sobre quem é a resposta" que existem no sistema:
 // formulario_respostas.alvo_colaborador_id (formulários direcionados, ver
 // src/lib/forms-publico.ts) e a resposta de uma pergunta do tipo
-// colaborador_unico (modelo antigo, usado pelo Piloto de Elite/NPS Interno).
-export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMesReferencia, emptyMessage }: Props) {
+// colaborador_unico (modelo antigo, usado pelo Piloto de Elite/NPS Interno) —
+// resolvida por formulário, já que cada resposta pertence a só um deles.
+export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarMesReferencia, emptyMessage }: Props) {
     const [loading, setLoading] = useState(true)
     const [metrics, setMetrics] = useState<Metric[]>([])
     const [evaluations, setEvaluations] = useState<Avaliacao[]>([])
 
+    // Chave estável para o efeito: a identidade do array formularioIds muda a
+    // cada render do componente pai, o que disparia esse efeito sem
+    // necessidade — o que importa é SE os ids mudaram, não a referência.
+    const formularioIdsKey = [...formularioIds].sort().join(',')
+
     useEffect(() => {
-        if (!colaboradorId) { setLoading(false); return }
+        if (!colaboradorId || formularioIds.length === 0) {
+            setMetrics([]); setEvaluations([]); setLoading(false)
+            return
+        }
 
         async function fetchData() {
             setLoading(true)
@@ -70,23 +84,41 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
             const perguntasQuery = (colunas: string) => supabase
                 .from('formulario_perguntas')
                 .select(colunas)
-                .eq('formulario_id', formularioId)
+                .in('formulario_id', formularioIds)
                 .order('ordem', { ascending: true })
 
-            const perguntasComCompetencia = await perguntasQuery('id, tipo, titulo, competencia, ordem')
+            const perguntasComCompetencia = await perguntasQuery('id, formulario_id, tipo, titulo, competencia, ordem')
             const perguntas = isSchemaDesatualizado(perguntasComCompetencia.error)
-                ? (await perguntasQuery('id, tipo, titulo, ordem')).data
+                ? (await perguntasQuery('id, formulario_id, tipo, titulo, ordem')).data
                 : perguntasComCompetencia.data
 
-            const listaPerguntas = (perguntas || []) as unknown as { id: string, tipo: string, titulo: string, competencia?: string | null }[]
+            const listaPerguntas = (perguntas || []) as unknown as { id: string, formulario_id: string, tipo: string, titulo: string, competencia?: string | null }[]
             const escalaPerguntas = listaPerguntas.filter(p => p.tipo === 'escala')
-            const avaliadoPergunta = listaPerguntas.find(p => p.tipo === 'colaborador_unico')
+
+            // Pergunta "Selecionar 1 Colaborador" de cada formulário-fonte —
+            // usada como alvo só quando aquele formulário não é direcionado.
+            const avaliadoPerguntaPorForm = new Map<string, string>()
+            for (const p of listaPerguntas) {
+                if (p.tipo === 'colaborador_unico') avaliadoPerguntaPorForm.set(p.formulario_id, p.id)
+            }
 
             if (escalaPerguntas.length === 0) {
                 setMetrics([]); setEvaluations([]); setLoading(false); return
             }
 
-            setMetrics(escalaPerguntas.map(p => ({ id: p.id, titulo: competenciaLabel(p) })))
+            // Agrupa perguntas de escala pelo texto da competência: o mesmo
+            // nome pode existir em vários formulários-fonte (ex.: cada
+            // formulário por núcleo do NPS Interno tem sua própria pergunta
+            // "Comunicação") e deve virar UMA métrica só, somando as
+            // respostas de todos eles.
+            const labelPorPergunta = new Map<string, string>()
+            const ordemLabels: string[] = []
+            for (const p of escalaPerguntas) {
+                const label = competenciaLabel(p)
+                labelPorPergunta.set(p.id, label)
+                if (!ordemLabels.includes(label)) ordemLabels.push(label)
+            }
+            setMetrics(ordemLabels.map(titulo => ({ id: titulo, titulo })))
 
             // Mesmo raciocínio para `alvo_colaborador_id` (migração 20260824):
             // sem a coluna, restam as respostas do modelo antigo, em que quem
@@ -94,14 +126,14 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
             const respostasQuery = (colunas: string) => supabase
                 .from('formulario_respostas')
                 .select(colunas)
-                .eq('formulario_id', formularioId)
+                .in('formulario_id', formularioIds)
                 .order('enviado_em', { ascending: true })
 
-            const respostasComAlvo = await respostasQuery('id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
+            const respostasComAlvo = await respostasQuery('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
             const respostasData = isSchemaDesatualizado(respostasComAlvo.error)
-                ? (await respostasQuery('id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')).data
+                ? (await respostasQuery('id, formulario_id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')).data
                 : respostasComAlvo.data
-            const respostas = (respostasData || []) as unknown as { id: string, enviado_em: string, alvo_colaborador_id?: string | null }[]
+            const respostas = (respostasData || []) as unknown as { id: string, formulario_id: string, enviado_em: string, alvo_colaborador_id?: string | null }[]
 
             const evals: Avaliacao[] = []
             for (const r of respostas) {
@@ -109,17 +141,21 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
 
                 // A resposta é sobre o colaborador logado?
                 let sobreMim = r.alvo_colaborador_id === colaboradorId
-                if (!sobreMim && !r.alvo_colaborador_id && avaliadoPergunta) {
-                    const it = items.find((i: any) => i.pergunta_id === avaliadoPergunta.id)
-                    sobreMim = it?.valor === colaboradorId
+                if (!sobreMim && !r.alvo_colaborador_id) {
+                    const avaliadoPerguntaId = avaliadoPerguntaPorForm.get(r.formulario_id)
+                    if (avaliadoPerguntaId) {
+                        const it = items.find((i: any) => i.pergunta_id === avaliadoPerguntaId)
+                        sobreMim = it?.valor === colaboradorId
+                    }
                 }
                 if (!sobreMim) continue
 
                 const scores: Record<string, number> = {}
                 for (const ep of escalaPerguntas) {
+                    if (ep.formulario_id !== r.formulario_id) continue
                     const it = items.find((i: any) => i.pergunta_id === ep.id)
                     const v = Number(it?.valor)
-                    if (it && !isNaN(v)) scores[ep.id] = v
+                    if (it && !isNaN(v)) scores[labelPorPergunta.get(ep.id)!] = v
                 }
 
                 const d = new Date(r.enviado_em)
@@ -133,7 +169,8 @@ export function FormularioCompetenciasView({ formularioId, colaboradorId, usarMe
             setLoading(false)
         }
         fetchData()
-    }, [formularioId, colaboradorId, usarMesReferencia])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [formularioIdsKey, colaboradorId, usarMesReferencia])
 
     const sorted = [...evaluations].sort((a, b) => (b.ano - a.ano) || (b.mes - a.mes))
     const latest = sorted[0]

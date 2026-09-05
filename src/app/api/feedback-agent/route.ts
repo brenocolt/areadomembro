@@ -4,7 +4,7 @@ import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
 import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
-import { getNpsInternoFormId } from '@/lib/pipj-nps-interno'
+import { getNpsInternoRespostasSobre } from '@/lib/pipj-nps-interno'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -92,44 +92,30 @@ async function gatherEvaluations(targetId: string) {
         }
     } catch (e) { /* fonte opcional */ }
 
-    // ── NPS Interno (formulário marcado com nps_interno) ────────────────────
+    // ── NPS Interno (formulários marcados com nps_interno) ──────────────────
+    // Pode vir de vários formulários ao mesmo tempo (um por núcleo, um para
+    // diretores, um para gerentes etc.) — getNpsInternoRespostasSobre já
+    // resolve isso e já cobre tanto formulário direcionado quanto o modelo
+    // colaborador_unico (Piloto de Elite).
     const internoMap = new Map<string, MonthBucket>()
     let internoTotal = 0
     try {
-        const formId = await getNpsInternoFormId(supabase)
-        if (formId) {
-            const { data: perguntas } = await supabase
-                .from('formulario_perguntas')
-                .select('id, tipo, titulo, ordem')
-                .eq('formulario_id', formId)
-                .order('ordem', { ascending: true })
-            const avaliadoPergunta = (perguntas || []).find(p => p.tipo === 'colaborador_unico')
-            const escalaPerguntas = (perguntas || []).filter(p => p.tipo === 'escala')
-            const textoPerguntas = (perguntas || []).filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
-
-            if (avaliadoPergunta) {
-                const { data: respostas } = await supabase
-                    .from('formulario_respostas')
-                    .select('id, enviado_em, formulario_respostas_itens(pergunta_id, valor, valores)')
-                    .eq('formulario_id', formId)
-                for (const r of respostas || []) {
-                    const items = (r as any).formulario_respostas_itens || []
-                    const avaliadoItem = items.find((it: any) => it.pergunta_id === avaliadoPergunta.id)
-                    if (!avaliadoItem || avaliadoItem.valor !== targetId) continue
-                    const ref = mesReferenciaFromDate(r.enviado_em)
-                    const b = ensureBucket(internoMap, ref.ano, ref.mes)
-                    b.n++
-                    internoTotal++
-                    for (const ep of escalaPerguntas) {
-                        const it = items.find((i: any) => i.pergunta_id === ep.id)
-                        const v = Number(it?.valor)
-                        if (it && !isNaN(v)) addMetric(b, ep.titulo, v)
-                    }
-                    for (const tp of textoPerguntas) {
-                        const it = items.find((i: any) => i.pergunta_id === tp.id)
-                        if (it?.valor && String(it.valor).trim()) b.feedbacks.push(String(it.valor).trim())
-                    }
-                }
+        const respostasInterno = await getNpsInternoRespostasSobre(supabase, targetId)
+        for (const r of respostasInterno) {
+            const escalaPerguntas = r.perguntas.filter(p => p.tipo === 'escala')
+            const textoPerguntas = r.perguntas.filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
+            const ref = mesReferenciaFromDate(r.enviado_em)
+            const b = ensureBucket(internoMap, ref.ano, ref.mes)
+            b.n++
+            internoTotal++
+            for (const ep of escalaPerguntas) {
+                const it = r.itens.find(i => i.pergunta_id === ep.id)
+                const v = Number(it?.valor)
+                if (it && !isNaN(v)) addMetric(b, ep.titulo || '', v)
+            }
+            for (const tp of textoPerguntas) {
+                const it = r.itens.find(i => i.pergunta_id === tp.id)
+                if (it?.valor && String(it.valor).trim()) b.feedbacks.push(String(it.valor).trim())
             }
         }
     } catch (e) { /* fonte opcional */ }
