@@ -503,6 +503,14 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         { id: '1', titulo: '', descricao: '', tipo: 'texto', opcoes: null, obrigatoria: true }
     ])
 
+    // Tipos de formulário já usados no banco — a "Pasta" de um formulário
+    // (ver Gestão de Formulários) é o próprio Tipo do Formulário, então este
+    // campo virou um dropdown que IMPORTA os tipos existentes em vez de
+    // texto livre, para não nascer uma pasta nova por erro de digitação
+    // (“NPS” x “Nps” x “nps ” viravam 3 pastas diferentes).
+    const [tiposExistentes, setTiposExistentes] = useState<string[]>([])
+    const TIPO_NOVO = '__novo_tipo__'
+
     // Público do formulário — ver aba "Público" mais abaixo e src/lib/forms-publico.ts.
     const [quemResponde, setQuemResponde] = useState<PublicoPar[]>([])
     const [quemRecebe, setQuemRecebe] = useState<PublicoPar[]>([])
@@ -551,6 +559,22 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         if (!open) return
         supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').then(({ data }) => {
             if (data) setColaboradores(data)
+        })
+    }, [open])
+
+    // Tipos de formulário já cadastrados (cada um é uma "Pasta" em Gestão de
+    // Formulários) — para popular o dropdown em vez de deixar texto livre.
+    useEffect(() => {
+        if (!open) return
+        supabase.from('formularios').select('tipo_formulario').then(({ data }) => {
+            const vistos = new Set<string>()
+            const tipos: string[] = []
+            for (const row of data || []) {
+                const t = (row.tipo_formulario || '').trim()
+                if (t && !vistos.has(t)) { vistos.add(t); tipos.push(t) }
+            }
+            tipos.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+            setTiposExistentes(tipos)
         })
     }, [open])
 
@@ -1078,12 +1102,32 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Tipo do Formulário</label>
-                                <Input
-                                    placeholder="Ex: NPS, Pesquisa, Feedback"
-                                    className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus-visible:ring-violet-500"
-                                    value={tipoFormulario}
-                                    onChange={(e) => setTipoFormulario(e.target.value)}
-                                />
+                                <p className="text-[11px] text-slate-400 -mt-1">Formulários do mesmo tipo ficam juntos numa mesma pasta em Gestão de Formulários.</p>
+                                <Select
+                                    value={tiposExistentes.includes(tipoFormulario) ? tipoFormulario : TIPO_NOVO}
+                                    onValueChange={(v) => setTipoFormulario(v === TIPO_NOVO ? '' : v)}
+                                >
+                                    <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11">
+                                        <SelectValue placeholder="Selecione o tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                                        {tiposExistentes.map(t => (
+                                            <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                        ))}
+                                        <SelectItem value={TIPO_NOVO} className="text-xs font-bold text-violet-600 dark:text-violet-400">
+                                            + Adicionar novo tipo (nova pasta)
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                {!tiposExistentes.includes(tipoFormulario) && (
+                                    <Input
+                                        autoFocus
+                                        placeholder="Nome do novo tipo (ex: NPS, Pesquisa, Feedback)"
+                                        className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-10 text-sm focus-visible:ring-violet-500"
+                                        value={tipoFormulario}
+                                        onChange={(e) => setTipoFormulario(e.target.value)}
+                                    />
+                                )}
                             </div>
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Página de Destino (Opcional)</label>
@@ -1112,7 +1156,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                         updateOpcao={updateOpcao}
                                         addOpcao={addOpcao}
                                         removeOpcao={removeOpcao}
-                                        insertFormatQuestion={insertFormatQuestion}
                                         secoes={perguntas.filter(x => x.tipo === 'secao' && x.id !== p.id)}
                                         updateLogicaCondicional={updateLogicaCondicional}
                                     />
