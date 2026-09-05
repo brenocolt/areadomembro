@@ -75,7 +75,7 @@ export async function approveAccountRequest(id: string) {
     // Default member pages that every new account should have access to
     const defaultMemberPages = [
         '/', '/profile', '/performance', '/nps-gerente', '/nps-projeto',
-        '/wallet', '/pdis', '/formularios', '/milhas', '/punishments'
+        '/wallet', '/formularios', '/milhas', '/punishments'
     ];
 
     // 3. Create Colaborador
@@ -247,7 +247,6 @@ export async function deleteUserCompletely(colaboradorId: string) {
     await supabase.from('milhas_saldo').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('milhas_trocas').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('ocorrencias').delete().eq('colaborador_id', colaboradorId);
-    await supabase.from('pdi_planos').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('projetos_finalizados').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('resgates_beneficios').delete().eq('colaborador_id', colaboradorId);
     await supabase.from('solicitacoes_remocao').delete().eq('colaborador_id', colaboradorId);
