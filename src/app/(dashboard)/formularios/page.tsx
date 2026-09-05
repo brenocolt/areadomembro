@@ -76,6 +76,9 @@ export default function FormulariosPage() {
     const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
+    // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
+    // (ex.: NPS Projetos).
+    const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
 
     const [npsCount, setNpsCount] = useState(0)
     const [npsLastDate, setNpsLastDate] = useState<Date | null>(null)
@@ -105,6 +108,9 @@ export default function FormulariosPage() {
         const { data: cData } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
         const colaboradoresFull = cData || []
         setColaboradores(colaboradoresFull)
+
+        const { data: pData } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome')
+        setProjetos(pData || [])
 
         let visibleForms = formsData || []
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
@@ -661,6 +667,7 @@ export default function FormulariosPage() {
                                     valor={respostas[p.id]}
                                     onChange={(v) => setRespostas({ ...respostas, [p.id]: v })}
                                     colaboradores={colaboradores}
+                                    projetos={projetos}
                                     selfId={colaborador?.id}
                                     numero={questionNumbers.get(p.id) || 0}
                                 />

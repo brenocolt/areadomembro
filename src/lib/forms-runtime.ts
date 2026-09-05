@@ -34,6 +34,45 @@ export function competenciaLabel(pergunta: { competencia?: string | null, titulo
     return c || stripHtml(pergunta.titulo) || 'Sem título'
 }
 
+// Resolve, pra cada pergunta "normal" (escala, texto etc.), qual pergunta
+// "Selecionar 1 Colaborador" (colaborador_unico) da MESMA SEÇÃO identifica
+// quem ela avalia. A maioria dos formulários com colaborador_unico tem só
+// UMA dessas perguntas (a resposta inteira é sobre uma pessoa só) — mas um
+// formulário pode ter várias, uma por seção (ex.: um NPS Projetos único:
+// "quem é o gerente" numa seção, "quem é a dupla" noutra) avaliando pessoas
+// DIFERENTES na MESMA resposta. Sem essa resolução por seção, todo mundo
+// que lê "sobre quem é esta resposta" atribuiria (ou perderia) notas entre
+// as pessoas avaliadas.
+//
+// Formulário com só um colaborador_unico (o caso de hoje) continua se
+// comportando exatamente igual: todas as perguntas caem na mesma seção
+// "efetiva" e viram atribuídas a esse único alvo.
+//
+// Espera as perguntas já na ordem do formulário (campo `ordem`) — aceita
+// tanto a lista de um formulário só quanto perguntas de vários formulários
+// concatenadas, desde que cada formulário mantenha sua sequência interna
+// intacta (uma pergunta 'secao' sempre fecha o que vinha antes dela).
+export function avaliadoPerguntaPorSecao(perguntas: { id: string, tipo: string }[]): Map<string, string> {
+    const resultado = new Map<string, string>()
+    let avaliadoId: string | null = null
+    let pendentes: string[] = []
+    const flush = () => {
+        if (avaliadoId) {
+            for (const pid of pendentes) resultado.set(pid, avaliadoId)
+        }
+        avaliadoId = null
+        pendentes = []
+    }
+    for (const p of perguntas) {
+        if (p.tipo === 'secao') { flush(); continue }
+        if (p.tipo === 'colaborador_unico') { avaliadoId = p.id; continue }
+        if (p.tipo === 'titulo') continue // cabeçalho decorativo, não é resposta
+        pendentes.push(p.id)
+    }
+    flush()
+    return resultado
+}
+
 // Agrupa a lista linear de perguntas em "seções" — cada pergunta do tipo
 // 'secao' inicia uma seção nova (ela mesma vira o cabeçalho, não entra na
 // lista de perguntas da seção). Perguntas antes da primeira 'secao' formam

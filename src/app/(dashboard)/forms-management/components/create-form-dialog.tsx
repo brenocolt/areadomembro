@@ -144,6 +144,7 @@ const TIPOS = [
     { value: 'colaborador_unico', label: 'Selecionar 1 Colaborador' },
     { value: 'colaborador_multiplo', label: 'Selecionar Múltiplos Colaboradores' },
     { value: 'grade_multipla_escolha', label: 'Grade de Múltipla Escolha' },
+    { value: 'selecionar_projeto', label: 'Selecionar Projeto (ativo)' },
 ]
 
 interface CreateFormDialogProps {

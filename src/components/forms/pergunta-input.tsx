@@ -9,6 +9,10 @@ interface PerguntaInputProps {
     valor: any
     onChange: (valor: any) => void
     colaboradores: { id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]
+    // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
+    // (ex.: NPS Projetos). Opcional porque a maioria dos formulários não usa
+    // esse tipo de pergunta.
+    projetos?: { id: string, nome: string }[]
     selfId?: string | null
     numero: number
 }
@@ -17,7 +21,7 @@ interface PerguntaInputProps {
 // Compartilhado entre a tela em que o membro responde e a simulação de
 // resposta em Gestão de Formulários, para que o teste mostre exatamente o
 // mesmo formulário que o membro vai ver.
-export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, selfId, numero }: PerguntaInputProps) {
+export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, projetos, selfId, numero }: PerguntaInputProps) {
     if (p.tipo === 'titulo') {
         return (
             <div className="pt-2 pb-1">
@@ -111,6 +115,19 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, sel
                     <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
                         {outros.map(c => (
                             <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            )}
+
+            {p.tipo === 'selecionar_projeto' && (
+                <Select value={valor || ''} onValueChange={(v) => onChange(v)}>
+                    <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus:ring-violet-500">
+                        <SelectValue placeholder="Selecione um projeto" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                        {(projetos || []).map(proj => (
+                            <SelectItem key={proj.id} value={proj.id}>{proj.nome}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>

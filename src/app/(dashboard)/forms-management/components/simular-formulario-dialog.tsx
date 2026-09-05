@@ -31,6 +31,7 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [publico, setPublico] = useState<FormularioPublico>({ quemResponde: [], quemRecebe: [] })
     const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
+    const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
     const [comoId, setComoId] = useState<string>('')
 
     const [respostasPorAlvo, setRespostasPorAlvo] = useState<Record<string, Record<string, any>>>({})
@@ -47,10 +48,11 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
             // que um membro real veria, e uma pergunta arquivada (removida
             // numa edição do formulário) não aparece mais pra responder.
             const perguntasComAtiva = supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).eq('ativa', true).order('ordem')
-            const [comAtivaResult, pub, { data: cData }] = await Promise.all([
+            const [comAtivaResult, pub, { data: cData }, { data: projData }] = await Promise.all([
                 perguntasComAtiva,
                 loadFormularioPublico(formulario!.id),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').order('nome'),
+                supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome'),
             ])
             const { data: pData } = isSchemaDesatualizado(comAtivaResult.error)
                 ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).order('ordem')
@@ -58,6 +60,7 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
             setPerguntas(pData || [])
             setPublico(pub)
             setColaboradores(cData || [])
+            setProjetos(projData || [])
             setComoId('')
             resetPreenchimento()
             setLoading(false)
@@ -265,6 +268,7 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
                                                 valor={respostas[p.id]}
                                                 onChange={(v) => setResposta(p.id, v)}
                                                 colaboradores={colaboradores}
+                                                projetos={projetos}
                                                 selfId={como.id}
                                                 numero={questionNumbers.get(p.id) || 0}
                                             />
