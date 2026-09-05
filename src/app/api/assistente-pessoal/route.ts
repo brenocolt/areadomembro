@@ -3,7 +3,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
-import { getNpsInternoRespostasSobre } from '@/lib/pipj-nps-interno'
+import { getRespostasFormulariosSobreColaborador } from '@/lib/forms-avaliacoes-membro'
+import { stripHtml } from '@/lib/forms-runtime'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -68,25 +69,28 @@ async function gatherNps(supabase: ReturnType<typeof createServerSupabaseClient>
         }
     } catch { /* fonte opcional */ }
 
-    // ── NPS Interno (formulários marcados com nps_interno) — o usuário é o AVALIADO ──
-    // Pode vir de vários formulários ao mesmo tempo (um por núcleo, um para
-    // diretores, um para gerentes etc.) — getNpsInternoRespostasSobre já
-    // resolve isso e já cobre tanto formulário direcionado quanto o modelo
-    // colaborador_unico (Piloto de Elite).
-    const internoMap = new Map<string, MonthBucket>()
-    let internoTotal = 0
+    // ── Avaliações recebidas em formulários — o usuário é o AVALIADO ────────
+    // Cobre TODO formulário que avalie alguém (direcionado via Quem Recebe,
+    // ou com uma pergunta "Selecionar 1 Colaborador"), de QUALQUER tipo —
+    // não só os marcados como NPS Interno. Agrupado pelo Tipo do Formulário
+    // (a "pasta" em Gestão de Formulários) para o assistente conseguir
+    // separar o que veio de cada fonte.
+    const formulariosMap = new Map<string, Map<string, MonthBucket>>()
+    let formulariosTotal = 0
     try {
-        const respostasInterno = await getNpsInternoRespostasSobre(supabase, ownId)
-        for (const r of respostasInterno) {
+        const respostas = await getRespostasFormulariosSobreColaborador(supabase, ownId)
+        for (const r of respostas) {
             const escalaPerguntas = r.perguntas.filter(p => p.tipo === 'escala')
             const textoPerguntas = r.perguntas.filter(p => ['texto', 'texto_longo', 'paragrafo'].includes(p.tipo))
+            const tipo = r.tipoFormulario || 'Formulário'
+            if (!formulariosMap.has(tipo)) formulariosMap.set(tipo, new Map())
             const ref = mesReferenciaFromDate(r.enviado_em)
-            const b = ensureBucket(internoMap, ref.ano, ref.mes)
-            b.n++; internoTotal++
+            const b = ensureBucket(formulariosMap.get(tipo)!, ref.ano, ref.mes)
+            b.n++; formulariosTotal++
             for (const ep of escalaPerguntas) {
                 const it = r.itens.find(i => i.pergunta_id === ep.id)
                 const v = Number(it?.valor)
-                if (it && !isNaN(v)) addMetric(b, ep.titulo || '', v)
+                if (it && !isNaN(v)) addMetric(b, ep.competencia?.trim() || stripHtml(ep.titulo), v)
             }
             for (const tp of textoPerguntas) {
                 const it = r.itens.find(i => i.pergunta_id === tp.id)
@@ -94,10 +98,13 @@ async function gatherNps(supabase: ReturnType<typeof createServerSupabaseClient>
             }
         }
     } catch { /* fonte opcional */ }
+    const avaliacoesFormularios = Object.fromEntries(
+        Array.from(formulariosMap.entries()).map(([tipo, map]) => [tipo, { porMes: bucketsToObject(map) }])
+    )
 
     return {
         npsExterno: { total: externoTotal, porMes: bucketsToObject(externoMap) },
-        npsInterno: { total: internoTotal, porMes: bucketsToObject(internoMap) },
+        avaliacoesFormularios: { total: formulariosTotal, porTipo: avaliacoesFormularios },
     }
 }
 

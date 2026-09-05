@@ -13,6 +13,7 @@ import { PastaInsights } from "./components/pasta-insights"
 import { NpsProjetoPerguntasDialog } from "./components/nps-projeto-perguntas-dialog"
 import { toast } from "sonner"
 import { loadFormularioPublico, resolveAlvos, colaboradorNoPublico } from "@/lib/forms-publico"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 
 // Convert ISO/UTC string -> "YYYY-MM-DDTHH:mm" in LOCAL timezone (input format).
 function isoToLocalDatetimeInput(iso: string | null | undefined): string {
@@ -423,10 +424,14 @@ export default function FormsManagementPage() {
     useEffect(() => { fetchForms() }, [])
 
     const loadFormWithQuestions = async (form: any): Promise<FormInitialData> => {
-        const [{ data: perguntas }, publico] = await Promise.all([
-            supabase.from('formulario_perguntas').select('*').eq('formulario_id', form.id).order('ordem'),
-            loadFormularioPublico(form.id),
-        ])
+        // Só perguntas ativas — uma arquivada (removida numa edição
+        // anterior, ver 20260909_formulario_perguntas_ativa.sql) não deve
+        // voltar a aparecer na tela de edição.
+        const perguntasComAtiva = supabase.from('formulario_perguntas').select('*').eq('formulario_id', form.id).eq('ativa', true).order('ordem')
+        const [comAtivaResult, publico] = await Promise.all([perguntasComAtiva, loadFormularioPublico(form.id)])
+        const { data: perguntas } = isSchemaDesatualizado(comAtivaResult.error)
+            ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', form.id).order('ordem')
+            : comAtivaResult
 
         return {
             id: form.id,
@@ -452,6 +457,7 @@ export default function FormsManagementPage() {
             gerarSubaba: !!form.gerar_subaba,
             subabaNome: form.subaba_nome || null,
             npsInterno: !!form.nps_interno,
+            modoResposta: form.modo_resposta || 'multipla',
         }
     }
 

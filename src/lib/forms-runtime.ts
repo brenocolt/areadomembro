@@ -16,12 +16,22 @@ export interface FormSection {
 // em nenhuma média nem contagem de avaliações.
 export const NAO_AVALIAR = '__nao_avaliar__'
 
+// Extrai o texto puro de um campo rich-text (negrito/itálico gravados como
+// HTML simples, ver RichTextInput) — usado sempre que o valor vai virar um
+// rótulo curto (nome de competência, métrica pro Assistente/Agente de
+// Feedback) em vez de ser exibido como rich text de verdade. Insere um
+// espaço no lugar de cada tag para não colar as palavras dos dois lados.
+export function stripHtml(html: string | null | undefined): string {
+    return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 // Nome exibido de uma pergunta de escala nas visualizações de competência
 // (sub-abas de Performance): usa a competência quando definida, senão cai de
-// volta no título da pergunta.
+// volta no título da pergunta (sempre como texto puro — "competência" é um
+// rótulo curto, não rich text).
 export function competenciaLabel(pergunta: { competencia?: string | null, titulo?: string | null }): string {
     const c = (pergunta.competencia || '').trim()
-    return c || (pergunta.titulo || '').trim() || 'Sem título'
+    return c || stripHtml(pergunta.titulo) || 'Sem título'
 }
 
 // Agrupa a lista linear de perguntas em "seções" — cada pergunta do tipo

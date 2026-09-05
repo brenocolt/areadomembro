@@ -931,10 +931,14 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
             const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
 
-            const { data: existingPerguntas } = await supabase
-                .from('formulario_perguntas')
-                .select('id')
-                .eq('formulario_id', initialData.id)
+            // Só considera perguntas ATIVAS como "já existentes" — uma
+            // pergunta arquivada (removida numa edição anterior) não deve
+            // ser tratada como se ainda estivesse no formulário.
+            const existingComAtiva = await supabase.from('formulario_perguntas').select('id').eq('formulario_id', initialData.id).eq('ativa', true)
+            const existingSemAtiva = isSchemaDesatualizado(existingComAtiva.error)
+                ? await supabase.from('formulario_perguntas').select('id').eq('formulario_id', initialData.id)
+                : null
+            const existingPerguntas = existingSemAtiva ? existingSemAtiva.data : existingComAtiva.data
             const existingIds = new Set((existingPerguntas || []).map((p: any) => p.id))
 
             const keptIds: string[] = []
@@ -981,7 +985,18 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
             const toDelete = Array.from(existingIds).filter(id => !keptIds.includes(id))
             if (toDelete.length > 0) {
-                await supabase.from('formulario_perguntas').delete().in('id', toDelete)
+                // Arquiva em vez de apagar: uma pergunta removida some da
+                // tela de resposta/edição, mas o histórico de respostas já
+                // dadas a ela continua entrando nas médias/gráficos de quem
+                // foi avaliado (só para de crescer dali pra frente).
+                const { error: archiveErr } = await supabase.from('formulario_perguntas').update({ ativa: false }).in('id', toDelete)
+                if (isSchemaDesatualizado(archiveErr)) {
+                    // Sem a coluna, não tem como só arquivar — cai pro
+                    // comportamento antigo (apaga de vez, junto com o
+                    // histórico de respostas dessa pergunta).
+                    await supabase.from('formulario_perguntas').delete().in('id', toDelete)
+                    toast.warning('Perguntas removidas foram apagadas com o histórico de respostas delas, porque o banco ainda não tem a coluna de arquivamento. Aplique a migração 20260909_formulario_perguntas_ativa.sql para preservar esse histórico da próxima vez.', { duration: 12000 })
+                }
             }
 
             await saveLogicaCondicional(validPerguntas, idMap)

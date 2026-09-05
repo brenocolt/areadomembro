@@ -89,7 +89,16 @@ export default function PerformancePage() {
                 return temColaboradorUnico.has(f.id)
             }
 
-            setNpsInternoFormIds(forms.filter(f => f.npsInterno && visivel(f)).map(f => f.id))
+            // NPS Interno entra TODO — sem filtrar por "Quem Recebe" atual.
+            // Cargo/núcleo mudam com o tempo (promoção, troca de núcleo): se
+            // filtrássemos pelo público de HOJE, um formulário que avaliou a
+            // pessoa no passado (ex.: Piloto de Elite do núcleo antigo) mas
+            // não a alcança mais sumiria da conta, apagando retroativamente
+            // critérios já avaliados. A view de competências já resolve
+            // "essa resposta é sobre mim?" olhando a resposta em si (alvo
+            // gravado ou pergunta colaborador_unico), então é ela quem
+            // decide o que aparece — aqui só juntamos TODAS as fontes.
+            setNpsInternoFormIds(forms.filter(f => f.npsInterno).map(f => f.id))
 
             setSubAbas(forms
                 .filter(f => f.gerarSubaba && !f.npsInterno && visivel(f))

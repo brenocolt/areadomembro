@@ -279,11 +279,14 @@ export default function FormulariosPage() {
 
     const openForm = async (formId: string) => {
         setActiveFormId(formId)
-        const { data } = await supabase
-            .from('formulario_perguntas')
-            .select('*')
-            .eq('formulario_id', formId)
-            .order('ordem')
+        // Só perguntas ativas — uma pergunta arquivada (removida numa
+        // edição do formulário, ver 20260909_formulario_perguntas_ativa.sql)
+        // não deve mais aparecer pra responder, mesmo que o histórico de
+        // respostas antigas dela continue preservado.
+        const comAtiva = await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formId).eq('ativa', true).order('ordem')
+        const { data } = isSchemaDesatualizado(comAtiva.error)
+            ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formId).order('ordem')
+            : comAtiva
         if (data) setPerguntas(data)
 
         const alvosDoForm = targetsByForm.get(formId) || null

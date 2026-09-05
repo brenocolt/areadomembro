@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
 import { colaboradorNoPublico, resolveAlvos, loadFormularioPublico, type FormularioPublico } from "@/lib/forms-publico"
 import { PerguntaInput } from "@/components/forms/pergunta-input"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 
 interface Colaborador { id: string; nome: string; cargo_atual?: string | null; nucleo_atual?: string | null }
 
@@ -42,11 +43,18 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
         if (!open || !formulario) return
         async function carregar() {
             setLoading(true)
-            const [{ data: pData }, pub, { data: cData }] = await Promise.all([
-                supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).order('ordem'),
+            // Só perguntas ativas — a simulação deve mostrar exatamente o
+            // que um membro real veria, e uma pergunta arquivada (removida
+            // numa edição do formulário) não aparece mais pra responder.
+            const perguntasComAtiva = supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).eq('ativa', true).order('ordem')
+            const [comAtivaResult, pub, { data: cData }] = await Promise.all([
+                perguntasComAtiva,
                 loadFormularioPublico(formulario!.id),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').order('nome'),
             ])
+            const { data: pData } = isSchemaDesatualizado(comAtivaResult.error)
+                ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).order('ordem')
+                : comAtivaResult
             setPerguntas(pData || [])
             setPublico(pub)
             setColaboradores(cData || [])
