@@ -4,47 +4,61 @@ import { useState, useEffect } from "react"
 import { NPSChart } from "./components/nps-chart";
 import { DetailedPerformance } from "./components/detailed-performance";
 import { FormularioCompetenciasView } from "./components/formulario-competencias-view";
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase";
+import { useColaborador, useAvaliacoesNpsCombinado } from "@/hooks/use-supabase";
 import { ImportNpsDialog } from "@/components/import-nps-dialog";
 import { supabase } from "@/lib/supabase";
 import { colaboradorNoPublico, type PublicoPar } from "@/lib/forms-publico";
 import { isSchemaDesatualizado } from "@/lib/db-compat";
 import { MessageSquare, FolderKanban, Zap, Award } from "lucide-react"
 
-// Sub-aba fixa: a visualização histórica de Performance (NPS Projetos). As
-// demais sub-abas — incluindo o NPS Interno (formulário marcado com
-// `nps_interno`) — vêm de formulários marcados com "Criar sub-aba" em Gestão
-// de Formulários — ver formularios.gerar_subaba/subaba_nome/nps_interno e
-// src/lib/forms-publico.ts.
+// Sub-aba fixa: a visualização histórica de Performance (NPS Projetos). O
+// NPS Interno é outra sub-aba fixa, mas COMPARTILHADA — pode ser alimentada
+// por vários formulários ao mesmo tempo (um por núcleo, um para diretores,
+// um para gerentes etc., todos marcados com `nps_interno`), que entram
+// somados numa aba só. As demais sub-abas vêm de formulários marcados com
+// "Criar sub-aba" em Gestão de Formulários — ver
+// formularios.gerar_subaba/subaba_nome/nps_interno e src/lib/forms-publico.ts.
 const TAB_NPS_PROJETOS = '__nps_projetos__'
+const TAB_NPS_INTERNO = '__nps_interno__'
 
-type SubAba = { id: string; titulo: string; npsInterno: boolean }
+type SubAba = { id: string; titulo: string }
 
 export default function PerformancePage() {
     const { colaboradorId, colaborador } = useColaborador()
     const [activeTab, setActiveTab] = useState<string>(TAB_NPS_PROJETOS)
     const [subAbas, setSubAbas] = useState<SubAba[]>([])
+    const [npsInternoFormIds, setNpsInternoFormIds] = useState<string[]>([])
 
     useEffect(() => {
         if (!colaborador) return
 
         async function carregarSubAbas() {
-            // Formulários que pediram sub-aba. `subaba_nome`/`nps_interno` são
-            // da migração 20260905 — sem ela, o PostgREST recusa a leitura
-            // INTEIRA por causa de colunas desconhecidas, e a tela mostraria
-            // "nenhuma sub-aba" mesmo com formulários configurados. Tenta com
-            // elas e, só nesse tipo de erro, repete sem elas.
+            // Formulários que pediram sub-aba OU que alimentam o NPS Interno
+            // (este último pode existir sem "Criar sub-aba" marcado, já que
+            // não ganha uma aba própria — entra na aba compartilhada).
+            // `subaba_nome`/`nps_interno` são da migração 20260905 — sem ela,
+            // o PostgREST recusa a leitura INTEIRA por causa de colunas
+            // desconhecidas, e a tela mostraria "nenhuma sub-aba" mesmo com
+            // formulários configurados. Tenta com elas e, só nesse tipo de
+            // erro, repete sem elas (aí nem sub-aba custom nem NPS Interno
+            // aparecem — mesmo comportamento de antes da migração).
             const comExtras = await supabase
                 .from('formularios')
-                .select('id, titulo, subaba_nome, nps_interno')
-                .eq('gerar_subaba', true)
+                .select('id, titulo, gerar_subaba, subaba_nome, nps_interno')
+                .or('gerar_subaba.eq.true,nps_interno.eq.true')
                 .order('created_at', { ascending: true })
             const semExtras = isSchemaDesatualizado(comExtras.error)
                 ? await supabase.from('formularios').select('id, titulo').eq('gerar_subaba', true).order('created_at', { ascending: true })
                 : null
-            const forms = (semExtras ? semExtras.data : comExtras.data) as any[] | null
+            const forms = ((semExtras ? semExtras.data : comExtras.data) || []).map((f: any) => ({
+                id: f.id as string,
+                titulo: f.titulo as string,
+                gerarSubaba: semExtras ? true : !!f.gerar_subaba,
+                subabaNome: (f.subaba_nome || '') as string,
+                npsInterno: semExtras ? false : !!f.nps_interno,
+            }))
 
-            if (!forms || forms.length === 0) { setSubAbas([]); return }
+            if (forms.length === 0) { setSubAbas([]); setNpsInternoFormIds([]); return }
 
             const [{ data: recebeRows }, { data: perguntasRows }] = await Promise.all([
                 supabase.from('formulario_publico_recebe').select('formulario_id, cargo, nucleo').in('formulario_id', forms.map(f => f.id)),
@@ -61,27 +75,41 @@ export default function PerformancePage() {
                 (perguntasRows || []).filter((p: any) => p.tipo === 'colaborador_unico').map((p: any) => p.formulario_id)
             )
 
+            const visivel = (f: { id: string }) => {
+                const recebe = recebeByForm.get(f.id) || []
+                if (recebe.length > 0) {
+                    // Direcionado: só vê quem está no público de "Quem
+                    // Recebe" — ou seja, quem é avaliado ali.
+                    return colaboradorNoPublico(colaborador, recebe)
+                }
+                // Sem "Quem Recebe": só faz sentido com uma pergunta
+                // "Selecionar 1 Colaborador" (modelo do NPS Interno) —
+                // aparece pra todo mundo, já que qualquer um pode ser
+                // escolhido nessa pergunta.
+                return temColaboradorUnico.has(f.id)
+            }
+
+            // NPS Interno entra TODO — sem filtrar por "Quem Recebe" atual.
+            // Cargo/núcleo mudam com o tempo (promoção, troca de núcleo): se
+            // filtrássemos pelo público de HOJE, um formulário que avaliou a
+            // pessoa no passado (ex.: Piloto de Elite do núcleo antigo) mas
+            // não a alcança mais sumiria da conta, apagando retroativamente
+            // critérios já avaliados. A view de competências já resolve
+            // "essa resposta é sobre mim?" olhando a resposta em si (alvo
+            // gravado ou pergunta colaborador_unico), então é ela quem
+            // decide o que aparece — aqui só juntamos TODAS as fontes.
+            setNpsInternoFormIds(forms.filter(f => f.npsInterno).map(f => f.id))
+
             setSubAbas(forms
-                .filter((f: any) => {
-                    const recebe = recebeByForm.get(f.id) || []
-                    if (recebe.length > 0) {
-                        // Direcionado: só vê quem está no público de "Quem
-                        // Recebe" — ou seja, quem é avaliado ali.
-                        return colaboradorNoPublico(colaborador, recebe)
-                    }
-                    // Sem "Quem Recebe": só faz sentido com uma pergunta
-                    // "Selecionar 1 Colaborador" (modelo do NPS Interno) —
-                    // aparece pra todo mundo, já que qualquer um pode ser
-                    // escolhido nessa pergunta.
-                    return temColaboradorUnico.has(f.id)
-                })
-                .map((f: any) => ({ id: f.id, titulo: (f.subaba_nome || '').trim() || f.titulo, npsInterno: !!f.nps_interno })))
+                .filter(f => f.gerarSubaba && !f.npsInterno && visivel(f))
+                .map(f => ({ id: f.id, titulo: f.subabaNome.trim() || f.titulo })))
         }
         carregarSubAbas()
     }, [colaborador])
 
     const tabs: SubAba[] = [
-        { id: TAB_NPS_PROJETOS, titulo: 'NPS Projetos', npsInterno: false },
+        { id: TAB_NPS_PROJETOS, titulo: 'NPS Projetos' },
+        ...(npsInternoFormIds.length > 0 ? [{ id: TAB_NPS_INTERNO, titulo: 'NPS Interno' }] : []),
         ...subAbas,
     ]
 
@@ -117,15 +145,22 @@ export default function PerformancePage() {
 
             {activeTab === TAB_NPS_PROJETOS && <NpsProjetosTab />}
 
-            {subAbas.filter(s => s.id === activeTab).map(s => (
+            {activeTab === TAB_NPS_INTERNO && npsInternoFormIds.length > 0 && (
                 <FormularioCompetenciasView
-                    key={s.id}
-                    formularioId={s.id}
+                    formularioIds={npsInternoFormIds}
                     colaboradorId={colaboradorId}
                     // O NPS Interno sempre avaliou o mês anterior ao envio —
                     // preserva esse comportamento específico dele.
-                    usarMesReferencia={s.npsInterno}
-                    emptyMessage={s.npsInterno ? 'Você ainda não recebeu avaliações no NPS Interno.' : undefined}
+                    usarMesReferencia
+                    emptyMessage="Você ainda não recebeu avaliações no NPS Interno."
+                />
+            )}
+
+            {subAbas.filter(s => s.id === activeTab).map(s => (
+                <FormularioCompetenciasView
+                    key={s.id}
+                    formularioIds={[s.id]}
+                    colaboradorId={colaboradorId}
                 />
             ))}
         </div>
@@ -136,9 +171,7 @@ export default function PerformancePage() {
 // sub-aba "NPS Projetos".
 function NpsProjetosTab() {
     const { colaboradorId, colaborador } = useColaborador()
-    const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
-        column: 'colaborador_id',
-        value: colaboradorId,
+    const { data: npsData } = useAvaliacoesNpsCombinado<any>(colaboradorId, {
         orderBy: 'ano',
         ascending: false,
         limit: 50,

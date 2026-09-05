@@ -2,7 +2,7 @@
 
 import { NPSGerenteChart } from "./components/nps-gerente-chart"
 import { NPSGerenteDetails } from "./components/nps-gerente-details"
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
+import { useColaborador, useAvaliacoesNpsCombinado } from "@/hooks/use-supabase"
 import { MessageSquare, HeartHandshake, LifeBuoy, Crown, ShieldAlert, Star } from "lucide-react"
 import { ImportNpsDialog } from "@/components/import-nps-dialog"
 import { useSession } from "next-auth/react"
@@ -18,9 +18,7 @@ export default function NPSGerentePage() {
     const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     const isAdministrador = isCargoDiretoria(colaborador?.cargo_atual)
 
-    const { data: npsData } = useSupabaseQuery<any>('avaliacoes_nps', {
-        column: 'colaborador_id',
-        value: colaboradorId,
+    const { data: npsData } = useAvaliacoesNpsCombinado<any>(colaboradorId, {
         orderBy: 'ano',
         ascending: false,
         limit: 12,

@@ -23,7 +23,6 @@ const ALL_PAGES = [
     { label: "NPS Gerente", path: "/nps-gerente" },
     { label: "Agente de Feedback", path: "/feedback-agente" },
     { label: "Assistente Pessoal", path: "/assistente-pessoal" },
-    { label: "NPS Projeto", path: "/nps-projeto" },
     { label: "Carteira PIPJ", path: "/wallet" },
     { label: "Formulários", path: "/formularios" },
     { label: "Minhas Milhas", path: "/milhas" },

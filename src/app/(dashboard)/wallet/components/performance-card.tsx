@@ -3,13 +3,11 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { CheckCircle2, AlertTriangle, Star } from "lucide-react"
-import { useColaborador, useSupabaseQuery } from "@/hooks/use-supabase"
+import { useColaborador, useAvaliacoesNpsCombinado } from "@/hooks/use-supabase"
 
 export function PerformanceCard() {
     const { colaborador, loading, colaboradorId } = useColaborador()
-    const { data: rawNpsData } = useSupabaseQuery<any>('avaliacoes_nps', {
-        column: 'colaborador_id',
-        value: colaboradorId,
+    const { data: rawNpsData } = useAvaliacoesNpsCombinado<any>(colaboradorId, {
         orderBy: 'ano',
         ascending: false,
         limit: 12,

@@ -2,11 +2,10 @@
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
-import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Star, Loader2 } from "lucide-react"
+import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Loader2, Lock, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
 import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms-publico"
 import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
@@ -23,6 +22,18 @@ export default function FormulariosPage() {
     // Respostas do respondente atual neste mês — inclui alvo_colaborador_id
     // para dar suporte a formulários direcionados (ver targetsByForm abaixo).
     const [respostasFeitas, setRespostasFeitas] = useState<any[]>([])
+    // Todas as respostas do respondente atual, sem filtro de mês — usada só
+    // para formulários com modo_resposta 'unica'/'unica_editavel', cuja
+    // restrição vale para sempre (não "reseta" todo mês como o padrão
+    // 'multipla' faz com respostasFeitas). Ver fonteRespostas/modoDoForm.
+    const [respostasTotais, setRespostasTotais] = useState<any[]>([])
+    // Resposta anterior (id) de cada alvo/self já respondido em formulário
+    // 'unica_editavel' — reenviar atualiza essa resposta em vez de criar uma
+    // nova. Preenchido ao abrir o formulário (ver openForm).
+    const [respostaIdPorAlvo, setRespostaIdPorAlvo] = useState<Record<string, string>>({})
+    // Abas/self travados porque o formulário é 'unica' e já foi respondido —
+    // não é possível reenviar.
+    const [bloqueadosPorAlvo, setBloqueadosPorAlvo] = useState<Set<string>>(new Set())
     const [activeFormId, setActiveFormId] = useState<string | null>(null)
     const [perguntas, setPerguntas] = useState<any[]>([])
 
@@ -61,13 +72,11 @@ export default function FormulariosPage() {
         setSectionHistoryPorAlvo(prev => ({ ...prev, [currentAlvoKey]: updater(prev[currentAlvoKey] || []) }))
     }
 
-    const router = useRouter()
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
-
-    const [npsCount, setNpsCount] = useState(0)
-    const [npsLastDate, setNpsLastDate] = useState<Date | null>(null)
-    const [npsAberto, setNpsAberto] = useState(true)
+    // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
+    // (ex.: NPS Projetos).
+    const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
 
     const fetchData = async () => {
         await supabase
@@ -93,6 +102,9 @@ export default function FormulariosPage() {
         const { data: cData } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
         const colaboradoresFull = cData || []
         setColaboradores(colaboradoresFull)
+
+        const { data: pData } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome')
+        setProjetos(pData || [])
 
         let visibleForms = formsData || []
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
@@ -175,30 +187,19 @@ export default function FormulariosPage() {
                 : respostasComAlvo.data
             if (rData) setRespostasFeitas(rData as unknown[])
 
-            const { data: configData } = await supabase
-                .from('configuracoes')
-                .select('valor')
-                .eq('chave', 'nps_projeto_ativo')
-                .single();
-            if (configData) {
-                setNpsAberto(configData.valor === true || configData.valor === 'true');
-            }
-
-            const { data: npsData, count } = await supabase
-                .from('nps_projeto_submissoes')
-                .select('created_at', { count: 'exact' })
-                .eq('avaliador_id', colaborador.id)
-                .gte('created_at', firstDayOfMonth)
-                .lte('created_at', lastDayOfMonth)
-                .order('created_at', { ascending: false })
-
-            if (npsData && npsData.length > 0) {
-                setNpsCount(count || npsData.length)
-                setNpsLastDate(new Date(npsData[0].created_at))
-            } else {
-                setNpsCount(0)
-                setNpsLastDate(null)
-            }
+            // Mesma busca, mas sem filtro de mês — só usada por formulários
+            // 'unica'/'unica_editavel' (ver fonteRespostas), cuja restrição
+            // não é mensal.
+            const respostasTotaisQuery = (colunas: string) => supabase
+                .from('formulario_respostas')
+                .select(colunas)
+                .eq('colaborador_id', colaborador.id)
+                .order('enviado_em', { ascending: false })
+            const respostasTotaisComAlvo = await respostasTotaisQuery('id, formulario_id, enviado_em, alvo_colaborador_id')
+            const rtData = isSchemaDesatualizado(respostasTotaisComAlvo.error)
+                ? (await respostasTotaisQuery('id, formulario_id, enviado_em')).data
+                : respostasTotaisComAlvo.data
+            if (rtData) setRespostasTotais(rtData as unknown[])
         }
     }
 
@@ -212,56 +213,127 @@ export default function FormulariosPage() {
         fetchData()
     }, [loadingColaborador, colaborador?.id])
 
+    // Modo de resposta do formulário — ver
+    // supabase/migrations/20260908_formularios_modo_resposta.sql. Ausente
+    // (migração pendente) ou qualquer valor desconhecido cai no padrão de
+    // sempre: múltiplas respostas, sem limite.
+    const modoDoForm = (formId: string): 'unica' | 'unica_editavel' | 'multipla' => {
+        const modo = forms.find(f => f.id === formId)?.modo_resposta
+        return modo === 'unica' || modo === 'unica_editavel' ? modo : 'multipla'
+    }
+    // 'multipla' usa a janela do mês atual (respostasFeitas) — comportamento
+    // de sempre. 'unica'/'unica_editavel' usam o histórico completo
+    // (respostasTotais): a restrição vale para sempre, não só neste mês.
+    const fonteRespostas = (formId: string) => modoDoForm(formId) === 'multipla' ? respostasFeitas : respostasTotais
+
     const getLastResponseDate = (formId: string) => {
-        const resp = respostasFeitas.find(r => r.formulario_id === formId)
+        const resp = fonteRespostas(formId).find(r => r.formulario_id === formId)
         return resp ? new Date(resp.enviado_em) : null
     }
 
     // Formulário direcionado só conta como "respondido" quando TODOS os
-    // alvos atuais têm pelo menos uma resposta este mês — se um novo alvo
-    // entrar no público depois, o formulário volta a ficar pendente mesmo
-    // que os alvos antigos já tenham sido respondidos.
+    // alvos atuais têm pelo menos uma resposta na fonte relevante — se um
+    // novo alvo entrar no público depois, o formulário volta a ficar
+    // pendente mesmo que os alvos antigos já tenham sido respondidos.
     const hasResponded = (formId: string) => {
+        const fonte = fonteRespostas(formId)
         const alvos = targetsByForm.get(formId)
-        if (!alvos) return respostasFeitas.some(r => r.formulario_id === formId)
+        if (!alvos) return fonte.some(r => r.formulario_id === formId)
         if (alvos.length === 0) return false
-        const respondidos = new Set(respostasFeitas.filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
+        const respondidos = new Set(fonte.filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
         return alvos.every(a => respondidos.has(a.id))
     }
-    const responseCount = (formId: string) => respostasFeitas.filter(r => r.formulario_id === formId).length
+    const responseCount = (formId: string) => fonteRespostas(formId).filter(r => r.formulario_id === formId).length
     // Progresso de um formulário direcionado (null = não é direcionado).
     const alvosStatus = (formId: string): { total: number, respondidos: number } | null => {
         const alvos = targetsByForm.get(formId)
         if (!alvos) return null
-        const respondidos = new Set(respostasFeitas.filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
+        const respondidos = new Set(fonteRespostas(formId).filter(r => r.formulario_id === formId).map(r => r.alvo_colaborador_id))
         return { total: alvos.length, respondidos: alvos.filter(a => respondidos.has(a.id)).length }
     }
 
     const openForm = async (formId: string) => {
         setActiveFormId(formId)
-        const { data } = await supabase
-            .from('formulario_perguntas')
-            .select('*')
-            .eq('formulario_id', formId)
-            .order('ordem')
+        // Só perguntas ativas — uma pergunta arquivada (removida numa
+        // edição do formulário, ver 20260909_formulario_perguntas_ativa.sql)
+        // não deve mais aparecer pra responder, mesmo que o histórico de
+        // respostas antigas dela continue preservado.
+        const comAtiva = await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formId).eq('ativa', true).order('ordem')
+        const { data } = isSchemaDesatualizado(comAtiva.error)
+            ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formId).order('ordem')
+            : comAtiva
         if (data) setPerguntas(data)
 
         const alvosDoForm = targetsByForm.get(formId) || null
         setTargets(alvosDoForm)
-        setActiveAlvoId(alvosDoForm && alvosDoForm.length > 0 ? alvosDoForm[0].id : null)
 
         // Estado de preenchimento limpo a cada abertura.
         setRespostasPorAlvo({})
         setSectionIndexPorAlvo({})
         setSectionHistoryPorAlvo({})
+        setRespostaIdPorAlvo({})
+        setBloqueadosPorAlvo(new Set())
 
-        // Abas já respondidas neste mês (antes desta sessão) começam marcadas
-        // — a pessoa pode reabri-las e responder de novo se quiser.
-        setEnviadosPorAlvo(new Set(
-            respostasFeitas
-                .filter(r => r.formulario_id === formId)
-                .map(r => r.alvo_colaborador_id || SELF_KEY)
-        ))
+        const modo = modoDoForm(formId)
+        const respostasDoForm = fonteRespostas(formId).filter(r => r.formulario_id === formId)
+
+        // Abas/self já respondidas (na fonte certa pro modo — ver
+        // fonteRespostas) começam marcadas — em modo 'multipla' a pessoa pode
+        // reabri-las e responder de novo se quiser.
+        const jaRespondidoKeys = new Set(respostasDoForm.map(r => r.alvo_colaborador_id || SELF_KEY))
+        setEnviadosPorAlvo(jaRespondidoKeys)
+
+        if (modo === 'unica') {
+            // Resposta única: quem já respondeu fica travado, sem reenviar.
+            setBloqueadosPorAlvo(jaRespondidoKeys)
+        }
+
+        if (modo === 'unica_editavel' && respostasDoForm.length > 0) {
+            // Carrega a resposta mais recente de cada alvo/self já
+            // respondido para pré-preencher o formulário — reenviar edita a
+            // mesma resposta em vez de criar uma nova.
+            const maisRecentePorAlvo = new Map<string, any>()
+            for (const r of respostasDoForm) {
+                const key = r.alvo_colaborador_id || SELF_KEY
+                const atual = maisRecentePorAlvo.get(key)
+                if (!atual || new Date(r.enviado_em) > new Date(atual.enviado_em)) maisRecentePorAlvo.set(key, r)
+            }
+            const idsRespostas = Array.from(maisRecentePorAlvo.values()).map(r => r.id).filter(Boolean)
+            const tipoPorPergunta = new Map<string, string>((data || []).map((p: any) => [p.id, p.tipo]))
+            let itensData: any[] = []
+            if (idsRespostas.length > 0) {
+                const { data: itensResult } = await supabase.from('formulario_respostas_itens').select('resposta_id, pergunta_id, valor, valores').in('resposta_id', idsRespostas)
+                itensData = itensResult || []
+            }
+
+            const novosRespostaId: Record<string, string> = {}
+            const novasRespostasPorAlvo: Record<string, Record<string, any>> = {}
+            for (const [key, r] of maisRecentePorAlvo.entries()) {
+                if (!r.id) continue
+                novosRespostaId[key] = r.id
+                const itens = (itensData || []).filter((it: any) => it.resposta_id === r.id)
+                const valores: Record<string, any> = {}
+                for (const it of itens) {
+                    const tipo = tipoPorPergunta.get(it.pergunta_id)
+                    if (tipo === 'grade_multipla_escolha') {
+                        try { valores[it.pergunta_id] = it.valor ? JSON.parse(it.valor) : {} } catch { valores[it.pergunta_id] = {} }
+                    } else if (Array.isArray(it.valores) && it.valores.length > 0) {
+                        valores[it.pergunta_id] = it.valores
+                    } else {
+                        valores[it.pergunta_id] = it.valor
+                    }
+                }
+                novasRespostasPorAlvo[key] = valores
+            }
+            setRespostaIdPorAlvo(novosRespostaId)
+            setRespostasPorAlvo(novasRespostasPorAlvo)
+        }
+
+        // Abre já na primeira aba ainda não travada (em 'unica', pula direto
+        // pras que faltam responder; nos outros modos não faz diferença).
+        setActiveAlvoId(alvosDoForm && alvosDoForm.length > 0
+            ? (alvosDoForm.find(a => !jaRespondidoKeys.has(a.id) || modo !== 'unica') || alvosDoForm[0]).id
+            : null)
     }
 
     // Seções derivadas da lista linear de perguntas (ver buildSections) e a
@@ -339,18 +411,53 @@ export default function FormulariosPage() {
             }
         }
 
-        setSubmitting(true)
-
         // Em formulário direcionado, cada envio é sobre a aba (alvo) ativa.
         const alvoId = targets ? activeAlvoId : null
+        const alvoKey = alvoId || SELF_KEY
+        const modo = modoDoForm(activeFormId)
 
-        const { data: respData, error } = await supabase.from('formulario_respostas').insert({
-            formulario_id: activeFormId,
-            colaborador_id: colaborador.id,
-            alvo_colaborador_id: alvoId,
-        }).select().single()
+        if (modo === 'unica' && bloqueadosPorAlvo.has(alvoKey)) {
+            toast.error(targets
+                ? `Este formulário só pode ser respondido uma vez, e você já enviou sua resposta sobre ${targets.find(t => t.id === alvoId)?.nome || 'esta pessoa'}.`
+                : "Este formulário só pode ser respondido uma vez, e você já enviou sua resposta.")
+            return
+        }
 
-        if (error || !respData) {
+        setSubmitting(true)
+
+        // 'unica_editavel' com resposta anterior: edita a mesma resposta (só
+        // troca os itens) em vez de criar uma nova.
+        const respostaExistenteId = modo === 'unica_editavel' ? respostaIdPorAlvo[alvoKey] : undefined
+
+        let respData: { id: string } | null = null
+        if (respostaExistenteId) {
+            const { error: updError } = await supabase
+                .from('formulario_respostas')
+                .update({ enviado_em: new Date().toISOString() })
+                .eq('id', respostaExistenteId)
+            if (updError) {
+                toast.error("Erro ao atualizar sua resposta.")
+                setSubmitting(false)
+                return
+            }
+            await supabase.from('formulario_respostas_itens').delete().eq('resposta_id', respostaExistenteId)
+            respData = { id: respostaExistenteId }
+        } else {
+            const { data: inserted, error } = await supabase.from('formulario_respostas').insert({
+                formulario_id: activeFormId,
+                colaborador_id: colaborador.id,
+                alvo_colaborador_id: alvoId,
+            }).select().single()
+
+            if (error || !inserted) {
+                toast.error("Erro ao enviar respostas.")
+                setSubmitting(false)
+                return
+            }
+            respData = inserted
+        }
+
+        if (!respData) {
             toast.error("Erro ao enviar respostas.")
             setSubmitting(false)
             return
@@ -362,7 +469,9 @@ export default function FormulariosPage() {
         const items = buildRespostaItens(respData.id, realPerguntas, respostas)
 
         if (items.length === 0) {
-            await supabase.from('formulario_respostas').delete().eq('id', respData.id)
+            // Numa edição, a resposta já existia antes desta tentativa — só
+            // apaga a resposta inteira quando ela acabou de ser criada agora.
+            if (!respostaExistenteId) await supabase.from('formulario_respostas').delete().eq('id', respData.id)
             toast.error('Não foi possível salvar suas respostas. Responda ao menos uma pergunta (respostas marcadas como "Não avaliar" não são gravadas).')
             setSubmitting(false)
             return
@@ -370,7 +479,7 @@ export default function FormulariosPage() {
 
         const { error: itemsError } = await supabase.from('formulario_respostas_itens').insert(items)
         if (itemsError) {
-            await supabase.from('formulario_respostas').delete().eq('id', respData.id)
+            if (!respostaExistenteId) await supabase.from('formulario_respostas').delete().eq('id', respData.id)
             console.error('Erro ao salvar itens da resposta:', itemsError)
             toast.error('Erro ao salvar suas respostas: ' + itemsError.message)
             setSubmitting(false)
@@ -378,6 +487,10 @@ export default function FormulariosPage() {
         }
 
         setSubmitting(false)
+
+        if (modo === 'unica') {
+            setBloqueadosPorAlvo(prev => new Set(prev).add(alvoKey))
+        }
 
         // Formulário direcionado: marca esta aba como enviada. Se sobrar
         // alguma aba pendente, avança pra ela e mantém o formulário aberto —
@@ -415,10 +528,13 @@ export default function FormulariosPage() {
 
     const pendentes = forms.filter(f => !hasResponded(f.id))
     const jaRespondidos = forms.filter(f => hasResponded(f.id))
-    const npsSubmitted = npsCount > 0
 
     if (activeFormId) {
         const form = forms.find(f => f.id === activeFormId)
+        const modoAtivo = modoDoForm(activeFormId)
+        const alvoKeyAtivo = targets ? (activeAlvoId || SELF_KEY) : SELF_KEY
+        const bloqueadoAtivo = bloqueadosPorAlvo.has(alvoKeyAtivo)
+        const editandoAtivo = modoAtivo === 'unica_editavel' && !!respostaIdPorAlvo[alvoKeyAtivo]
         const prevCount = responseCount(activeFormId)
         const currentSection = sections[sectionIndex] || sections[0]
         const nextIsSubmit = computeNext(sections, sectionIndex, respostas).type === 'submit'
@@ -448,21 +564,26 @@ export default function FormulariosPage() {
                                 <div className="flex flex-wrap gap-2">
                                     {targets.map(t => {
                                         const done = enviadosPorAlvo.has(t.id)
+                                        const bloqueado = bloqueadosPorAlvo.has(t.id)
                                         const active = t.id === activeAlvoId
                                         return (
                                             <button
                                                 key={t.id}
                                                 type="button"
-                                                onClick={() => setActiveAlvoId(t.id)}
+                                                disabled={bloqueado}
+                                                title={bloqueado ? `Este formulário só pode ser respondido uma vez — resposta sobre ${t.nome} já enviada.` : undefined}
+                                                onClick={() => { if (!bloqueado) setActiveAlvoId(t.id) }}
                                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                                                     active
                                                         ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20'
+                                                        : bloqueado
+                                                        ? 'bg-slate-100/70 dark:bg-slate-800/50 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                                                         : done
                                                         ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
                                                         : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-500/10'
                                                 }`}
                                             >
-                                                {done && <CheckCircle2 className="h-3.5 w-3.5" />}
+                                                {bloqueado ? <Lock className="h-3.5 w-3.5" /> : done && <CheckCircle2 className="h-3.5 w-3.5" />}
                                                 {t.nome}
                                             </button>
                                         )
@@ -471,10 +592,18 @@ export default function FormulariosPage() {
                             </div>
                         )}
 
-                        {!targets && prevCount > 0 && (
+                        {!targets && modoAtivo === 'multipla' && prevCount > 0 && (
                             <div className="ml-12 mb-4">
                                 <Badge className="bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400 text-[10px] font-bold border-none">
                                     Você já respondeu {prevCount}x — esta será uma nova resposta
+                                </Badge>
+                            </div>
+                        )}
+
+                        {!targets && modoAtivo === 'unica_editavel' && !!respostaIdPorAlvo[SELF_KEY] && (
+                            <div className="ml-12 mb-4">
+                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none flex items-center gap-1 w-fit">
+                                    <Pencil className="h-3 w-3" /> Você já respondeu — isto vai corrigir sua resposta anterior
                                 </Badge>
                             </div>
                         )}
@@ -506,6 +635,7 @@ export default function FormulariosPage() {
                                     valor={respostas[p.id]}
                                     onChange={(v) => setRespostas({ ...respostas, [p.id]: v })}
                                     colaboradores={colaboradores}
+                                    projetos={projetos}
                                     selfId={colaborador?.id}
                                     numero={questionNumbers.get(p.id) || 0}
                                 />
@@ -516,11 +646,26 @@ export default function FormulariosPage() {
                             <Button variant="ghost" onClick={handleBack} className="rounded-xl font-bold text-slate-500">
                                 ← Voltar
                             </Button>
-                            <Button onClick={handleNext} disabled={submitting} className="rounded-xl font-bold h-11 px-8 bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
+                            <Button
+                                onClick={handleNext}
+                                disabled={submitting || (nextIsSubmit && bloqueadoAtivo)}
+                                title={nextIsSubmit && bloqueadoAtivo ? 'Este formulário só pode ser respondido uma vez — resposta já enviada.' : undefined}
+                                className="rounded-xl font-bold h-11 px-8 bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20"
+                            >
                                 {submitting
                                     ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    : nextIsSubmit && bloqueadoAtivo
+                                    ? <Lock className="h-4 w-4 mr-2" />
                                     : (nextIsSubmit ? <Send className="h-4 w-4 mr-2" /> : <ArrowRight className="h-4 w-4 mr-2" />)}
-                                {submitting ? 'Enviando...' : (nextIsSubmit ? (targets ? `Enviar sobre ${targets.find(t => t.id === activeAlvoId)?.nome || ''}` : 'Enviar Respostas') : 'Próxima Seção')}
+                                {submitting
+                                    ? 'Enviando...'
+                                    : nextIsSubmit && bloqueadoAtivo
+                                    ? 'Já respondido'
+                                    : nextIsSubmit
+                                    ? (targets
+                                        ? `${editandoAtivo ? 'Corrigir' : 'Enviar'} sobre ${targets.find(t => t.id === activeAlvoId)?.nome || ''}`
+                                        : (editandoAtivo ? 'Corrigir Respostas' : 'Enviar Respostas'))
+                                    : 'Próxima Seção'}
                             </Button>
                         </div>
                     </div>
@@ -538,56 +683,6 @@ export default function FormulariosPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Formulários</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Responda os formulários disponíveis para você.</p>
-                </div>
-            </div>
-
-            <div className="space-y-3">
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Star className="h-5 w-5 text-violet-500" /> NPS Projeto
-                </h2>
-                <div
-                    onClick={() => { if(npsAberto) router.push('/nps-projeto') }}
-                    className={`bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm transition-all group ${
-                        npsAberto ? 'cursor-pointer hover:border-violet-300 dark:hover:border-violet-600' : 'opacity-70 cursor-not-allowed'
-                    }`}
-                >
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${!npsAberto ? 'bg-slate-50 dark:bg-slate-800' : npsSubmitted ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-amber-50 dark:bg-amber-500/10'}`}>
-                                {!npsAberto
-                                    ? <Star className="h-5 w-5 text-slate-400" />
-                                    : npsSubmitted
-                                    ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                                    : <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                                }
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-slate-900 dark:text-white">Avaliação NPS do Projeto</h3>
-                                <p className="text-sm text-slate-500 mt-0.5">Avaliação mensal de desempenho por projeto</p>
-                                {npsSubmitted && npsLastDate && (
-                                    <div className="flex items-center gap-3 mt-0.5">
-                                        <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                                            ✓ Respondido {npsCount}x este mês
-                                        </p>
-                                        <span className="text-xs text-slate-400">
-                                            Última: {npsLastDate.toLocaleDateString('pt-BR')} às {npsLastDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                )}
-                                {!npsAberto && (
-                                    <p className="text-xs text-rose-500 font-medium mt-1">Este formulário está fechado para respostas no momento.</p>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            {npsAberto && npsSubmitted && (
-                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none">
-                                    Responder novamente
-                                </Badge>
-                            )}
-                            {npsAberto && <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />}
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -646,11 +741,23 @@ export default function FormulariosPage() {
                             const lastDate = getLastResponseDate(form.id)
                             const count = responseCount(form.id)
                             const status = alvosStatus(form.id)
+                            const modo = modoDoForm(form.id)
+                            // Formulário 'unica' sem direcionamento (self):
+                            // fica travado de vez, não há o que reabrir.
+                            const travadoParaSempre = modo === 'unica' && !targetsByForm.has(form.id)
                             return (
                                 <div
                                     key={form.id}
-                                    onClick={() => openForm(form.id)}
-                                    className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm cursor-pointer hover:border-violet-300 dark:hover:border-violet-600 transition-all group"
+                                    onClick={() => {
+                                        if (travadoParaSempre) {
+                                            toast.info('Este formulário só pode ser respondido uma vez, e você já enviou sua resposta.')
+                                            return
+                                        }
+                                        openForm(form.id)
+                                    }}
+                                    className={`bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm transition-all group ${
+                                        travadoParaSempre ? 'opacity-70 cursor-default' : 'cursor-pointer hover:border-violet-300 dark:hover:border-violet-600'
+                                    }`}
                                 >
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
@@ -677,10 +784,20 @@ export default function FormulariosPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none">
-                                                Responder novamente
-                                            </Badge>
-                                            <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />
+                                            {modo === 'unica' ? (
+                                                <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 text-[10px] font-bold border-none flex items-center gap-1">
+                                                    <Lock className="h-3 w-3" /> Resposta única enviada
+                                                </Badge>
+                                            ) : modo === 'unica_editavel' ? (
+                                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none flex items-center gap-1">
+                                                    <Pencil className="h-3 w-3" /> Corrigir resposta
+                                                </Badge>
+                                            ) : (
+                                                <Badge className="bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400 text-[10px] font-bold border-none">
+                                                    Responder novamente
+                                                </Badge>
+                                            )}
+                                            {!travadoParaSempre && <ArrowRight className="h-5 w-5 text-slate-300 group-hover:text-violet-500 transition-colors" />}
                                         </div>
                                     </div>
                                 </div>
@@ -690,7 +807,7 @@ export default function FormulariosPage() {
                 </div>
             )}
 
-            {forms.length === 0 && !npsSubmitted && (
+            {forms.length === 0 && (
                 <div className="bg-white dark:bg-[#0F172A] rounded-3xl p-12 border border-slate-100 dark:border-slate-800/50 shadow-sm text-center">
                     <FileQuestion className="h-12 w-12 mx-auto mb-3 text-slate-300" />
                     <p className="text-lg font-bold text-slate-400">Nenhum formulário adicional disponível</p>

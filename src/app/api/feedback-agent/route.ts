@@ -4,7 +4,8 @@ import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
 import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
-import { getNpsInternoFormId } from '@/lib/pipj-nps-interno'
+import { getRespostasFormulariosSobreColaborador } from '@/lib/forms-avaliacoes-membro'
+import { stripHtml } from '@/lib/forms-runtime'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -92,51 +93,43 @@ async function gatherEvaluations(targetId: string) {
         }
     } catch (e) { /* fonte opcional */ }
 
-    // ── NPS Interno (formulário marcado com nps_interno) ────────────────────
-    const internoMap = new Map<string, MonthBucket>()
-    let internoTotal = 0
+    // ── Avaliações recebidas em formulários — o AVALIADO é targetId ─────────
+    // Cobre TODO formulário que avalie alguém (direcionado via Quem Recebe,
+    // ou com uma pergunta "Selecionar 1 Colaborador"), de QUALQUER tipo —
+    // não só os marcados como NPS Interno. Agrupado pelo Tipo do Formulário
+    // (a "pasta" em Gestão de Formulários) para o agente conseguir separar
+    // o que veio de cada fonte.
+    const formulariosMap = new Map<string, Map<string, MonthBucket>>()
+    let formulariosTotal = 0
     try {
-        const formId = await getNpsInternoFormId(supabase)
-        if (formId) {
-            const { data: perguntas } = await supabase
-                .from('formulario_perguntas')
-                .select('id, tipo, titulo, ordem')
-                .eq('formulario_id', formId)
-                .order('ordem', { ascending: true })
-            const avaliadoPergunta = (perguntas || []).find(p => p.tipo === 'colaborador_unico')
-            const escalaPerguntas = (perguntas || []).filter(p => p.tipo === 'escala')
-            const textoPerguntas = (perguntas || []).filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
-
-            if (avaliadoPergunta) {
-                const { data: respostas } = await supabase
-                    .from('formulario_respostas')
-                    .select('id, enviado_em, formulario_respostas_itens(pergunta_id, valor, valores)')
-                    .eq('formulario_id', formId)
-                for (const r of respostas || []) {
-                    const items = (r as any).formulario_respostas_itens || []
-                    const avaliadoItem = items.find((it: any) => it.pergunta_id === avaliadoPergunta.id)
-                    if (!avaliadoItem || avaliadoItem.valor !== targetId) continue
-                    const ref = mesReferenciaFromDate(r.enviado_em)
-                    const b = ensureBucket(internoMap, ref.ano, ref.mes)
-                    b.n++
-                    internoTotal++
-                    for (const ep of escalaPerguntas) {
-                        const it = items.find((i: any) => i.pergunta_id === ep.id)
-                        const v = Number(it?.valor)
-                        if (it && !isNaN(v)) addMetric(b, ep.titulo, v)
-                    }
-                    for (const tp of textoPerguntas) {
-                        const it = items.find((i: any) => i.pergunta_id === tp.id)
-                        if (it?.valor && String(it.valor).trim()) b.feedbacks.push(String(it.valor).trim())
-                    }
-                }
+        const respostas = await getRespostasFormulariosSobreColaborador(supabase, targetId)
+        for (const r of respostas) {
+            const escalaPerguntas = r.perguntas.filter(p => p.tipo === 'escala')
+            const textoPerguntas = r.perguntas.filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
+            const tipo = r.tipoFormulario || 'Formulário'
+            if (!formulariosMap.has(tipo)) formulariosMap.set(tipo, new Map())
+            const ref = mesReferenciaFromDate(r.enviado_em)
+            const b = ensureBucket(formulariosMap.get(tipo)!, ref.ano, ref.mes)
+            b.n++
+            formulariosTotal++
+            for (const ep of escalaPerguntas) {
+                const it = r.itens.find(i => i.pergunta_id === ep.id)
+                const v = Number(it?.valor)
+                if (it && !isNaN(v)) addMetric(b, ep.competencia?.trim() || stripHtml(ep.titulo), v)
+            }
+            for (const tp of textoPerguntas) {
+                const it = r.itens.find(i => i.pergunta_id === tp.id)
+                if (it?.valor && String(it.valor).trim()) b.feedbacks.push(String(it.valor).trim())
             }
         }
     } catch (e) { /* fonte opcional */ }
+    const avaliacoesFormularios = Object.fromEntries(
+        Array.from(formulariosMap.entries()).map(([tipo, map]) => [tipo, { porMes: bucketsToObject(map) }])
+    )
 
     return {
         npsExterno: { total: externoTotal, porMes: bucketsToObject(externoMap) },
-        npsInterno: { total: internoTotal, porMes: bucketsToObject(internoMap) },
+        avaliacoesFormularios: { total: formulariosTotal, porTipo: avaliacoesFormularios },
     }
 }
 
@@ -174,7 +167,7 @@ export async function POST(request: Request) {
         const { data: alvo } = await supabase.from('colaboradores').select('nome, cargo_atual').eq('id', targetId).single()
         const dados = await gatherEvaluations(targetId)
 
-        const semDados = dados.npsExterno.total === 0 && dados.npsInterno.total === 0
+        const semDados = dados.npsExterno.total === 0 && dados.avaliacoesFormularios.total === 0
 
         const systemPrompt = `Você é o Agente de Feedback da Produtiva Júnior. Sua missão é ler as avaliações internas recebidas por um membro e devolver um feedback qualitativo, humano e construtivo — como um mentor que leu com atenção o que os colegas escreveram, não como um relatório estatístico.
 

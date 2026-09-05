@@ -26,10 +26,21 @@ const COLUNAS_MIGRACAO_20260825 = ['gerar_subaba', 'competencia', 'permite_nao_a
 // Colunas da migração 20260905 (nome customizado da sub-aba + marcação do
 // formulário do NPS Interno) — mesmo raciocínio acima.
 const COLUNAS_MIGRACAO_20260905 = ['subaba_nome', 'nps_interno']
-const COLUNAS_OPCIONAIS = [...COLUNAS_MIGRACAO_20260825, ...COLUNAS_MIGRACAO_20260905]
+// Coluna da migração 20260908 (modo de resposta: única/única editável/múltipla).
+const COLUNAS_MIGRACAO_20260908 = ['modo_resposta']
+// Coluna da migração 20260912 (marcação do formulário como fonte do NPS
+// Projetos genérico — ver src/lib/nps-projetos-generico.ts).
+const COLUNAS_MIGRACAO_20260912 = ['nps_projetos_generico']
+const COLUNAS_OPCIONAIS = [...COLUNAS_MIGRACAO_20260825, ...COLUNAS_MIGRACAO_20260905, ...COLUNAS_MIGRACAO_20260908, ...COLUNAS_MIGRACAO_20260912]
 
 function mensagemErroGravacao(error: { message?: string, details?: string } | null): string {
     const msg = `${error?.message || ''} ${error?.details || ''}`
+    if (COLUNAS_MIGRACAO_20260912.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem a coluna de marcação do NPS Projetos. Aplique a migração supabase/migrations/20260912_formularios_nps_projetos_generico.sql e tente de novo.'
+    }
+    if (COLUNAS_MIGRACAO_20260908.some(c => msg.includes(c))) {
+        return 'O banco ainda não tem a coluna de modo de resposta. Aplique a migração supabase/migrations/20260908_formularios_modo_resposta.sql e tente de novo.'
+    }
     if (COLUNAS_MIGRACAO_20260905.some(c => msg.includes(c))) {
         return 'O banco ainda não tem as colunas de nome da sub-aba/NPS Interno. Aplique a migração supabase/migrations/20260905_formularios_subaba_nome_nps_interno.sql e tente de novo.'
     }
@@ -66,7 +77,7 @@ async function gravarComFallback<T>(
 // de NPS Interno não foram gravados.
 function avisarSemExtras(degradado: boolean) {
     if (!degradado) return
-    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba (nome ou marcador de NPS Interno inclusive): o banco ainda não tem essas colunas. Rode as migrações 20260825_formularios_subabas_competencias.sql e 20260905_formularios_subaba_nome_nps_interno.sql e salve de novo para aplicá-las.', { duration: 10000 })
+    toast.warning('Salvo sem competência/"Não avaliar"/sub-aba (nome ou marcador de NPS Interno/NPS Projetos inclusive)/modo de resposta: o banco ainda não tem essas colunas. Rode as migrações 20260825_formularios_subabas_competencias.sql, 20260905_formularios_subaba_nome_nps_interno.sql, 20260908_formularios_modo_resposta.sql e 20260912_formularios_nps_projetos_generico.sql e salve de novo para aplicá-las.', { duration: 10000 })
 }
 
 function localDatetimeInputToIso(local: string | null | undefined): string | null {
@@ -119,10 +130,21 @@ export interface FormInitialData {
     // formulário (ex.: título "Piloto de Elite" → sub-aba "NPS Interno").
     // Vazio = usa o título do formulário.
     subabaNome?: string | null
-    // Marca ESTE formulário como "o" NPS Interno — usado pelo PIPJ, Feedback
-    // Agent e Assistente Pessoal para achar as respostas certas. Só um
-    // formulário deve estar marcado; o salvamento desmarca qualquer outro.
+    // Marca este formulário como UMA das fontes do NPS Interno — usado pelo
+    // PIPJ, Feedback Agent e Assistente Pessoal para achar as respostas
+    // certas. Vários formulários podem estar marcados ao mesmo tempo (ex.:
+    // um por núcleo, um para diretores, um para gerentes) — todos entram
+    // somados na mesma aba compartilhada "NPS Interno" em Performance.
     npsInterno?: boolean
+    // Marca este formulário como UMA das fontes do NPS Projetos — ver
+    // src/lib/nps-projetos-generico.ts. Somado ao avaliacoes_nps (fonte
+    // atual) em PIPJ, Performance, NPS Gerente e Wallet; independente do
+    // marcador de NPS Interno (são fontes separadas).
+    npsProjetosGenerico?: boolean
+    // Controla quantas vezes cada pessoa pode responder este formulário —
+    // ver supabase/migrations/20260908_formularios_modo_resposta.sql.
+    // Ausente/'multipla' = comportamento de sempre (ilimitado).
+    modoResposta?: 'unica' | 'unica_editavel' | 'multipla'
 }
 
 const TIPOS = [
@@ -133,6 +155,7 @@ const TIPOS = [
     { value: 'colaborador_unico', label: 'Selecionar 1 Colaborador' },
     { value: 'colaborador_multiplo', label: 'Selecionar Múltiplos Colaboradores' },
     { value: 'grade_multipla_escolha', label: 'Grade de Múltipla Escolha' },
+    { value: 'selecionar_projeto', label: 'Selecionar Projeto (ativo)' },
 ]
 
 interface CreateFormDialogProps {
@@ -242,7 +265,8 @@ function SortableQuestion({ p, i, updatePergunta, removePergunta, duplicatePergu
                             id={`pergunta-titulo-${p.id}`}
                             value={p.titulo}
                             onChange={(html) => updatePergunta(p.id, 'titulo', html)}
-                            className="flex items-center bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-xl h-10 px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 pr-16"
+                            multiline
+                            className="block min-h-10 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 pr-16"
                             placeholder="Texto da pergunta"
                         />
                         <div className="absolute right-1.5 top-1.5 flex items-center">
@@ -566,6 +590,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     const [gerarSubaba, setGerarSubaba] = useState(false)
     const [subabaNome, setSubabaNome] = useState("")
     const [npsInterno, setNpsInterno] = useState(false)
+    const [npsProjetosGenerico, setNpsProjetosGenerico] = useState(false)
+    const [modoResposta, setModoResposta] = useState<'unica' | 'unica_editavel' | 'multipla'>('multipla')
     // Lista de colaboradores só para a prévia de alcance na aba "Público".
     const [colaboradores, setColaboradores] = useState<{ id: string, nome: string, cargo_atual?: string | null, nucleo_atual?: string | null }[]>([])
 
@@ -592,6 +618,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
             setGerarSubaba(!!initialData.gerarSubaba)
             setSubabaNome(initialData.subabaNome || "")
             setNpsInterno(!!initialData.npsInterno)
+            setNpsProjetosGenerico(!!initialData.npsProjetosGenerico)
+            setModoResposta(initialData.modoResposta || 'multipla')
             if (initialData.perguntas.length > 0) {
                 setPerguntas(initialData.perguntas.map(p => ({
                     ...p,
@@ -647,6 +675,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         setGerarSubaba(false)
         setSubabaNome("")
         setNpsInterno(false)
+        setNpsProjetosGenerico(false)
+        setModoResposta('multipla')
     }
 
     const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -862,21 +892,19 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
         // NPS Interno — quem responde escolhe livremente quem está
         // avaliando, sem depender de cargo/núcleo).
         const hasColaboradorUnico = validPerguntas.some(p => p.tipo === 'colaborador_unico')
-        const subabaEfetiva = (quemRecebe.length > 0 || hasColaboradorUnico) && gerarSubaba
+        const permiteSubabaEfetiva = quemRecebe.length > 0 || hasColaboradorUnico
+        const subabaEfetiva = permiteSubabaEfetiva && gerarSubaba
         const subabaNomeEfetivo = subabaEfetiva ? (subabaNome.trim() || null) : null
-        const npsInternoEfetivo = subabaEfetiva && npsInterno
-
-        // Só um formulário pode estar marcado como "o" NPS Interno — ao
-        // marcar este, desmarca qualquer outro que já estivesse. Best-effort:
-        // se a coluna ainda não existir (migração pendente), simplesmente
-        // não faz nada aqui (o aviso principal de "salvo sem extras" já cobre
-        // isso).
-        const garantirNpsInternoUnico = async (formularioId: string) => {
-            if (!npsInternoEfetivo) return
-            try {
-                await supabase.from('formularios').update({ nps_interno: false }).eq('nps_interno', true).neq('id', formularioId)
-            } catch { /* coluna ainda não existe — nada a fazer */ }
-        }
+        // Independente da sub-aba: vários formulários podem estar marcados
+        // como fonte do NPS Interno ao mesmo tempo (um por núcleo, um para
+        // diretores, um para gerentes etc.) — todos entram na mesma aba
+        // compartilhada "NPS Interno" em Performance, ver
+        // performance/page.tsx. Não há mais exclusividade entre formulários.
+        const npsInternoEfetivo = permiteSubabaEfetiva && npsInterno
+        // Mesmo raciocínio, mas pro NPS Projetos — fonte separada da de NPS
+        // Interno, somada ao avaliacoes_nps em PIPJ/Performance/NPS
+        // Gerente/Wallet (ver src/lib/nps-projetos-generico.ts).
+        const npsProjetosGenericoEfetivo = permiteSubabaEfetiva && npsProjetosGenerico
 
         // Vira true se alguma gravação só passou depois de tirar as colunas
         // da migração 20260825 — o formulário foi salvo, mas sem os extras.
@@ -909,6 +937,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     gerar_subaba: subabaEfetiva,
                     subaba_nome: subabaNomeEfetivo,
                     nps_interno: npsInternoEfetivo,
+                    nps_projetos_generico: npsProjetosGenericoEfetivo,
+                    modo_resposta: modoResposta,
                 },
             )
             salvouSemExtras = salvouSemExtras || updateDegradado
@@ -918,14 +948,17 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 setLoading(false)
                 return
             }
-            await garantirNpsInternoUnico(initialData.id!)
 
             const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
 
-            const { data: existingPerguntas } = await supabase
-                .from('formulario_perguntas')
-                .select('id')
-                .eq('formulario_id', initialData.id)
+            // Só considera perguntas ATIVAS como "já existentes" — uma
+            // pergunta arquivada (removida numa edição anterior) não deve
+            // ser tratada como se ainda estivesse no formulário.
+            const existingComAtiva = await supabase.from('formulario_perguntas').select('id').eq('formulario_id', initialData.id).eq('ativa', true)
+            const existingSemAtiva = isSchemaDesatualizado(existingComAtiva.error)
+                ? await supabase.from('formulario_perguntas').select('id').eq('formulario_id', initialData.id)
+                : null
+            const existingPerguntas = existingSemAtiva ? existingSemAtiva.data : existingComAtiva.data
             const existingIds = new Set((existingPerguntas || []).map((p: any) => p.id))
 
             const keptIds: string[] = []
@@ -972,7 +1005,18 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
 
             const toDelete = Array.from(existingIds).filter(id => !keptIds.includes(id))
             if (toDelete.length > 0) {
-                await supabase.from('formulario_perguntas').delete().in('id', toDelete)
+                // Arquiva em vez de apagar: uma pergunta removida some da
+                // tela de resposta/edição, mas o histórico de respostas já
+                // dadas a ela continua entrando nas médias/gráficos de quem
+                // foi avaliado (só para de crescer dali pra frente).
+                const { error: archiveErr } = await supabase.from('formulario_perguntas').update({ ativa: false }).in('id', toDelete)
+                if (isSchemaDesatualizado(archiveErr)) {
+                    // Sem a coluna, não tem como só arquivar — cai pro
+                    // comportamento antigo (apaga de vez, junto com o
+                    // histórico de respostas dessa pergunta).
+                    await supabase.from('formulario_perguntas').delete().in('id', toDelete)
+                    toast.warning('Perguntas removidas foram apagadas com o histórico de respostas delas, porque o banco ainda não tem a coluna de arquivamento. Aplique a migração 20260909_formulario_perguntas_ativa.sql para preservar esse histórico da próxima vez.', { duration: 12000 })
+                }
             }
 
             await saveLogicaCondicional(validPerguntas, idMap)
@@ -1002,6 +1046,8 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                     gerar_subaba: subabaEfetiva,
                     subaba_nome: subabaNomeEfetivo,
                     nps_interno: npsInternoEfetivo,
+                    nps_projetos_generico: npsProjetosGenericoEfetivo,
+                    modo_resposta: modoResposta,
                 },
             )
             salvouSemExtras = salvouSemExtras || formDegradado
@@ -1011,7 +1057,6 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                 setLoading(false)
                 return
             }
-            await garantirNpsInternoUnico(formData.id)
 
             const perguntasToInsert = validPerguntas.map((p, i) => ({
                 formulario_id: formData.id,
@@ -1238,6 +1283,21 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                                 />
                             </div>
                         </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-900 dark:text-slate-200">Modo de Resposta</label>
+                            <p className="text-[11px] text-slate-400 -mt-1">Controla quantas vezes cada pessoa (ou, em formulário direcionado, cada alvo) pode responder este formulário.</p>
+                            <Select value={modoResposta} onValueChange={(v) => setModoResposta(v as typeof modoResposta)}>
+                                <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                                    <SelectItem value="multipla" className="text-xs">Múltiplas vezes (padrão)</SelectItem>
+                                    <SelectItem value="unica_editavel" className="text-xs">Uma vez, mas pode corrigir depois</SelectItem>
+                                    <SelectItem value="unica" className="text-xs">Uma única vez</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
                     <div className="space-y-3">
@@ -1338,31 +1398,44 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
                             </div>
 
                             {gerarSubaba && (
-                                <div className="space-y-3 pl-1">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nome da sub-aba (opcional)</label>
-                                        <Input
-                                            value={subabaNome}
-                                            onChange={(e) => setSubabaNome(e.target.value)}
-                                            placeholder={titulo || 'Usa o título do formulário'}
-                                            className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
-                                        />
-                                        <p className="text-[11px] text-slate-400">Deixe em branco para usar o título do formulário na aba.</p>
-                                    </div>
-
-                                    <div className="flex items-start gap-3 bg-amber-50/50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/20 rounded-xl px-4 py-3">
-                                        <Switch checked={npsInterno} onCheckedChange={setNpsInterno} className="mt-0.5" />
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Este é o formulário do NPS Interno</p>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                                Marca este formulário como a fonte do NPS Interno usada no cálculo de PIPJ, no Feedback Agent
-                                                e no Assistente Pessoal. Só um formulário deve ter isso marcado — marcar aqui desmarca
-                                                automaticamente qualquer outro que já estivesse.
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div className="space-y-1.5 pl-1">
+                                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400">Nome da sub-aba (opcional)</label>
+                                    <Input
+                                        value={subabaNome}
+                                        onChange={(e) => setSubabaNome(e.target.value)}
+                                        placeholder={titulo || 'Usa o título do formulário'}
+                                        className="h-9 text-xs bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-700 rounded-lg"
+                                    />
+                                    <p className="text-[11px] text-slate-400">Deixe em branco para usar o título do formulário na aba.</p>
                                 </div>
                             )}
+
+                            <div className="flex items-start gap-3 bg-amber-50/50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/20 rounded-xl px-4 py-3">
+                                <Switch checked={npsInterno} onCheckedChange={setNpsInterno} className="mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Este formulário alimenta o NPS Interno</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Marca este formulário como uma das fontes do NPS Interno (cálculo de PIPJ, Feedback Agent e Assistente
+                                        Pessoal), agrupando suas notas na aba compartilhada &quot;NPS Interno&quot; de Performance. Independe de
+                                        &quot;Criar sub-aba&quot; acima — <strong>vários formulários podem estar marcados ao mesmo tempo</strong> (por
+                                        exemplo, um por núcleo, mais um para diretores e outro para gerentes): as avaliações de todos eles
+                                        entram somadas na página de quem for avaliado.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-3 bg-cyan-50/50 dark:bg-cyan-500/5 border border-cyan-100 dark:border-cyan-500/20 rounded-xl px-4 py-3">
+                                <Switch checked={npsProjetosGenerico} onCheckedChange={setNpsProjetosGenerico} className="mt-0.5" />
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Este formulário alimenta o NPS Projetos</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Marca este formulário como uma das fontes do NPS Projetos — as notas somam com a Avaliação NPS do Projeto
+                                        atual em PIPJ, Performance, NPS Gerente e Wallet. Fonte separada do NPS Interno (o marcador acima);
+                                        vários formulários podem estar marcados ao mesmo tempo. Só faz sentido em pergunta(s) &quot;Selecionar 1
+                                        Colaborador&quot; com competência definida em cada escala (ex.: &quot;Comunicação&quot;, &quot;Pontualidade&quot;).
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </TabsContent>
