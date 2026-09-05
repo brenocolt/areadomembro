@@ -1,9 +1,10 @@
 import { isSchemaDesatualizado } from './db-compat'
 import { avaliadoPerguntaPorSecao } from './forms-runtime'
 
-// NPS Projetos — Fase B: soma às avaliações do formulário fixo de sempre
-// (tabela avaliacoes_nps, escrita por nps-projeto-form.tsx/nps-projeto/page.tsx)
-// as respostas de formulários GENÉRICOS marcados com
+// NPS Projetos — Fase B: soma às avaliações históricas do formulário fixo
+// de antes da Fase C (tabela avaliacoes_nps — /nps-projeto virou um
+// redirecionamento, ver src/app/(dashboard)/nps-projeto/page.tsx) as
+// respostas de formulários GENÉRICOS marcados com
 // formularios.nps_projetos_generico (ver migração
 // 20260912_formularios_nps_projetos_generico.sql e o formulário semeado em
 // 20260911_nps_projetos_formulario_generico_fase_a.sql).
