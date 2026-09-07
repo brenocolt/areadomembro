@@ -1,7 +1,8 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
-import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal } from "lucide-react"
+import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown } from "lucide-react"
+import { avaliadoPerguntaPorSecao } from "@/lib/forms-runtime"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -84,6 +85,14 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             return d.getFullYear() === filtroMes.ano && d.getMonth() + 1 === filtroMes.mes
         }), [respostas, filtroMes])
 
+    // Pergunta colaborador_unico "dona" de cada pergunta de escala/texto, por
+    // SEÇÃO (ver avaliadoPerguntaPorSecao) — um formulário pode ter mais de
+    // uma pergunta "Selecionar 1 Colaborador" (ex.: NPS Projetos: gerente +
+    // até 3 duplas, cada uma numa seção), e cada nota pertence à seção em
+    // que está, não a uma pergunta fixa única. `perguntas` já vem ordenado
+    // por `ordem` na busca inicial, que é o que a função exige.
+    const avaliadoPorPergunta = useMemo(() => avaliadoPerguntaPorSecao(perguntas), [perguntas])
+
     // ── Early returns (depois de todos os hooks) ───────────────────────────────
 
     if (loading) {
@@ -156,22 +165,27 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         })
     }
 
-    // Ranking de avaliados: formulários de avaliação de pares têm uma pergunta
-    // "colaborador_unico" (quem está sendo avaliado) + perguntas "escala" (as notas).
-    // A média de cada avaliado agrega todas as notas que ele recebeu em todas as escalas.
-    const avaliadoPergunta = perguntas.find(p => p.tipo === 'colaborador_unico')
+    // Ranking de avaliados: formulários de avaliação de pares têm ao menos uma
+    // pergunta "colaborador_unico" (quem está sendo avaliado) + perguntas
+    // "escala" (as notas). A média de cada avaliado agrega todas as notas que
+    // ele recebeu em todas as escalas — resolvidas POR SEÇÃO (avaliadoPorPergunta),
+    // já que um formulário pode ter mais de uma pergunta colaborador_unico
+    // (ex.: NPS Projetos: gerente + até 3 duplas, cada uma avaliando alguém
+    // diferente na MESMA resposta).
     const escalaPerguntas = perguntas.filter(p => p.tipo === 'escala')
-    const hasRanking = !!avaliadoPergunta && escalaPerguntas.length > 0
+    const hasRanking = perguntas.some(p => p.tipo === 'colaborador_unico') && escalaPerguntas.length > 0
 
     let rankingAvaliados: { id: string; nome: string; media: number; totalAvaliacoes: number }[] = []
     if (hasRanking) {
         const acc: Record<string, { soma: number; qtd: number; avaliacoes: Set<string> }> = {}
         displayRespostas.forEach(r => {
-            const itemAvaliado = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === avaliadoPergunta!.id)
-            const avaliadoId = itemAvaliado?.valor
-            if (!avaliadoId) return
+            const itens = r.formulario_respostas_itens || []
             escalaPerguntas.forEach(p => {
-                const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
+                const avaliadoPerguntaId = avaliadoPorPergunta.get(p.id)
+                if (!avaliadoPerguntaId) return
+                const avaliadoId = itens.find((it: any) => it.pergunta_id === avaliadoPerguntaId)?.valor
+                if (!avaliadoId) return
+                const item = itens.find((it: any) => it.pergunta_id === p.id)
                 const v = Number(item?.valor)
                 if (!isNaN(v) && item?.valor !== null && item?.valor !== undefined) {
                     if (!acc[avaliadoId]) acc[avaliadoId] = { soma: 0, qtd: 0, avaliacoes: new Set() }
@@ -185,6 +199,25 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             .map(([id, d]) => ({ id, nome: getColabName(id), media: d.qtd > 0 ? d.soma / d.qtd : 0, totalAvaliacoes: d.avaliacoes.size }))
             .sort((a, b) => b.media - a.media)
     }
+
+    // Média Geral (mesmo padrão da aba de NPS Projeto): todas as notas de
+    // escala do mês, sem agrupar por avaliado — dá o número que aparece nos
+    // cards de KPI do dashboard.
+    const todasNotas: number[] = []
+    displayRespostas.forEach(r => {
+        escalaPerguntas.forEach(p => {
+            const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
+            const v = Number(item?.valor)
+            if (item && !isNaN(v)) todasNotas.push(v)
+        })
+    })
+    const mediaGeral = todasNotas.length > 0 ? todasNotas.reduce((a, b) => a + b, 0) / todasNotas.length : null
+
+    // Avaliados com média (por pessoa) abaixo da Média Geral — mesmo recorte
+    // do card "Abaixo da Média" do NPS Projeto.
+    const abaixoDaMedia = (hasRanking && mediaGeral !== null)
+        ? rankingAvaliados.filter(r => r.media < mediaGeral).sort((a, b) => a.media - b.media)
+        : []
 
     const MEDAL_STYLES = [
         { badge: 'bg-amber-400 text-amber-950', card: 'border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5' },
@@ -312,54 +345,93 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         )
                     })()}
 
-                    {/* Ranking de avaliados (médias das perguntas de escala por pessoa avaliada) */}
+                    {/* KPIs (mesmo padrão da aba de NPS Projeto) */}
+                    {escalaPerguntas.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral</h3>
+                                <div className="flex items-end gap-3">
+                                    <span className={`text-4xl font-black ${mediaGeral === null ? 'text-slate-400' : mediaGeral >= 4.5 ? 'text-emerald-500' : mediaGeral >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{mediaGeral === null ? '—' : mediaGeral.toFixed(2)}</span>
+                                    <span className="text-sm font-medium text-slate-400 mb-1">/5 ({todasNotas.length} notas)</span>
+                                </div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Respostas</h3>
+                                <div className="text-4xl font-black text-slate-700 dark:text-slate-300">{monthFilteredRespostas.length}</div>
+                            </div>
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Competências Avaliadas</h3>
+                                <div className="text-4xl font-black text-violet-500">{escalaPerguntas.length}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Ranking de avaliados (médias das perguntas de escala por pessoa avaliada) + Abaixo da Média */}
                     {hasRanking && rankingAvaliados.length > 0 && (
-                        <div className="bg-gradient-to-br from-violet-50 to-white dark:from-violet-500/10 dark:to-slate-800/50 p-5 rounded-2xl border border-violet-100 dark:border-violet-500/20">
-                            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                    <Trophy className="h-4 w-4 text-amber-500" />
-                                    Ranking dos Avaliados
-                                    <span className="text-xs font-normal text-slate-400">— média das notas recebidas</span>
-                                </h3>
-                                {rankingAvaliados.length > 3 && (
-                                    <button
-                                        onClick={() => setShowFullRanking(v => !v)}
-                                        className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
-                                    >
-                                        {showFullRanking ? 'Ver apenas top 3' : `Ver ranking completo (${rankingAvaliados.length})`}
-                                    </button>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <div className="lg:col-span-2 bg-gradient-to-br from-violet-50 to-white dark:from-violet-500/10 dark:to-slate-800/50 p-5 rounded-2xl border border-violet-100 dark:border-violet-500/20">
+                                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <Trophy className="h-4 w-4 text-amber-500" />
+                                        Ranking dos Avaliados
+                                        <span className="text-xs font-normal text-slate-400">— média das notas recebidas</span>
+                                    </h3>
+                                    {rankingAvaliados.length > 3 && (
+                                        <button
+                                            onClick={() => setShowFullRanking(v => !v)}
+                                            className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                                        >
+                                            {showFullRanking ? 'Ver apenas top 3' : `Ver ranking completo (${rankingAvaliados.length})`}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {!showFullRanking ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                        {rankingAvaliados.slice(0, 3).map((r, i) => (
+                                            <div key={r.id} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${MEDAL_STYLES[i].card}`}>
+                                                <div className={`flex items-center justify-center w-9 h-9 rounded-full font-black text-sm ${MEDAL_STYLES[i].badge}`}>
+                                                    {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
+                                                </div>
+                                                <p className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-full">{r.nome}</p>
+                                                <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(1)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
+                                                <p className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                                        {rankingAvaliados.map((r, i) => (
+                                            <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${i < 3 ? MEDAL_STYLES[i].card : 'bg-white dark:bg-transparent border-slate-100 dark:border-slate-800'}`}>
+                                                <div className="flex items-center gap-3 min-w-0">
+                                                    <span className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${i < 3 ? MEDAL_STYLES[i].badge : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                                                        {i + 1}
+                                                    </span>
+                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{r.nome}</span>
+                                                </div>
+                                                <div className="flex items-center gap-3 shrink-0">
+                                                    <span className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</span>
+                                                    <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(1)}/5</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
                             </div>
 
-                            {!showFullRanking ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    {rankingAvaliados.slice(0, 3).map((r, i) => (
-                                        <div key={r.id} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${MEDAL_STYLES[i].card}`}>
-                                            <div className={`flex items-center justify-center w-9 h-9 rounded-full font-black text-sm ${MEDAL_STYLES[i].badge}`}>
-                                                {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
+                            {abaixoDaMedia.length > 0 && mediaGeral !== null && (
+                                <div className="bg-rose-50 dark:bg-rose-500/5 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
+                                    <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <TrendingDown className="h-3.5 w-3.5" />Abaixo da Média ({mediaGeral.toFixed(2)})
+                                    </h3>
+                                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                                        {abaixoDaMedia.map((c, i) => (
+                                            <div key={i} className="flex items-center justify-between gap-2">
+                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
+                                                <span className="text-sm font-black text-rose-500 shrink-0">{c.media.toFixed(2)}</span>
                                             </div>
-                                            <p className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-full">{r.nome}</p>
-                                            <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(1)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
-                                            <p className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                                    {rankingAvaliados.map((r, i) => (
-                                        <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${i < 3 ? MEDAL_STYLES[i].card : 'bg-white dark:bg-transparent border-slate-100 dark:border-slate-800'}`}>
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <span className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${i < 3 ? MEDAL_STYLES[i].badge : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                                                    {i + 1}
-                                                </span>
-                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{r.nome}</span>
-                                            </div>
-                                            <div className="flex items-center gap-3 shrink-0">
-                                                <span className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</span>
-                                                <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(1)}/5</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -4,7 +4,7 @@ import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { mesReferenciaFromDate } from '@/lib/nps-period'
 import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
-import { getRespostasFormulariosSobreColaborador } from '@/lib/forms-avaliacoes-membro'
+import { getRespostasFormulariosSobreColaborador, getRespostasFormulariosGeral } from '@/lib/forms-avaliacoes-membro'
 import { stripHtml } from '@/lib/forms-runtime'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
@@ -67,21 +67,30 @@ function bucketsToObject(map: Map<string, MonthBucket>) {
         }))
 }
 
-async function gatherEvaluations(targetId: string) {
+type Filtro = { mes?: number; ano?: number }
+
+// `targetId` ausente = modo geral: agrega TODA a empresa em vez de uma
+// pessoa só (ver getRespostasFormulariosGeral). `filtro` restringe a um mês
+// e/ou ano específico (mês de referência — o mesmo usado no resto do
+// sistema, ver mesReferenciaFromDate), pra quem quiser olhar só um período.
+async function gatherEvaluations(targetId: string | undefined, filtro?: Filtro) {
     const supabase = createServerSupabaseClient()
 
     // ── NPS Externo / Projeto (avaliacoes_nps) ──────────────────────────────
     const externoMap = new Map<string, MonthBucket>()
     let externoTotal = 0
     try {
-        const { data } = await supabase
+        let query = supabase
             .from('avaliacoes_nps')
             .select('mes, ano, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico, suporte, relacionamento, resolutividade, lideranca, nps_geral, feedback_texto, tipo_avaliacao, created_at')
-            .eq('colaborador_id', targetId)
+        if (targetId) query = query.eq('colaborador_id', targetId)
+        const { data } = await query
         for (const r of data || []) {
             // mês de referência da avaliação; cai para created_at se faltar
             let mes = Number(r.mes), ano = Number(r.ano)
             if (!mes || !ano) { const ref = mesReferenciaFromDate(r.created_at); mes = ref.mes; ano = ref.ano }
+            if (filtro?.mes && mes !== filtro.mes) continue
+            if (filtro?.ano && ano !== filtro.ano) continue
             const b = ensureBucket(externoMap, ano, mes)
             b.n++
             externoTotal++
@@ -93,22 +102,26 @@ async function gatherEvaluations(targetId: string) {
         }
     } catch (e) { /* fonte opcional */ }
 
-    // ── Avaliações recebidas em formulários — o AVALIADO é targetId ─────────
-    // Cobre TODO formulário que avalie alguém (direcionado via Quem Recebe,
-    // ou com uma pergunta "Selecionar 1 Colaborador"), de QUALQUER tipo —
-    // não só os marcados como NPS Interno. Agrupado pelo Tipo do Formulário
-    // (a "pasta" em Gestão de Formulários) para o agente conseguir separar
-    // o que veio de cada fonte.
+    // ── Avaliações recebidas em formulários ─────────────────────────────────
+    // Com targetId: só as respostas em que o AVALIADO é ele (direcionado via
+    // Quem Recebe, ou com uma pergunta "Selecionar 1 Colaborador"). Sem
+    // targetId (modo geral): TODAS as respostas de TODOS os formulários,
+    // agregadas por Tipo de Formulário (a "pasta" em Gestão de Formulários)
+    // — o agente enxerga a empresa inteira, sem estar preso a uma pessoa.
     const formulariosMap = new Map<string, Map<string, MonthBucket>>()
     let formulariosTotal = 0
     try {
-        const respostas = await getRespostasFormulariosSobreColaborador(supabase, targetId)
+        const respostas = targetId
+            ? await getRespostasFormulariosSobreColaborador(supabase, targetId)
+            : await getRespostasFormulariosGeral(supabase)
         for (const r of respostas) {
             const escalaPerguntas = r.perguntas.filter(p => p.tipo === 'escala')
             const textoPerguntas = r.perguntas.filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
             const tipo = r.tipoFormulario || 'Formulário'
-            if (!formulariosMap.has(tipo)) formulariosMap.set(tipo, new Map())
             const ref = mesReferenciaFromDate(r.enviado_em)
+            if (filtro?.mes && ref.mes !== filtro.mes) continue
+            if (filtro?.ano && ref.ano !== filtro.ano) continue
+            if (!formulariosMap.has(tipo)) formulariosMap.set(tipo, new Map())
             const b = ensureBucket(formulariosMap.get(tipo)!, ref.ano, ref.mes)
             b.n++
             formulariosTotal++
@@ -146,13 +159,16 @@ export async function POST(request: Request) {
         const body = await request.json().catch(() => ({}))
         const messages: { role: 'user' | 'assistant'; content: string }[] = Array.isArray(body.messages) ? body.messages : []
         const requestedId: string | undefined = body.colaboradorId
+        const mesFiltro = Number(body.mes) || undefined
+        const anoFiltro = Number(body.ano) || undefined
+        const filtro: Filtro | undefined = (mesFiltro || anoFiltro) ? { mes: mesFiltro, ano: anoFiltro } : undefined
 
         const role = (session.user as any).role
         const ownId = (session.user as any).colaborador_id
         const isAdmin = role === 'ADMIN' || role === 'admin'
 
-        // Autorização: admin/gerente e assessores de Gestão de Pessoas podem escolher; demais só veem o próprio.
-        let targetId = ownId
+        // Autorização: admin/gerente e assessores de Gestão de Pessoas podem
+        // escolher (ou deixar em branco = modo geral); demais só veem o próprio.
         const supabase = createServerSupabaseClient()
         let isGerente = false
         let isAssessorGP = false
@@ -161,15 +177,28 @@ export async function POST(request: Request) {
             isGerente = isCargoGerencial(me?.cargo_atual, me?.nucleo_atual)
             isAssessorGP = isCargoAssessorGP(me?.cargo_atual, me?.nucleo_atual)
         }
-        if (requestedId && (isAdmin || isGerente || isAssessorGP)) targetId = requestedId
-        if (!targetId) return NextResponse.json({ error: 'Colaborador não identificado.' }, { status: 400 })
+        const canChoose = isAdmin || isGerente || isAssessorGP
 
-        const { data: alvo } = await supabase.from('colaboradores').select('nome, cargo_atual').eq('id', targetId).single()
-        const dados = await gatherEvaluations(targetId)
+        // targetId indefinido = MODO GERAL (só possível pra quem pode
+        // escolher — sem isso, ninguém "esquece" de selecionar a si mesmo).
+        let targetId: string | undefined
+        if (canChoose) {
+            targetId = requestedId || undefined
+        } else {
+            targetId = ownId
+        }
+        if (!targetId && !canChoose) return NextResponse.json({ error: 'Colaborador não identificado.' }, { status: 400 })
+
+        const alvo = targetId ? (await supabase.from('colaboradores').select('nome, cargo_atual').eq('id', targetId).single()).data : null
+        const dados = await gatherEvaluations(targetId, filtro)
 
         const semDados = dados.npsExterno.total === 0 && dados.avaliacoesFormularios.total === 0
+        const periodoLabel = filtro
+            ? `${filtro.mes ? MESES[filtro.mes - 1] : 'todos os meses'}${filtro.ano ? ` de ${filtro.ano}` : ''}`
+            : 'todo o histórico disponível'
 
-        const systemPrompt = `Você é o Agente de Feedback da Produtiva Júnior. Sua missão é ler as avaliações internas recebidas por um membro e devolver um feedback qualitativo, humano e construtivo — como um mentor que leu com atenção o que os colegas escreveram, não como um relatório estatístico.
+        const systemPrompt = targetId
+            ? `Você é o Agente de Feedback da Produtiva Júnior. Sua missão é ler as avaliações internas recebidas por um membro e devolver um feedback qualitativo, humano e construtivo — como um mentor que leu com atenção o que os colegas escreveram, não como um relatório estatístico.
 
 CONTEXTO IMPORTANTE: estas avaliações são INTERNAS — feitas por OUTROS MEMBROS da própria empresa (colegas do mesmo núcleo e/ou pessoas que atuaram nos mesmos projetos, incluindo gerentes). NÃO são avaliações de clientes externos. Nunca se refira a "clientes", "consumidores" ou "público externo": trate sempre como feedback de colegas de trabalho e da equipe interna.
 
@@ -185,16 +214,24 @@ Estrutura sugerida (markdown, adapte se os dados pedirem):
 Regras: baseie-se apenas nos dados fornecidos, nunca invente comentários ou fatos; se não houver comentários suficientes, seja honesto sobre isso em vez de inflar a análise com números; responda perguntas de acompanhamento mantendo o mesmo tom qualitativo e os mesmos dados.
 
 Colaborador: ${alvo?.nome || 'Desconhecido'} | Cargo: ${alvo?.cargo_atual || '—'}
-${semDados ? 'Sem avaliações registradas.' : JSON.stringify(dados)}`
+Período considerado: ${periodoLabel}
+${semDados ? 'Sem avaliações registradas neste período.' : JSON.stringify(dados)}`
+            : `Você é o Agente de Feedback da Produtiva Júnior, funcionando agora em MODO GERAL: ainda não foi escolhido nenhum colaborador específico. Nesse modo você é um assistente de IA comum, mas com acesso completo aos dados de avaliações e respostas qualitativas de TODA a empresa (agregados por tipo de formulário e por mês — não presos a uma pessoa só). Use isso para ajudar com pedidos gerais: um resumo do clima/qualidade das avaliações internas, os temas que mais aparecem nos comentários captados nos formulários, ajuda para redigir ou estruturar um texto de feedback, ou qualquer outra dúvida sobre esses dados.
+
+Se o usuário quiser o feedback de UMA pessoa específica, oriente-o a selecioná-la no menu "Selecione o colaborador" no topo da tela — você não tem (e não deve inventar) o detalhamento individual de ninguém neste modo, só os agregados da empresa.
+
+CONTEXTO: os dados abaixo são agregados por Tipo de Formulário e por mês, cobrindo TODA a empresa.
+Período considerado: ${periodoLabel}
+${semDados ? 'Sem avaliações registradas neste período.' : JSON.stringify(dados)}`
 
         const anthropic = new Anthropic({ apiKey })
 
         // Se for a primeira interação (sem mensagens), gera o feedback automático.
         const convo = messages.length > 0
             ? messages
-            : [{ role: 'user' as const, content: semDados
-                ? 'Não há avaliações registradas. Explique isso de forma gentil.'
-                : 'Gere o feedback completo com base nas minhas avaliações recebidas.' }]
+            : [{ role: 'user' as const, content: targetId
+                ? (semDados ? 'Não há avaliações registradas. Explique isso de forma gentil.' : 'Gere o feedback completo com base nas minhas avaliações recebidas.')
+                : 'Faça um resumo geral do clima e das avaliações qualitativas mais recentes da empresa.' }]
 
         const resp = await anthropic.messages.create({
             model: MODEL,

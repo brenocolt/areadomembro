@@ -123,3 +123,43 @@ export async function getRespostasFormulariosSobreColaborador(
   }
   return resultado
 }
+
+// Mesma leitura acima, mas SEM filtrar por "sobre quem é a resposta" — TODAS
+// as respostas de TODOS os formulários do sistema. Usado pelo Agente de
+// Feedback em modo geral (nenhum colaborador escolhido ainda), pra dar uma
+// visão agregada da empresa inteira em vez de uma pessoa específica.
+export async function getRespostasFormulariosGeral(
+  supabaseAdmin: any,
+): Promise<RespostaFormularioSobreColaborador[]> {
+  const { data: formsData } = await supabaseAdmin.from('formularios').select('id, titulo, tipo_formulario')
+  const forms = (formsData || []) as { id: string; titulo: string; tipo_formulario?: string | null }[]
+  if (forms.length === 0) return []
+  const formsById = new Map(forms.map((f) => [f.id, f]))
+
+  const { data: perguntasRows } = await supabaseAdmin
+    .from('formulario_perguntas')
+    .select('id, formulario_id, tipo, titulo, competencia')
+  const perguntas = (perguntasRows || []) as { id: string; formulario_id: string; tipo: string; titulo?: string | null; competencia?: string | null }[]
+  const perguntasPorForm = new Map<string, typeof perguntas>()
+  for (const p of perguntas) {
+    const arr = perguntasPorForm.get(p.formulario_id) || []
+    arr.push(p)
+    perguntasPorForm.set(p.formulario_id, arr)
+  }
+
+  const { data: respostasRows } = await supabaseAdmin
+    .from('formulario_respostas')
+    .select('id, formulario_id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')
+
+  return ((respostasRows || []) as any[]).map((r) => {
+    const form = formsById.get(r.formulario_id)
+    return {
+      formularioId: r.formulario_id,
+      formularioTitulo: form?.titulo || 'Formulário',
+      tipoFormulario: form?.tipo_formulario || 'Formulário',
+      enviado_em: r.enviado_em,
+      perguntas: perguntasPorForm.get(r.formulario_id) || [],
+      itens: r.formulario_respostas_itens || [],
+    }
+  })
+}

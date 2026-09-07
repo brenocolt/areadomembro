@@ -219,15 +219,20 @@ export default function FormsResponsesPage() {
                 `
             }).join('')
         } else {
-                // Default forms PDF generator
+                // Gerador de PDF genérico — mesmo padrão do NPS Projeto acima:
+                // agrupado por mês, com cabeçalho de Média/Promotores/
+                // Neutros/Detratores (quando o formulário tem perguntas de
+                // escala) e tabela com chips de nota + comentários.
                 let groups: Record<string, { label: string; respostas: any[] }> = {}
-                // We'll group by month for the generic export
                 // colaboradores é resolvido duas vezes (autor e, em
                 // formulários direcionados, o alvo) — precisa apontar pra FK
                 // explícita, senão o PostgREST não sabe desambiguar.
-                const rawResp = await supabase.from('formulario_respostas')
-                    .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
-                    .eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false })
+                const [rawResp, colabsResp] = await Promise.all([
+                    supabase.from('formulario_respostas')
+                        .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
+                        .eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false }),
+                    supabase.from('colaboradores').select('id, nome'),
+                ])
                 if (rawResp.data) {
                     rawResp.data.forEach(r => {
                         const date = new Date(r.enviado_em)
@@ -236,40 +241,82 @@ export default function FormsResponsesPage() {
                         groups[key].respostas.push(r)
                     })
                 }
+                const colabNomeMap = new Map((colabsResp.data || []).map((c: any) => [c.id, c.nome]))
+                const getNome = (id: string) => colabNomeMap.get(id) || id
+
+                // Notas de escala de uma resposta (chips + média) — resolve o
+                // "avaliado" tanto pelo alvo_colaborador_id (direcionado)
+                // quanto pela pergunta colaborador_unico (modelo antigo).
+                const resumoResposta = (r: any) => {
+                    const itens = r.formulario_respostas_itens || []
+                    const escalaItens = itens.filter((it: any) => it.formulario_perguntas?.tipo === 'escala')
+                    const textoItens = itens.filter((it: any) => ['texto', 'texto_longo', 'paragrafo'].includes(it.formulario_perguntas?.tipo))
+                    const colabUnicoItem = itens.find((it: any) => it.formulario_perguntas?.tipo === 'colaborador_unico')
+                    const avaliadoNome = r.alvo?.nome || (colabUnicoItem?.valor ? getNome(colabUnicoItem.valor) : null)
+                    const media = escalaItens.length > 0
+                        ? escalaItens.reduce((s: number, it: any) => s + Number(it.valor || 0), 0) / escalaItens.length
+                        : null
+                    return { escalaItens, textoItens, avaliadoNome, media }
+                }
 
                 htmlContent = Object.keys(groups).map(key => {
                     const group = groups[key]
-                    return `
-                        <h2 style="color:#4f46e5; border-bottom:2px solid #e0e7ff; padding-bottom:8px; margin-top:30px; font-size:18px;">${group.label}</h2>
-                        <div style="display:flex; flex-direction:column; gap:20px;">
-                            ${group.respostas.map(r => {
-                                const sendDate = new Date(r.enviado_em)
-                                const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                                const author = (r.colaboradores?.nome || 'Anônimo') + (r.alvo?.nome ? ` — sobre ${r.alvo.nome}` : '')
-                                
-                                const itemsHtml = r.formulario_respostas_itens?.map((item: any) => {
-                                    return `
-                                        <div style="margin-bottom:12px;">
-                                            <div style="font-size:11px; font-weight:bold; color:#64748b; margin-bottom:4px; text-transform:uppercase;">${item.formulario_perguntas?.titulo || 'Pergunta'}</div>
-                                            <div style="font-size:13px; color:#1e293b; background:#f8fafc; padding:8px 12px; border-radius:6px; border:1px solid #e2e8f0;">${item.valor_texto || item.valor_numero || item.valor_booleano || '-'}</div>
-                                        </div>
-                                    `
-                                }).join('') || ''
 
-                                return `
-                                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:20px; background:#ffffff; page-break-inside:avoid;">
-                                        <div style="display:flex; justify-content:space-between; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
-                                            <div>
-                                                <div style="font-weight:bold; font-size:16px; color:#0f172a;">${author}</div>
-                                                <div style="font-size:12px; color:#64748b;">Enviado em ${dateStr}</div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            ${itemsHtml}
-                                        </div>
-                                    </div>
-                                `
-                            }).join('')}
+                    let sumScore = 0, countScore = 0, promotores = 0, neutros = 0, detratores = 0
+                    group.respostas.forEach(r => {
+                        const { media } = resumoResposta(r)
+                        if (media === null) return
+                        sumScore += media; countScore++
+                        if (media >= 4.5) promotores++
+                        else if (media <= 3.5) detratores++
+                        else neutros++
+                    })
+                    const mediaLabel = countScore > 0 ? (sumScore / countScore).toFixed(1) : null
+                    const headerStats = mediaLabel
+                        ? `Média: ${mediaLabel}/5 (P: ${promotores}, N: ${neutros}, D: ${detratores})`
+                        : `${group.respostas.length} resposta${group.respostas.length !== 1 ? 's' : ''}`
+
+                    const rows = group.respostas.map((r: any) => {
+                        const sendDate = new Date(r.enviado_em)
+                        const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                        const authorName = r.colaboradores?.nome || 'Anônimo'
+                        const { escalaItens, textoItens, avaliadoNome, media } = resumoResposta(r)
+                        const respondente = authorName + (avaliadoNome ? ` — sobre ${avaliadoNome}` : '')
+
+                        const scoresHtml = escalaItens.map((it: any) => {
+                            const v = Number(it.valor || 0)
+                            const color = v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444'
+                            const label = String(it.formulario_perguntas?.competencia || it.formulario_perguntas?.titulo || 'Nota')
+                            const shortLabel = label.length > 16 ? label.slice(0, 16) + '…' : label
+                            return `<div style="display:inline-block; margin-right:12px; margin-bottom:8px; background:#f8fafc; padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0;">
+                                <small style="color:#64748b; font-size:9px; text-transform:uppercase; display:block; margin-bottom:2px;">${shortLabel}</small>
+                                <strong style="color:${color}; font-size:12px;">${v}</strong>
+                            </div>`
+                        }).join('')
+                        const feedbackHtml = textoItens.map((it: any) => it.valor).filter(Boolean).join('<br/>') || '—'
+
+                        return `<tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding:16px 12px; vertical-align:top;">
+                                <div style="font-weight:bold; color:#0f172a;">${respondente}</div>
+                            </td>
+                            <td style="padding:16px 12px; vertical-align:top; text-align:center;">
+                                ${media !== null
+                                ? `<div style="display:inline-block; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:14px; color:${media >= 4.5 ? '#10b981' : media <= 3.5 ? '#ef4444' : '#f59e0b'}; background:${media >= 4.5 ? '#ecfdf5' : media <= 3.5 ? '#fef2f2' : '#fffbeb'}">${media.toFixed(1)}/5</div>`
+                                : '—'}
+                            </td>
+                            <td style="padding:16px 12px; vertical-align:top;">${scoresHtml || '—'}</td>
+                            <td style="white-space:nowrap; padding:16px 12px;">${dateStr}</td>
+                            <td style="max-width:250px;word-wrap:break-word; padding:16px 12px;">${feedbackHtml}</td>
+                        </tr>`
+                    }).join('')
+
+                    return `
+                        <div class="month-section">
+                            <h2>${group.label} — ${headerStats}</h2>
+                            <table>
+                                <thead><tr><th>Respondente</th><th>Nota</th><th>Detalhamento</th><th>Data</th><th>Comentários</th></tr></thead>
+                                <tbody>${rows}</tbody>
+                            </table>
                         </div>
                     `
                 }).join('')

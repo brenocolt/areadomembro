@@ -10,6 +10,11 @@ import { isCargoGerencial, isCargoAssessorGP } from "@/lib/cargos"
 
 const INIT_PROMPT = "Gere o feedback completo com base nas minhas avaliações recebidas."
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+const ANO_ATUAL = new Date().getFullYear()
+const ANOS = Array.from({ length: 5 }, (_, i) => ANO_ATUAL - i)
+const SEM_COLABORADOR = "__geral__"
+
 type Msg = { role: "user" | "assistant"; content: string; error?: boolean }
 
 // Renderizador leve de markdown (títulos, negrito, listas) — sem dependências.
@@ -53,7 +58,11 @@ export default function FeedbackAgentePage() {
     const canChoose = isAdmin || isGerente || isAssessorGP
 
     const [colaboradores, setColaboradores] = useState<{ id: string; nome: string }[]>([])
+    // Começa sem ninguém selecionado — mesmo para quem pode escolher. Até
+    // escolher um nome, o agente funciona em modo geral (ver route.ts).
     const [targetId, setTargetId] = useState<string>("")
+    const [mesFiltro, setMesFiltro] = useState<string>("todos")
+    const [anoFiltro, setAnoFiltro] = useState<string>("todos")
     const [messages, setMessages] = useState<Msg[]>([])
     const [input, setInput] = useState("")
     const [loading, setLoading] = useState(false)
@@ -67,10 +76,12 @@ export default function FeedbackAgentePage() {
         })
     }, [canChoose])
 
-    // Sem seletor (usuário comum), o alvo é sempre o próprio colaborador.
+    // Quem não pode escolher (usuário comum) só enxerga a si mesmo — não há
+    // "modo geral" pra ele, então o alvo já nasce definido. Quem pode
+    // escolher começa sem nenhum nome pré-definido (modo geral).
     useEffect(() => {
-        if (colaboradorId && !targetId) setTargetId(colaboradorId)
-    }, [colaboradorId, targetId])
+        if (!canChoose && colaboradorId && !targetId) setTargetId(colaboradorId)
+    }, [canChoose, colaboradorId, targetId])
 
     const callAgent = useCallback(async (convo: Msg[]): Promise<Msg> => {
         const res = await fetch("/api/feedback-agent", {
@@ -78,15 +89,20 @@ export default function FeedbackAgentePage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 colaboradorId: targetId || undefined,
+                mes: mesFiltro !== "todos" ? Number(mesFiltro) : undefined,
+                ano: anoFiltro !== "todos" ? Number(anoFiltro) : undefined,
                 messages: convo.map(m => ({ role: m.role, content: m.content })),
             }),
         })
         const data = await res.json()
         if (!res.ok) return { role: "assistant", content: data.error || "Erro ao gerar feedback.", error: true }
         return { role: "assistant", content: data.text }
-    }, [targetId])
+    }, [targetId, mesFiltro, anoFiltro])
 
-    // Gera o feedback automático ao carregar / trocar de colaborador
+    // Gera o feedback automático ao carregar / trocar de colaborador (ou de
+    // período, com um colaborador já escolhido). Em modo geral (sem
+    // targetId) não dispara sozinho — o usuário já pode digitar livremente,
+    // sem precisar de um "gerar" automático que não faz sentido pra empresa toda.
     const generateInitial = useCallback(async () => {
         if (!targetId) return
         setLoading(true)
@@ -98,8 +114,9 @@ export default function FeedbackAgentePage() {
 
     useEffect(() => {
         if (targetId) generateInitial()
+        else setMessages([]) // volta ao modo geral: limpa a conversa da pessoa anterior
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [targetId])
+    }, [targetId, mesFiltro, anoFiltro])
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
@@ -134,15 +151,38 @@ export default function FeedbackAgentePage() {
                     </div>
                 </div>
                 {canChoose && colaboradores.length > 0 && (
-                    <Select value={targetId} onValueChange={setTargetId}>
+                    <Select value={targetId || SEM_COLABORADOR} onValueChange={v => setTargetId(v === SEM_COLABORADOR ? "" : v)}>
                         <SelectTrigger className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-700 rounded-xl h-10 w-full sm:w-64 shrink-0">
                             <SelectValue placeholder="Selecione o colaborador" />
                         </SelectTrigger>
                         <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl max-h-72">
+                            <SelectItem value={SEM_COLABORADOR}>Nenhum (modo geral)</SelectItem>
                             {colaboradores.map(c => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 )}
+            </div>
+
+            {/* Filtro de período — sempre em dropdown, sem digitação */}
+            <div className="flex items-center gap-2">
+                <Select value={mesFiltro} onValueChange={setMesFiltro}>
+                    <SelectTrigger className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-700 rounded-xl h-9 w-40 shrink-0 text-sm">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl max-h-72">
+                        <SelectItem value="todos">Todos os meses</SelectItem>
+                        {MESES.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+                <Select value={anoFiltro} onValueChange={setAnoFiltro}>
+                    <SelectTrigger className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-700 rounded-xl h-9 w-32 shrink-0 text-sm">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl max-h-72">
+                        <SelectItem value="todos">Todos os anos</SelectItem>
+                        {ANOS.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Chat */}
@@ -153,7 +193,9 @@ export default function FeedbackAgentePage() {
                             <Bot className="h-10 w-10 mb-3 text-violet-400" />
                             {targetId
                                 ? <p className="text-sm">Preparando a análise de {targetNome || "suas avaliações"}…</p>
-                                : <p className="text-sm">Selecione um colaborador no menu acima para gerar o feedback.</p>
+                                : canChoose
+                                    ? <p className="text-sm max-w-sm">Modo geral: pergunte à vontade sobre o clima da equipe, temas recorrentes nos comentários ou peça ajuda para redigir um feedback. Para o feedback de uma pessoa específica, selecione o nome dela no menu acima.</p>
+                                    : <p className="text-sm">Selecione um colaborador no menu acima para gerar o feedback.</p>
                             }
                         </div>
                     )}

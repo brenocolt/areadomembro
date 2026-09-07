@@ -177,6 +177,12 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
     const latestMonthEvals = latest ? sorted.filter(e => e.ano === latest.ano && e.mes === latest.mes) : []
     const ultimoMesLabel = latest ? `${MESES[latest.mes - 1]}/${latest.ano}` : '—'
 
+    // Só mostra (card e legenda do gráfico) competências que o colaborador
+    // já recebeu ao menos uma vez — uma pergunta de escala pode existir no
+    // formulário sem nunca ter sido respondida para essa pessoa específica
+    // (ex.: pergunta nova, ou seção que nunca se aplicou a ela).
+    const metricsComDados = metrics.filter(m => evaluations.some(e => e.scores[m.id] !== undefined && !isNaN(e.scores[m.id])))
+
     const avgMetric = (metricId: string): string => {
         const vals = latestMonthEvals.map(e => e.scores[metricId]).filter(v => v !== undefined && !isNaN(v))
         const a = avgOf(vals)
@@ -245,6 +251,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
             {/* Cards por competência */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {metrics.map((m, idx) => {
+                    if (!metricsComDados.includes(m)) return null
                     const style = METRIC_STYLES[idx % METRIC_STYLES.length]
                     const Icon = style.icon
                     return (
@@ -266,7 +273,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <CardStat title="Média Geral" value={mediaGeral()} trend={`${latestMonthEvals.length} aval. em ${ultimoMesLabel}`} color="text-green-500" />
                 <CardStat title="Total Avaliações" value={String(evaluations.length)} trend="Recebidas neste formulário" color="text-blue-500" />
-                <CardStat title="Competências Avaliadas" value={String(metrics.length)} trend="Perguntas de escala do formulário" color="text-violet-500" />
+                <CardStat title="Competências Avaliadas" value={String(metricsComDados.length)} trend="Perguntas de escala do formulário" color="text-violet-500" />
             </div>
 
             {/* Evolução no tempo */}
@@ -285,6 +292,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                                 <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '13px' }} cursor={{ stroke: '#8B5CF6', strokeWidth: 2 }} />
                                 <Legend wrapperStyle={{ fontSize: '12px', fontWeight: 600, paddingTop: '12px' }} />
                                 {metrics.map((m, idx) => {
+                                    if (!metricsComDados.includes(m)) return null
                                     const style = METRIC_STYLES[idx % METRIC_STYLES.length]
                                     return (
                                         <Line key={m.id} type="monotone" dataKey={m.titulo} stroke={style.stroke} strokeWidth={2.5} dot={{ r: 4, fill: style.stroke }} activeDot={{ r: 6 }} connectNulls />
@@ -309,7 +317,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                                 <tr className="text-left">
                                     <th className="sticky left-0 z-10 bg-white dark:bg-[#0F172A] py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider border-b border-slate-100 dark:border-slate-800">Mês</th>
                                     <th className="py-3 px-3 text-xs font-bold uppercase text-violet-500 tracking-wider whitespace-nowrap border-b border-slate-100 dark:border-slate-800">Média Geral</th>
-                                    {metrics.map(m => (
+                                    {metricsComDados.map(m => (
                                         <th key={m.id} className="py-3 px-3 text-xs font-bold uppercase text-slate-400 tracking-wider whitespace-nowrap border-b border-slate-100 dark:border-slate-800">{m.titulo}</th>
                                     ))}
                                 </tr>
@@ -334,7 +342,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                                                     <span className="text-slate-400 font-normal ml-1.5">({evs.length} aval.)</span>
                                                 </td>
                                                 <td className={`py-3 px-3 font-extrabold ${monthAvgColor} border-b border-slate-50 dark:border-slate-800/50`}>{monthAvg === null ? '—' : monthAvg.toFixed(1)}</td>
-                                                {metrics.map(m => {
+                                                {metricsComDados.map(m => {
                                                     const vals = evs.map(e => e.scores[m.id]).filter(v => v !== undefined && !isNaN(v))
                                                     const a = avgOf(vals)
                                                     const display = a === null ? '—' : a.toFixed(1)
