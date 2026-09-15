@@ -24,6 +24,7 @@ const ALL_PAGES = [
     { label: "Agente de Feedback", path: "/feedback-agente" },
     { label: "Assistente Pessoal", path: "/assistente-pessoal" },
     { label: "Carteira PIPJ", path: "/wallet" },
+    { label: "PDI", path: "/pdi" },
     { label: "Formulários", path: "/formularios" },
     { label: "Minhas Milhas", path: "/milhas" },
     { label: "Punições", path: "/punishments" },
