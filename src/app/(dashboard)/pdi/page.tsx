@@ -6,14 +6,16 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Target, Plus, Clock, CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
-    PdiPapel, PdiTipoMomento,
+    PdiPapel, PdiTipoMomento, PdiCargoMapeamento,
     formatarDataBr, formatarTiposComOpcoes, formatarLista, nomesDosPapeis,
-    linkAdicionarAgenda, PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS,
+    linkAdicionarAgenda, PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS, resolverPapelId,
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
+import { PainelLider } from "./components/painel-lider"
 
 function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPapel[], tipos: PdiTipoMomento[], onClick: () => void }) {
     const papeisNomes = nomesDosPapeis(papeis, s.cargos || [])
@@ -49,21 +51,26 @@ export default function PdiPage() {
     const [view, setView] = useState<'lista' | 'wizard' | 'detalhe'>('lista')
     const [detalheId, setDetalheId] = useState<string | null>(null)
     const [acting, setActing] = useState(false)
+    // Se o colaborador tem um papel de liderança (Closer, Gerente de X,
+    // Diretor...), a aba "Para Eu Atender" (painel do líder, §5) aparece.
+    const [meuPapelId, setMeuPapelId] = useState<string | null>(null)
 
     const fetchTudo = useCallback(async () => {
-        const [{ data: papeisData }, { data: tiposData }, res] = await Promise.all([
+        const [{ data: papeisData }, { data: tiposData }, { data: mapeamentos }, res] = await Promise.all([
             supabase.from('pdi_papeis').select('*').order('ordem'),
             supabase.from('pdi_tipos_momento').select('*').eq('ativo', true).order('ordem'),
+            supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual'),
             fetch('/api/pdi/solicitacoes'),
         ])
         setPapeis(papeisData || [])
         setTipos(tiposData || [])
+        setMeuPapelId(resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual, (mapeamentos || []) as PdiCargoMapeamento[]))
         if (res.ok) {
             const json = await res.json()
             setSolicitacoes(json.solicitacoes || [])
         }
         setLoading(false)
-    }, [])
+    }, [colaborador?.cargo_atual, colaborador?.nucleo_atual])
 
     useEffect(() => {
         if (colaboradorId) fetchTudo()
@@ -223,35 +230,50 @@ export default function PdiPage() {
             {loading ? (
                 <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
             ) : (
-                <>
-                    <div className="space-y-3">
-                        <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-amber-500" /> Próximos
-                        </h2>
-                        {proximos.length === 0 ? (
-                            <p className="text-sm text-slate-400 italic">Nenhum momento em andamento no momento.</p>
-                        ) : (
-                            <div className="grid gap-3">
-                                {proximos.map(s => (
-                                    <SolicitacaoCard key={s.id} s={s} papeis={papeis} tipos={tipos} onClick={() => abrirDetalhe(s.id)} />
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                <Tabs defaultValue="meus-pedidos">
+                    {meuPapelId && (
+                        <TabsList>
+                            <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>
+                            <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>
+                        </TabsList>
+                    )}
 
-                    {historico.length > 0 && (
+                    <TabsContent value="meus-pedidos" className="space-y-8 mt-4">
                         <div className="space-y-3">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Histórico
+                                <Clock className="h-5 w-5 text-amber-500" /> Próximos
                             </h2>
-                            <div className="grid gap-3">
-                                {historico.map(s => (
-                                    <SolicitacaoCard key={s.id} s={s} papeis={papeis} tipos={tipos} onClick={() => abrirDetalhe(s.id)} />
-                                ))}
-                            </div>
+                            {proximos.length === 0 ? (
+                                <p className="text-sm text-slate-400 italic">Nenhum momento em andamento no momento.</p>
+                            ) : (
+                                <div className="grid gap-3">
+                                    {proximos.map(s => (
+                                        <SolicitacaoCard key={s.id} s={s} papeis={papeis} tipos={tipos} onClick={() => abrirDetalhe(s.id)} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
+
+                        {historico.length > 0 && (
+                            <div className="space-y-3">
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Histórico
+                                </h2>
+                                <div className="grid gap-3">
+                                    {historico.map(s => (
+                                        <SolicitacaoCard key={s.id} s={s} papeis={papeis} tipos={tipos} onClick={() => abrirDetalhe(s.id)} />
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    {meuPapelId && (
+                        <TabsContent value="para-atender" className="mt-4">
+                            <PainelLider papeis={papeis} tipos={tipos} />
+                        </TabsContent>
                     )}
-                </>
+                </Tabs>
             )}
         </div>
     )
