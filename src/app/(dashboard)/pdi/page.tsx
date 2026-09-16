@@ -76,6 +76,18 @@ export default function PdiPage() {
         if (colaboradorId) fetchTudo()
     }, [colaboradorId, fetchTudo])
 
+    // Link direto de uma notificação ou do Slack (/pdi?solicitacao=ID) abre
+    // o detalhe assim que a lista carregar. Lido via window.location (em vez
+    // de useSearchParams) pra não exigir um Suspense boundary aqui.
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const idParam = new URLSearchParams(window.location.search).get('solicitacao')
+        if (idParam && solicitacoes.some(s => s.id === idParam)) {
+            setDetalheId(idParam)
+            setView('detalhe')
+        }
+    }, [solicitacoes])
+
     function abrirDetalhe(id: string) {
         setDetalheId(id)
         setView('detalhe')

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { isDataValida, gerarHorariosDisponiveis } from '@/lib/pdi'
+import { isDataValida, gerarHorariosDisponiveis, formatarTiposComOpcoes } from '@/lib/pdi'
+import { registrarEvento } from '@/lib/pdi-server'
 
 export async function GET() {
     const session = await auth()
@@ -49,13 +50,13 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient()
 
-    const { data: papeisValidos } = await supabase.from('pdi_papeis').select('id')
+    const { data: papeisValidos } = await supabase.from('pdi_papeis').select('id, nome')
     const idsValidos = new Set((papeisValidos || []).map((p: any) => p.id))
     if (!cargos.every((c: string) => idsValidos.has(c))) {
         return NextResponse.json({ error: 'Papel de liderança inválido.' }, { status: 400 })
     }
 
-    const { data: tiposValidos } = await supabase.from('pdi_tipos_momento').select('id').eq('ativo', true)
+    const { data: tiposValidos } = await supabase.from('pdi_tipos_momento').select('*').eq('ativo', true)
     const tiposIdsValidos = new Set((tiposValidos || []).map((t: any) => t.id))
     for (const tipoId of tipos) {
         if (!tiposIdsValidos.has(tipoId)) {
@@ -109,13 +110,26 @@ export async function POST(req: NextRequest) {
         cargos.map((papel_id: string) => ({ solicitacao_id: solicitacao.id, papel_id }))
     )
 
-    // Notificações internas e Slack ainda não existem — entram no passo 6
-    // do roteiro (a solicitação já fica registrada e funcional sem eles).
-    await supabase.from('pdi_eventos').insert({
-        solicitacao_id: solicitacao.id,
+    const { data: colaborador } = await supabase.from('colaboradores').select('nome, nucleo_atual').eq('id', colaboradorId).single()
+    const papeisNomes = cargos.map((c: string) => (papeisValidos || []).find((p: any) => p.id === c)?.nome || c)
+    const tiposTexto = formatarTiposComOpcoes((tiposValidos || []) as any, tipos, detalhes || {}, outro_texto)
+
+    await registrarEvento(supabase, {
+        solicitacaoId: solicitacao.id,
         tipo: 'nova',
-        autor_id: colaboradorId,
-        texto: `Solicitação criada para ${data} às ${hora}.`,
+        autorId: colaboradorId,
+        texto: `Nova solicitação de ${colaborador?.nome || 'um colaborador'} para ${data} às ${hora}.`,
+        colaboradorId,
+        cargos,
+        slackContexto: {
+            colaboradorNome: colaborador?.nome,
+            colaboradorNucleo: colaborador?.nucleo_atual,
+            papeisNomes,
+            tiposTexto,
+            data,
+            hora,
+            descricao,
+        },
     })
 
     return NextResponse.json({ solicitacao })

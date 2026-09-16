@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { resolverPapelId, isDataValida, gerarHorariosDisponiveis } from '@/lib/pdi'
+import { resolverPapelId, isDataValida, gerarHorariosDisponiveis, formatarDataBr } from '@/lib/pdi'
+import { registrarEvento } from '@/lib/pdi-server'
 
 const ACOES_COLABORADOR = ['cancelar', 'aceitar_sugestao', 'manter_original']
 const ACOES_LIDER = ['aceitar', 'sugerir_horario', 'concluir']
@@ -73,14 +74,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // papéis pedidos nesta solicitação — nunca confiar em um papel enviado
     // pelo cliente.
     let meuPapelId: string | null = null
+    let meuNome = ''
     if (ACOES_LIDER.includes(action)) {
         const { data: colaborador } = await supabase
             .from('colaboradores')
-            .select('cargo_atual, nucleo_atual')
+            .select('nome, cargo_atual, nucleo_atual')
             .eq('id', colaboradorId)
             .single()
         const { data: mapeamentos } = await supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual')
         meuPapelId = resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual, mapeamentos || [])
+        meuNome = colaborador?.nome || 'Um líder'
 
         if (!meuPapelId || !(solicitacao.cargos || []).includes(meuPapelId)) {
             return NextResponse.json({ error: 'Você não tem o papel de liderança pedido nesta solicitação.' }, { status: 403 })
@@ -95,9 +98,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             status: 'cancelado',
             atualizado_em: new Date().toISOString(),
         }).eq('id', id)
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'cancelamento', autor_id: colaboradorId,
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'cancelamento',
+            autorId: colaboradorId,
             texto: podeCancelarComoAdmin ? 'Solicitação cancelada pela administração.' : 'Solicitação cancelada pelo colaborador.',
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
+            canceladoPeloAdmin: podeCancelarComoAdmin,
         })
         return NextResponse.json({ success: true })
     }
@@ -121,9 +129,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             .eq('solicitacao_id', id)
             .eq('papel_id', sugestao.papel_id)
 
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'aceite_sugestao', autor_id: colaboradorId,
-            texto: `Novo horário aceito: ${sugestao.data} às ${sugestao.hora}.`,
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'aceite_sugestao',
+            autorId: colaboradorId,
+            texto: `Novo horário aceito: ${formatarDataBr(sugestao.data)} às ${sugestao.hora}.`,
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
+            liderRelevanteId: sugestao.lider_id,
         })
         return NextResponse.json({ success: true })
     }
@@ -132,14 +145,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (solicitacao.status !== 'reagendado') {
             return NextResponse.json({ error: 'Não há sugestão de horário pendente.' }, { status: 400 })
         }
+        const sugestaoAtual = solicitacao.sugestao as { lider_id?: string } | null
         await supabase.from('pdi_solicitacoes').update({
             status: 'aguardando',
             sugestao: null,
             atualizado_em: new Date().toISOString(),
         }).eq('id', id)
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'recusa_sugestao', autor_id: colaboradorId,
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'recusa_sugestao',
+            autorId: colaboradorId,
             texto: 'Colaborador manteve o horário original.',
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
+            liderRelevanteId: sugestaoAtual?.lider_id,
         })
         return NextResponse.json({ success: true })
     }
@@ -171,8 +190,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             }).eq('id', id)
         }
 
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'aceite', autor_id: colaboradorId, texto: 'Momento aceito.',
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'aceite',
+            autorId: colaboradorId,
+            texto: `${meuNome} aceitou o momento (${formatarDataBr(solicitacao.data)} às ${solicitacao.hora}).`,
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
         })
         return NextResponse.json({ success: true })
     }
@@ -195,9 +219,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             atualizado_em: new Date().toISOString(),
         }).eq('id', id)
 
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'sugestao', autor_id: colaboradorId,
-            texto: `Sugeriu novo horário: ${data} às ${hora}.`,
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'sugestao',
+            autorId: colaboradorId,
+            texto: `${meuNome} sugeriu novo horário: ${formatarDataBr(data)} às ${hora}.`,
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
         })
         return NextResponse.json({ success: true })
     }
@@ -223,8 +251,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         await supabase.from('pdi_solicitacoes').update({
             status: 'concluido', atualizado_em: new Date().toISOString(),
         }).eq('id', id)
-        await supabase.from('pdi_eventos').insert({
-            solicitacao_id: id, tipo: 'conclusao', autor_id: colaboradorId, texto: 'Momento concluído.',
+        await registrarEvento(supabase, {
+            solicitacaoId: id,
+            tipo: 'conclusao',
+            autorId: colaboradorId,
+            texto: `${meuNome} concluiu o momento.`,
+            colaboradorId: solicitacao.colaborador_id,
+            cargos: solicitacao.cargos || [],
         })
         return NextResponse.json({ success: true })
     }

@@ -5,6 +5,7 @@ import { ModeToggle } from "@/components/theme-toggle"
 import { AuthProvider } from "@/components/auth-provider"
 import { LogoutButton } from "@/components/logout-button"
 import { RouteGuard } from "@/components/route-guard"
+import { PdiNotificationBell } from "@/components/pdi-notification-bell"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -22,6 +23,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </div>
 
                         <div className="flex items-center gap-4">
+                            <PdiNotificationBell />
                             <ModeToggle />
                             <LogoutButton />
                         </div>
