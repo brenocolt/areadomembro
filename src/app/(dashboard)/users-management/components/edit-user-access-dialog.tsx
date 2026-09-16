@@ -28,6 +28,7 @@ const ALL_PAGES = [
     { label: "Formulários", path: "/formularios" },
     { label: "Minhas Milhas", path: "/milhas" },
     { label: "Punições", path: "/punishments" },
+    { label: "Gestão de PDI", path: "/pdi-management" },
     { label: "Gestão de Formulários", path: "/forms-management" },
     { label: "Gestão de Pontos", path: "/points-management" },
     { label: "Pontuar Membros", path: "/pontuar-membros" },

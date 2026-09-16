@@ -55,6 +55,7 @@ const memberItems = [
 ]
 
 const managementItems = [
+    { title: "Gestão de PDI", url: "/pdi-management", icon: Target },
     { title: "Gestão de Formulários", url: "/forms-management", icon: FileQuestion },
     { title: "Gestão de Pontos", url: "/points-management", icon: ClipboardList },
     { title: "Pontuar Membros", url: "/pontuar-membros", icon: UserPlus },

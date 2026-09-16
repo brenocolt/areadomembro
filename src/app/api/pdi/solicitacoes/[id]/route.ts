@@ -25,9 +25,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (error || !solicitacao) {
         return NextResponse.json({ error: 'Solicitação não encontrada.' }, { status: 404 })
     }
-    // Painéis de líder/admin (passos 4 e 5) ainda vão ampliar quem pode ler
-    // uma solicitação que não é a sua própria.
-    if (solicitacao.colaborador_id !== colaboradorId) {
+    const isAdmin = (session?.user as any)?.role === 'ADMIN'
+    if (solicitacao.colaborador_id !== colaboradorId && !isAdmin) {
         return NextResponse.json({ error: 'Você não tem permissão para ver esta solicitação.' }, { status: 403 })
     }
 
@@ -60,7 +59,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 })
     }
 
-    if (ACOES_COLABORADOR.includes(action) && solicitacao.colaborador_id !== colaboradorId) {
+    const isAdmin = (session?.user as any)?.role === 'ADMIN'
+    // "cancelar" é a única ação do administrador (§7) — ele não designa
+    // ninguém, só encerra. As demais ações de colaborador (responder a uma
+    // sugestão de horário) continuam exclusivas de quem fez o pedido.
+    const podeCancelarComoAdmin = action === 'cancelar' && isAdmin
+    if (ACOES_COLABORADOR.includes(action) && solicitacao.colaborador_id !== colaboradorId && !podeCancelarComoAdmin) {
         return NextResponse.json({ error: 'Você não tem permissão para alterar esta solicitação.' }, { status: 403 })
     }
 
@@ -93,7 +97,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }).eq('id', id)
         await supabase.from('pdi_eventos').insert({
             solicitacao_id: id, tipo: 'cancelamento', autor_id: colaboradorId,
-            texto: 'Solicitação cancelada pelo colaborador.',
+            texto: podeCancelarComoAdmin ? 'Solicitação cancelada pela administração.' : 'Solicitação cancelada pelo colaborador.',
         })
         return NextResponse.json({ success: true })
     }
