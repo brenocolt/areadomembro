@@ -18,6 +18,7 @@ import {
     UserPlus,
     LogOut,
     Briefcase,
+    Target,
 } from "lucide-react"
 
 import {
@@ -47,12 +48,14 @@ const memberItems = [
     { title: "NPS Gerente", url: "/nps-gerente", icon: Crown },
     { title: "Assistente Pessoal", url: "/assistente-pessoal", icon: Bot },
     { title: "Carteira PIPJ", url: "/wallet", icon: Wallet },
+    { title: "PDI", url: "/pdi", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
     { title: "Minhas Milhas", url: "/milhas", icon: Ticket },
     { title: "Punições", url: "/punishments", icon: AlertTriangle },
 ]
 
 const managementItems = [
+    { title: "Gestão de PDI", url: "/pdi-management", icon: Target },
     { title: "Gestão de Formulários", url: "/forms-management", icon: FileQuestion },
     { title: "Gestão de Pontos", url: "/points-management", icon: ClipboardList },
     { title: "Pontuar Membros", url: "/pontuar-membros", icon: UserPlus },
