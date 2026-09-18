@@ -40,11 +40,16 @@ export function scheduleDailyMondaySync() {
     if (agendado) return
     agendado = true
 
+    // Roda uma vez assim que o servidor sobe — sem isso, um deploy feito
+    // fora do horário agendado só refletiria os projetos do Monday no dia
+    // seguinte, o que parece (e na prática é) o app "não ter atualizado".
+    rodarSincronizacao()
+
     const delay = msAteProximoHorario(HORA_UTC, MINUTO_UTC)
     setTimeout(function agendarProximo() {
         rodarSincronizacao()
         setInterval(rodarSincronizacao, UM_DIA_MS)
     }, delay)
 
-    console.log(`[monday-sync] Próxima sincronização automática em ${Math.round(delay / 60000)} min.`)
+    console.log(`[monday-sync] Sincronização inicial disparada. Próxima agendada em ${Math.round(delay / 60000)} min.`)
 }
