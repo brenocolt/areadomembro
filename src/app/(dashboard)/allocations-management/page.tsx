@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
 import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock, ChevronDown } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useColaborador } from "@/hooks/use-supabase"
@@ -17,7 +18,7 @@ interface Colaborador {
     nucleo_atual: string
     projetos: number
     email_corporativo: string
-    projetos_ativos_detalhe: string[] | null
+    projetos_ativos_detalhe: any[] | null
 }
 
 export default function AllocationsManagementPage() {
@@ -63,7 +64,12 @@ export default function AllocationsManagementPage() {
     })
 
     const totalAlocacoes = colaboradores.reduce((sum, c) => sum + (c.projetos || 0), 0)
-    const projetosDistintos = new Set(colaboradores.flatMap(c => c.projetos_ativos_detalhe || [])).size
+    const projetosDistintos = new Set(
+        colaboradores
+            .flatMap(c => (c.projetos_ativos_detalhe || []).map(normalizarProjetoDetalhe))
+            .filter(p => p.status === 'Ativo')
+            .map(p => p.nome)
+    ).size
     const colabsComProjetos = colaboradores.filter(c => (c.projetos || 0) > 0).length
     const mediaProjetos = colaboradores.length > 0 ? (totalAlocacoes / colaboradores.length).toFixed(1) : '0'
 
@@ -233,6 +239,9 @@ export default function AllocationsManagementPage() {
                                 const val = editValues[colab.id] || 0
                                 const changed = hasChanged(colab.id)
                                 const isSaving = saving === colab.id
+                                const projetosAtivosColab = (colab.projetos_ativos_detalhe || [])
+                                    .map(normalizarProjetoDetalhe)
+                                    .filter(p => p.status === 'Ativo')
 
                                 return (
                                     <div key={colab.id}>
@@ -321,18 +330,23 @@ export default function AllocationsManagementPage() {
                                             <div className="px-4 pb-3 pl-16">
                                                 <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/50 rounded-xl p-3">
                                                     <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">
-                                                        Projetos ativos ({(colab.projetos_ativos_detalhe || []).length})
+                                                        Projetos ativos ({projetosAtivosColab.length})
                                                     </p>
-                                                    {(colab.projetos_ativos_detalhe || []).length === 0 ? (
+                                                    {projetosAtivosColab.length === 0 ? (
                                                         <p className="text-xs text-slate-400 italic">
                                                             Nenhum projeto ativo sincronizado do Monday para este colaborador.
                                                         </p>
                                                     ) : (
                                                         <ul className="space-y-1">
-                                                            {(colab.projetos_ativos_detalhe || []).map((nome, idx) => (
+                                                            {projetosAtivosColab.map((p, idx) => (
                                                                 <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                                                                     <FolderKanban className="h-3 w-3 text-slate-400 shrink-0" />
-                                                                    {nome}
+                                                                    {p.nome}
+                                                                    {p.data_inicio && (
+                                                                        <span className="text-slate-400">
+                                                                            · desde {new Date(p.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                    )}
                                                                 </li>
                                                             ))}
                                                         </ul>

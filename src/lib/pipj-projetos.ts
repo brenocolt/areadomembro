@@ -10,16 +10,19 @@
 
 export type ProjetoAtivoDetalhe = {
     nome: string
+    status: 'Ativo' | 'Concluído'
     data_inicio: string | null
     data_fim: string | null
 }
 
 // Compatibilidade com dados sincronizados antes dessa mudança, quando
-// projetos_ativos_detalhe era só um array de nomes (string[]).
+// projetos_ativos_detalhe era só um array de nomes (string[]), ou ainda sem
+// o campo status.
 export function normalizarProjetoDetalhe(raw: any): ProjetoAtivoDetalhe {
-    if (typeof raw === 'string') return { nome: raw, data_inicio: null, data_fim: null }
+    if (typeof raw === 'string') return { nome: raw, status: 'Ativo', data_inicio: null, data_fim: null }
     return {
         nome: raw?.nome || '',
+        status: raw?.status === 'Concluído' ? 'Concluído' : 'Ativo',
         data_inicio: raw?.data_inicio || null,
         data_fim: raw?.data_fim || null,
     }
@@ -44,6 +47,23 @@ export function mesEfetivoInicio(dataInicio: string): { ano: number; mes: number
     return { ano, mes }
 }
 
+// Até que mês/ano um projeto ainda conta no PIPJ, dada sua data de
+// finalização — regra simétrica à do início: se finalizado na primeira
+// quinzena (dia <= 15), já não conta mais no mês em que terminou (o último
+// mês que conta é o anterior); se na segunda quinzena (dia >= 16), ainda
+// conta no mês em que terminou.
+export function mesEfetivoFim(dataFim: string): { ano: number; mes: number } {
+    const d = new Date(dataFim + 'T12:00:00')
+    const dia = d.getDate()
+    let mes = d.getMonth() + 1
+    let ano = d.getFullYear()
+    if (dia <= 15) {
+        mes -= 1
+        if (mes < 1) { mes = 12; ano -= 1 }
+    }
+    return { ano, mes }
+}
+
 // Um projeto sem data_inicio conhecida (dado antigo, ainda sem sincronizar)
 // conta sempre, pra não regredir o comportamento anterior a essa mudança.
 export function contaProjetoNoMes(projeto: ProjetoAtivoDetalhe, mes: number, ano: number): boolean {
@@ -53,8 +73,8 @@ export function contaProjetoNoMes(projeto: ProjetoAtivoDetalhe, mes: number, ano
     if (compararAnoMes(inicio.ano, inicio.mes, ano, mes) > 0) return false
 
     if (projeto.data_fim) {
-        const fim = new Date(projeto.data_fim + 'T12:00:00')
-        if (compararAnoMes(fim.getFullYear(), fim.getMonth() + 1, ano, mes) < 0) return false
+        const fim = mesEfetivoFim(projeto.data_fim)
+        if (compararAnoMes(fim.ano, fim.mes, ano, mes) < 0) return false
     }
 
     return true
