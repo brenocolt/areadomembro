@@ -1,8 +1,10 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
-import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown } from "lucide-react"
+import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown, Search, Briefcase } from "lucide-react"
 import { avaliadoPerguntaPorSecao } from "@/lib/forms-runtime"
+import { loadFormularioPublico, colaboradorNoPublico, type FormularioPublico } from "@/lib/forms-publico"
+import { CARGOS, CARGO_FANTASMA } from "@/lib/cargos"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -13,17 +15,20 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const now = new Date()
     const [filtroMes, setFiltroMes] = useState<{ mes: number; ano: number }>({ mes: now.getMonth() + 1, ano: now.getFullYear() })
     const [colaboradores, setColaboradores] = useState<any[]>([])
+    const [publico, setPublico] = useState<FormularioPublico | null>(null)
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
     const [filterAnswerValue, setFilterAnswerValue] = useState<string>('')
     const [groupMode, setGroupMode] = useState<'dashboard' | 'pessoa' | 'mes' | 'pergunta'>('dashboard')
     const [showFullRanking, setShowFullRanking] = useState(false)
+    const [filterCargo, setFilterCargo] = useState<string>('todos')
+    const [searchAvaliado, setSearchAvaliado] = useState('')
 
     useEffect(() => {
         async function fetch() {
             setLoading(true)
-            const [{ data: pData }, { data: rData }, { data: cData }] = await Promise.all([
+            const [{ data: pData }, { data: rData }, { data: cData }, publicoData] = await Promise.all([
                 supabase.from('formulario_perguntas').select('*').eq('formulario_id', formularioId).order('ordem'),
                 // colaboradores é resolvido duas vezes (autor da resposta e,
                 // em formulários direcionados, o alvo dela) — precisa apontar
@@ -31,11 +36,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                 supabase.from('formulario_respostas')
                     .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
                     .eq('formulario_id', formularioId).order('enviado_em', { ascending: false }),
-                supabase.from('colaboradores').select('id, nome'),
+                supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
+                loadFormularioPublico(formularioId),
             ])
             setPerguntas(pData || [])
             setRespostas(rData || [])
             setColaboradores(cData || [])
+            setPublico(publicoData)
+            setFilterCargo('todos')
+            setSearchAvaliado('')
 
             // Auto-expand first group
             if (rData && rData.length > 0) {
@@ -58,6 +67,17 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     }
 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
+    const getColabCargo = (id: string) => colaboradores.find(c => c.id === id)?.cargo_atual || null
+
+    // Avaliado de uma pergunta de escala, NUMA resposta específica — via a
+    // pergunta colaborador_unico "dona" da mesma seção (avaliadoPorPergunta).
+    // Usado para filtrar por cargo (Operacional/Tático/Estratégico) tanto o
+    // ranking quanto a distribuição de cada pergunta.
+    const avaliadoIdParaPergunta = (r: any, perguntaId: string): string | undefined => {
+        const avaliadoPerguntaId = avaliadoPorPergunta.get(perguntaId)
+        if (!avaliadoPerguntaId) return undefined
+        return (r.formulario_respostas_itens || []).find((it: any) => it.pergunta_id === avaliadoPerguntaId)?.valor
+    }
 
     // ── Hooks: devem ficar ANTES de qualquer early return ─────────────────────
 
@@ -175,7 +195,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const escalaPerguntas = perguntas.filter(p => p.tipo === 'escala')
     const hasRanking = perguntas.some(p => p.tipo === 'colaborador_unico') && escalaPerguntas.length > 0
 
-    let rankingAvaliados: { id: string; nome: string; media: number; totalAvaliacoes: number }[] = []
+    let rankingAvaliados: { id: string; nome: string; cargo: string | null; media: number; totalAvaliacoes: number }[] = []
     if (hasRanking) {
         const acc: Record<string, { soma: number; qtd: number; avaliacoes: Set<string> }> = {}
         displayRespostas.forEach(r => {
@@ -196,27 +216,48 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             })
         })
         rankingAvaliados = Object.entries(acc)
-            .map(([id, d]) => ({ id, nome: getColabName(id), media: d.qtd > 0 ? d.soma / d.qtd : 0, totalAvaliacoes: d.avaliacoes.size }))
+            .map(([id, d]) => ({ id, nome: getColabName(id), cargo: getColabCargo(id), media: d.qtd > 0 ? d.soma / d.qtd : 0, totalAvaliacoes: d.avaliacoes.size }))
             .sort((a, b) => b.media - a.media)
     }
 
+    // Cargos (Operacional/Tático/Estratégico) realmente presentes entre os
+    // avaliados deste formulário — só mostra as abas de filtro quando faz
+    // sentido (mais de um cargo avaliado). A conta fantasma Administrador
+    // nunca aparece aqui, mesmo que por engano tenha sido avaliada.
+    const cargosPresentes = CARGOS.filter(c => c !== CARGO_FANTASMA && rankingAvaliados.some(r => r.cargo === c))
+    const mostrarAbasCargo = cargosPresentes.length > 1
+
+    // Ranking filtrado pelo cargo selecionado e pela busca por nome —
+    // aplicado ao Ranking dos Avaliados, ao "Abaixo da Média" e às perguntas
+    // de escala/seleção/colaborador do detalhamento por pergunta abaixo.
+    const buscaNormalizada = searchAvaliado.trim().toLowerCase()
+    const rankingFiltrado = rankingAvaliados
+        .filter(r => filterCargo === 'todos' || r.cargo === filterCargo)
+        .filter(r => !buscaNormalizada || r.nome.toLowerCase().includes(buscaNormalizada))
+
     // Média Geral (mesmo padrão da aba de NPS Projeto): todas as notas de
     // escala do mês, sem agrupar por avaliado — dá o número que aparece nos
-    // cards de KPI do dashboard.
+    // cards de KPI do dashboard. Quando uma aba de cargo está selecionada,
+    // só entram notas cujo avaliado é daquele cargo.
     const todasNotas: number[] = []
     displayRespostas.forEach(r => {
         escalaPerguntas.forEach(p => {
             const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
             const v = Number(item?.valor)
-            if (item && !isNaN(v)) todasNotas.push(v)
+            if (!item || isNaN(v)) return
+            if (filterCargo !== 'todos') {
+                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
+                if (avaliadoId && getColabCargo(avaliadoId) !== filterCargo) return
+            }
+            todasNotas.push(v)
         })
     })
     const mediaGeral = todasNotas.length > 0 ? todasNotas.reduce((a, b) => a + b, 0) / todasNotas.length : null
 
     // Avaliados com média (por pessoa) abaixo da Média Geral — mesmo recorte
-    // do card "Abaixo da Média" do NPS Projeto.
+    // do card "Abaixo da Média" do NPS Projeto, já dentro do filtro de cargo/busca.
     const abaixoDaMedia = (hasRanking && mediaGeral !== null)
-        ? rankingAvaliados.filter(r => r.media < mediaGeral).sort((a, b) => a.media - b.media)
+        ? rankingFiltrado.filter(r => r.media < mediaGeral).sort((a, b) => a.media - b.media)
         : []
     const mostrarAbaixoDaMedia = abaixoDaMedia.length > 0 && mediaGeral !== null
 
@@ -332,6 +373,42 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                 </div>
             </div>
 
+            {/* Cargo tabs + busca por avaliado — só no dashboard, e só quando o
+                formulário avalia pessoas (hasRanking) */}
+            {groupMode === 'dashboard' && hasRanking && (
+                <div className="flex flex-wrap items-center gap-2 -mt-2">
+                    {mostrarAbasCargo && (
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
+                            <button
+                                onClick={() => setFilterCargo('todos')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${filterCargo === 'todos' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                            >
+                                <Briefcase className="h-3 w-3 inline mr-1" />Todos
+                            </button>
+                            {cargosPresentes.map(cargo => (
+                                <button
+                                    key={cargo}
+                                    onClick={() => setFilterCargo(cargo)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${filterCargo === cargo ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                                >
+                                    {cargo}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    <div className="relative ml-auto">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar avaliado..."
+                            value={searchAvaliado}
+                            onChange={e => setSearchAvaliado(e.target.value)}
+                            className="h-8 pl-8 pr-3 text-xs rounded-xl bg-slate-100 dark:bg-slate-800 border-none focus:outline-none focus:ring-2 focus:ring-violet-400 min-w-[180px]"
+                        />
+                    </div>
+                </div>
+            )}
+
             {/* Content */}
             {groupMode === 'dashboard' ? (
                 <div className="space-y-6">
@@ -350,7 +427,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     {escalaPerguntas.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral</h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral{filterCargo !== 'todos' ? ` (${filterCargo})` : ''}</h3>
                                 <div className="flex items-end gap-3">
                                     <span className={`text-4xl font-black ${mediaGeral === null ? 'text-slate-400' : mediaGeral >= 4.5 ? 'text-emerald-500' : mediaGeral >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{mediaGeral === null ? '—' : mediaGeral.toFixed(2)}</span>
                                     <span className="text-sm font-medium text-slate-400 mb-1">/5 ({todasNotas.length} notas)</span>
@@ -368,7 +445,9 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     )}
 
                     {/* Ranking de avaliados (médias das perguntas de escala por pessoa avaliada) + Abaixo da Média */}
-                    {hasRanking && rankingAvaliados.length > 0 && (
+                    {hasRanking && rankingFiltrado.length > 0 && (() => {
+                        const mostrarRankingCompleto = showFullRanking || !!buscaNormalizada
+                        return (
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                             <div className={`${mostrarAbaixoDaMedia ? 'lg:col-span-2' : 'lg:col-span-3'} bg-gradient-to-br from-violet-50 to-white dark:from-violet-500/10 dark:to-slate-800/50 p-5 rounded-2xl border border-violet-100 dark:border-violet-500/20`}>
                                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
@@ -377,19 +456,19 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                         Ranking dos Avaliados
                                         <span className="text-xs font-normal text-slate-400">— média das notas recebidas</span>
                                     </h3>
-                                    {rankingAvaliados.length > 3 && (
+                                    {rankingFiltrado.length > 3 && !buscaNormalizada && (
                                         <button
                                             onClick={() => setShowFullRanking(v => !v)}
                                             className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
                                         >
-                                            {showFullRanking ? 'Ver apenas top 3' : `Ver ranking completo (${rankingAvaliados.length})`}
+                                            {showFullRanking ? 'Ver apenas top 3' : `Ver ranking completo (${rankingFiltrado.length})`}
                                         </button>
                                     )}
                                 </div>
 
-                                {!showFullRanking ? (
+                                {!mostrarRankingCompleto ? (
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        {rankingAvaliados.slice(0, 3).map((r, i) => (
+                                        {rankingFiltrado.slice(0, 3).map((r, i) => (
                                             <div key={r.id} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${MEDAL_STYLES[i].card}`}>
                                                 <div className={`flex items-center justify-center w-9 h-9 rounded-full font-black text-sm ${MEDAL_STYLES[i].badge}`}>
                                                     {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
@@ -402,7 +481,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                     </div>
                                 ) : (
                                     <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                                        {rankingAvaliados.map((r, i) => (
+                                        {rankingFiltrado.map((r, i) => (
                                             <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${i < 3 ? MEDAL_STYLES[i].card : 'bg-white dark:bg-transparent border-slate-100 dark:border-slate-800'}`}>
                                                 <div className="flex items-center gap-3 min-w-0">
                                                     <span className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${i < 3 ? MEDAL_STYLES[i].badge : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
@@ -436,14 +515,22 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                 </div>
                             )}
                         </div>
-                    )}
+                        )
+                    })()}
 
                     {perguntas.map((p, idx) => {
-                        const itemResponses = displayRespostas.flatMap(r =>
-                            (r.formulario_respostas_itens || [])
-                                .filter((it: any) => it.pergunta_id === p.id)
-                                .map((it: any) => ({ ...it, _autor: r.colaboradores?.nome || 'Anônimo' }))
-                        )
+                        const itemResponses = displayRespostas
+                            .filter(r => {
+                                if (filterCargo === 'todos') return true
+                                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
+                                if (!avaliadoId) return true
+                                return getColabCargo(avaliadoId) === filterCargo
+                            })
+                            .flatMap(r =>
+                                (r.formulario_respostas_itens || [])
+                                    .filter((it: any) => it.pergunta_id === p.id)
+                                    .map((it: any) => ({ ...it, _autor: r.colaboradores?.nome || 'Anônimo' }))
+                            )
 
                         // Tooltip com os respondentes de uma opção (aparece no hover da barra)
                         const VotersTooltip = ({ nomes }: { nomes: string[] }) => (
@@ -730,7 +817,17 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     respondentesMap[id].count++
                 })
                 const respondentesIds = new Set(Object.keys(respondentesMap))
-                const naoRespondentes = colaboradores.filter(c => !respondentesIds.has(c.id))
+
+                // Universo esperado de respondentes: quem bate com "quem responde"
+                // do formulário (aba Público) — lista vazia = Todos. Sem isso, a
+                // lista de "Não responderam" incluía todo mundo cadastrado, mesmo
+                // gente de fora do público-alvo de formulários direcionados.
+                const quemResponde = publico?.quemResponde ?? []
+                const audienciaEsperada = quemResponde.length === 0
+                    ? colaboradores
+                    : colaboradores.filter(c => colaboradorNoPublico(c, quemResponde))
+
+                const naoRespondentes = audienciaEsperada.filter(c => !respondentesIds.has(c.id))
                 const respondentes = Object.entries(respondentesMap)
                     .map(([id, d]) => ({ id, nome: d.nome, count: d.count }))
                     .sort((a, b) => b.count - a.count)
@@ -739,7 +836,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <Users className="h-4 w-4 text-violet-500" />
-                            Participação em {MESES[filtroMes.mes - 1]}/{filtroMes.ano} — {respondentes.length} de {colaboradores.length} membros responderam
+                            Participação em {MESES[filtroMes.mes - 1]}/{filtroMes.ano} — {respondentes.length} de {audienciaEsperada.length} membros responderam
                         </h3>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
