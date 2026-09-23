@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Wallet, Plane, Calendar, ArrowRight, TrendingUp, Loader2, MapPin, FileQuestion, Star, ShieldAlert } from "lucide-react"
+import { AlertTriangle, Wallet, Plane, Calendar, ArrowRight, TrendingUp, Loader2, MapPin, FileQuestion, Star, ShieldAlert, FolderKanban } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,8 @@ import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
+import { CARGO_FANTASMA } from "@/lib/cargos"
+import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
 
 export function PlanoPunicaoAlert() {
     const { colaboradorId } = useColaborador()
@@ -469,6 +471,94 @@ export function QuickActions() {
                         </div>
                     </DialogContent>
                 </Dialog>
+            </CardContent>
+        </Card>
+    )
+}
+
+type ColaboradorProjetos = {
+    id: string
+    nome: string
+    projetos: number | null
+    projetos_ativos_detalhe: any[] | null
+}
+
+export function ProjectsOverview() {
+    const [colaboradores, setColaboradores] = useState<ColaboradorProjetos[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        async function fetchProjetos() {
+            const { data } = await supabase
+                .from('colaboradores')
+                .select('id, nome, projetos, projetos_ativos_detalhe')
+                .eq('status', 'Ativo')
+                .neq('cargo_atual', CARGO_FANTASMA)
+                .order('nome', { ascending: true })
+
+            if (data) setColaboradores(data as ColaboradorProjetos[])
+            setLoading(false)
+        }
+        fetchProjetos()
+    }, [])
+
+    if (loading) return (
+        <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl mt-6">
+            <CardContent className="p-6"><div className="h-40 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" /></CardContent>
+        </Card>
+    )
+
+    const membrosComProjetos = colaboradores.map(c => ({
+        ...c,
+        projetosAtivos: (c.projetos_ativos_detalhe || [])
+            .map(normalizarProjetoDetalhe)
+            .filter(p => p.status === 'Ativo')
+    }))
+
+    const projetosDistintos = new Set(
+        membrosComProjetos.flatMap(c => c.projetosAtivos.map(p => p.nome))
+    ).size
+
+    const totalAlocacoes = colaboradores.reduce((sum, c) => sum + (c.projetos || 0), 0)
+
+    return (
+        <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl mt-6">
+            <CardHeader className="border-b border-slate-50 dark:border-slate-800/50 pb-4 flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="text-lg font-display">Projetos por Membro</CardTitle>
+                    <p className="text-sm text-slate-500 mt-1">
+                        {projetosDistintos} {projetosDistintos === 1 ? 'projeto distinto' : 'projetos distintos'} · {totalAlocacoes} {totalAlocacoes === 1 ? 'alocação' : 'alocações'}
+                    </p>
+                </div>
+                <Link href="/allocations-management">
+                    <Button variant="outline" size="sm" className="gap-2">
+                        Ver tudo <ArrowRight className="h-4 w-4" />
+                    </Button>
+                </Link>
+            </CardHeader>
+            <CardContent className="p-6">
+                {membrosComProjetos.length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                        {membrosComProjetos.map(c => (
+                            <div key={c.id} className="py-3 flex items-start justify-between gap-4">
+                                <div className="min-w-0">
+                                    <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{c.nome}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                        {c.projetosAtivos.length > 0
+                                            ? c.projetosAtivos.map(p => p.nome).join(', ')
+                                            : 'Sem projetos ativos'}
+                                    </p>
+                                </div>
+                                <div className="shrink-0 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                                    <FolderKanban className="h-4 w-4" />
+                                    <span className="text-sm font-bold text-slate-900 dark:text-white">{c.projetos || 0}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-sm text-slate-400 italic text-center py-8">Nenhum membro encontrado</p>
+                )}
             </CardContent>
         </Card>
     )
