@@ -18,38 +18,36 @@ export interface PdiTipoMomento {
     ordem: number
 }
 
-export interface PdiCargoMapeamento {
-    papel_id: string
-    cargo_atual: string
-    nucleo_atual: string | null
-}
-
-export type PdiGrupoPapel = 'Closer' | 'Gerentes' | 'Outros níveis'
-
-// Agrupamento visual do passo 1 do wizard (§3 da especificação): Closer |
-// Gerentes (os 6 ger_*) | Outros níveis (Cargo tático, Diretor).
-export function grupoDoPapel(papelId: string): PdiGrupoPapel {
-    if (papelId === 'closer') return 'Closer'
-    if (papelId.startsWith('ger_')) return 'Gerentes'
-    return 'Outros níveis'
-}
-
-// Resolve o papel de liderança de um colaborador a partir do seu
-// cargo_atual/nucleo_atual, usando o mapeamento gravado em `pdi_cargos`.
-// Prioriza uma linha exata (mesmo núcleo); sem isso, cai no "catch-all"
-// daquele cargo_atual (nucleo_atual null). Retorna null se a pessoa não tem
-// papel de liderança nenhum (ex.: cargo Operacional).
+// Resolve o papel de liderança de um colaborador direto do cargo_atual/
+// nucleo_atual dele — sem passar por uma tabela de mapeamento mantida à
+// parte (o antigo `pdi_cargos`, removido: ficava desatualizado sempre que
+// alguém trocava de núcleo, ou quando a grafia do núcleo divergia entre a
+// tabela e o cadastro real). Estratégico sempre resolve para "diretor";
+// Tático resolve para o próprio texto do núcleo (mesmo valor que já existe
+// em colaboradores.nucleo_atual — ver construirPapeisPorNucleo). Retorna
+// null se a pessoa não tem papel de liderança nenhum (ex.: cargo
+// Operacional).
 export function resolverPapelId(
     cargoAtual: string | null | undefined,
-    nucleoAtual: string | null | undefined,
-    mapeamentos: PdiCargoMapeamento[]
+    nucleoAtual: string | null | undefined
 ): string | null {
-    if (!cargoAtual) return null
-    const nucleo = nucleoAtual || null
-    const exato = mapeamentos.find(m => m.cargo_atual === cargoAtual && m.nucleo_atual === nucleo)
-    if (exato) return exato.papel_id
-    const catchAll = mapeamentos.find(m => m.cargo_atual === cargoAtual && m.nucleo_atual === null)
-    return catchAll?.papel_id ?? null
+    if (cargoAtual === 'Estratégico') return 'diretor'
+    if (cargoAtual === 'Tático' && nucleoAtual) return nucleoAtual
+    return null
+}
+
+// Monta a lista de papéis selecionáveis no passo 1 do wizard: "Diretor" +
+// um item por núcleo que tenha hoje pelo menos um Tático ativo (a lista de
+// núcleos vem de quem realmente ocupa esse cargo agora, não de um
+// catálogo fixo — por isso não fica desatualizada quando alguém muda de
+// núcleo ou de cargo).
+export function construirPapeisPorNucleo(nucleosDeTaticosAtivos: (string | null)[]): PdiPapel[] {
+    const unicos = Array.from(new Set(nucleosDeTaticosAtivos.filter((n): n is string => !!n)))
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    return [
+        { id: 'diretor', nome: 'Diretor', ordem: 0 },
+        ...unicos.map((nucleo, i) => ({ id: nucleo, nome: nucleo, ordem: i + 1 })),
+    ]
 }
 
 // Horários de 09:00 a 17:30 em blocos de 30 min, exceto 12:00–13:00 (§3).

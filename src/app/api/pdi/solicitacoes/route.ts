@@ -50,8 +50,15 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServerSupabaseClient()
 
-    const { data: papeisValidos } = await supabase.from('pdi_papeis').select('id, nome')
-    const idsValidos = new Set((papeisValidos || []).map((p: any) => p.id))
+    // Papel de liderança válido = 'diretor' ou o texto exato de um núcleo
+    // com pelo menos um Tático ativo hoje (nada de catálogo fixo — ver
+    // resolverPapelId em @/lib/pdi).
+    const { data: taticosAtivos } = await supabase
+        .from('colaboradores')
+        .select('nucleo_atual')
+        .eq('cargo_atual', 'Tático')
+        .eq('status', 'Ativo')
+    const idsValidos = new Set<string>(['diretor', ...(taticosAtivos || []).map((c: any) => c.nucleo_atual).filter(Boolean)])
     if (!cargos.every((c: string) => idsValidos.has(c))) {
         return NextResponse.json({ error: 'Papel de liderança inválido.' }, { status: 400 })
     }
@@ -111,7 +118,7 @@ export async function POST(req: NextRequest) {
     )
 
     const { data: colaborador } = await supabase.from('colaboradores').select('nome, nucleo_atual').eq('id', colaboradorId).single()
-    const papeisNomes = cargos.map((c: string) => (papeisValidos || []).find((p: any) => p.id === c)?.nome || c)
+    const papeisNomes = cargos.map((c: string) => (c === 'diretor' ? 'Diretor' : c))
     const tiposTexto = formatarTiposComOpcoes((tiposValidos || []) as any, tipos, detalhes || {}, outro_texto)
 
     await registrarEvento(supabase, {

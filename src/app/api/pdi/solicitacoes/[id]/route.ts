@@ -81,8 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             .select('nome, cargo_atual, nucleo_atual')
             .eq('id', colaboradorId)
             .single()
-        const { data: mapeamentos } = await supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual')
-        meuPapelId = resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual, mapeamentos || [])
+        meuPapelId = resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual)
         meuNome = colaborador?.nome || 'Um líder'
 
         if (!meuPapelId || !(solicitacao.cargos || []).includes(meuPapelId)) {

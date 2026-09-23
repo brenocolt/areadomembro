@@ -22,8 +22,7 @@ export async function GET() {
         .eq('id', colaboradorId)
         .single()
 
-    const { data: mapeamentos } = await supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual')
-    const papelId = resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual, mapeamentos || [])
+    const papelId = resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual)
 
     if (!papelId) {
         return NextResponse.json({ souLider: false, papelId: null, solicitacoes: [] })

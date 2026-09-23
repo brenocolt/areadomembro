@@ -9,13 +9,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Send } from "lucide-react"
 import {
-    PdiPapel, PdiTipoMomento, PdiGrupoPapel,
-    grupoDoPapel, gerarHorariosDisponiveis, isDataValida, dataParaChave,
+    PdiPapel, PdiTipoMomento,
+    gerarHorariosDisponiveis, isDataValida, dataParaChave,
     linkAnalisarAgenda, linkAdicionarAgenda, formatarLista, nomesDosPapeis,
     formatarTiposComOpcoes, formatarDataBr,
 } from "@/lib/pdi"
-
-const GRUPOS: PdiGrupoPapel[] = ['Closer', 'Gerentes', 'Outros níveis']
 
 interface WizardProps {
     papeis: PdiPapel[]
@@ -28,6 +26,9 @@ export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: Wi
     const { colaborador } = useColaborador()
     const [passo, setPasso] = useState(1)
 
+    // Nível escolhido primeiro (passo 1): 'diretor' fixa cargos em ['diretor'];
+    // 'tatico' libera a escolha de um ou mais núcleos abaixo.
+    const [nivel, setNivel] = useState<'tatico' | 'diretor' | null>(null)
     const [cargos, setCargos] = useState<string[]>([])
     const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([])
     const [detalhes, setDetalhes] = useState<Record<string, string[]>>({})
@@ -63,6 +64,13 @@ export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: Wi
         checarOcupados()
         return () => { cancelado = true }
     }, [dataEscolhida, cargos])
+
+    function escolherNivel(n: 'tatico' | 'diretor') {
+        setNivel(n)
+        setCargos(n === 'diretor' ? ['diretor'] : [])
+    }
+
+    const opcoesNucleo = papeis.filter(p => p.id !== 'diretor')
 
     const resumoPapeis = formatarLista(nomesDosPapeis(papeis, cargos))
     const resumoTipos = formatarTiposComOpcoes(tipos, tiposSelecionados, detalhes, outroTexto)
@@ -147,29 +155,41 @@ export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: Wi
                     {passo === 1 && (
                         <div className="space-y-5">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Com quem você quer o momento?</h2>
-                            {GRUPOS.map(grupo => {
-                                const itens = papeis.filter(p => grupoDoPapel(p.id) === grupo)
-                                if (itens.length === 0) return null
-                                return (
-                                    <div key={grupo} className="space-y-2">
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{grupo}</span>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {itens.map(p => {
-                                                const checked = cargos.includes(p.id)
-                                                return (
-                                                    <label key={p.id} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-700'}`}>
-                                                        <Checkbox
-                                                            checked={checked}
-                                                            onCheckedChange={(v) => setCargos(c => v ? [...c, p.id] : c.filter(x => x !== p.id))}
-                                                        />
-                                                        <span className="text-sm text-slate-700 dark:text-slate-300">{p.nome}</span>
-                                                    </label>
-                                                )
-                                            })}
-                                        </div>
+                            <div className="space-y-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nível</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([['tatico', 'Tático'], ['diretor', 'Diretor']] as const).map(([id, nome]) => (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            onClick={() => escolherNivel(id)}
+                                            className={`p-3 rounded-xl border text-sm font-semibold transition-colors ${nivel === id ? 'border-primary bg-primary/5 text-slate-900 dark:text-white' : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
+                                        >
+                                            {nome}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {nivel === 'tatico' && (
+                                <div className="space-y-2">
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Núcleo</span>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {opcoesNucleo.map(p => {
+                                            const checked = cargos.includes(p.id)
+                                            return (
+                                                <label key={p.id} className={`flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-colors ${checked ? 'border-primary bg-primary/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                                    <Checkbox
+                                                        checked={checked}
+                                                        onCheckedChange={(v) => setCargos(c => v ? [...c, p.id] : c.filter(x => x !== p.id))}
+                                                    />
+                                                    <span className="text-sm text-slate-700 dark:text-slate-300">{p.nome}</span>
+                                                </label>
+                                            )
+                                        })}
                                     </div>
-                                )
-                            })}
+                                </div>
+                            )}
                         </div>
                     )}
 
