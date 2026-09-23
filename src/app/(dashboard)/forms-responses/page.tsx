@@ -163,7 +163,7 @@ export default function FormsResponsesPage() {
                     else if (r.nps_geral <= 3.5) detratores++
                     else neutros++
                 })
-                const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
+                const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(2) : '0'
 
                     const rows = monthRespostas.map(r => {
                         const sendDate = new Date(r.created_at)
@@ -192,7 +192,7 @@ export default function FormsResponsesPage() {
                             </td>
                             <td style="padding:16px 12px; vertical-align:top; text-align:center;">
                                 <div style="display:inline-block; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:14px; color:${r.nps_geral >= 4.5 ? '#10b981' : r.nps_geral <= 3.5 ? '#ef4444' : '#f59e0b'}; background:${r.nps_geral >= 4.5 ? '#ecfdf5' : r.nps_geral <= 3.5 ? '#fef2f2' : '#fffbeb'}">
-                                    ${Number(r.nps_geral).toFixed(1)}/5
+                                    ${Number(r.nps_geral).toFixed(2)}/5
                                 </div>
                             </td>
                             <td style="padding:16px 12px; vertical-align:top;">
@@ -527,7 +527,7 @@ export default function FormsResponsesPage() {
                                                                                 <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
                                                                                     <div className="flex justify-between items-center mb-1">
                                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(2)}</span>
                                                                                     </div>
                                                                                     <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                                                         <div className="h-full rounded-full bg-violet-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
@@ -549,7 +549,7 @@ export default function FormsResponsesPage() {
                                                                                 <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
                                                                                     <div className="flex justify-between items-center mb-1">
                                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(2)}</span>
                                                                                     </div>
                                                                                     <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                                                         <div className="h-full rounded-full bg-amber-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
@@ -671,7 +671,7 @@ export default function FormsResponsesPage() {
                                             else if (r.nps_geral <= 3.5) detratores++
                                             else neutros++
                                         })
-                                        const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
+                                        const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(2) : '0'
                                         const isPromotorGlobal = Number(npsScore) >= 4.5
                                         const isDetratorGlobal = Number(npsScore) <= 3.5
 
@@ -726,7 +726,7 @@ export default function FormsResponsesPage() {
                                                                             </div>
                                                                         </div>
                                                                         <div className={`text-2xl font-black px-3 py-1 rounded-xl ${isPromotor ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' : isDetrator ? 'text-rose-600 bg-rose-50 dark:bg-rose-500/10' : 'text-amber-600 bg-amber-50 dark:bg-amber-500/10'}`}>
-                                                                            {Number(resposta.nps_geral).toFixed(1)}<span className="text-xs font-bold opacity-50">/5</span>
+                                                                            {Number(resposta.nps_geral).toFixed(2)}<span className="text-xs font-bold opacity-50">/5</span>
                                                                         </div>
                                                                     </div>
 

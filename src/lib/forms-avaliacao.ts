@@ -305,7 +305,7 @@ export function gerarRelatorioHtml(params: {
         return `<tr>
             <td>${e(r.colaboradores?.nome || 'Anônimo')}</td>
             <td>${l.avaliadoId ? e(nomeDe(l.avaliadoId)) : '—'}${mostrarPapel && l.papel ? `<br/><span class="tag">${e(rotuloPapelDe(l.papel))}</span>` : ''}</td>
-            <td style="text-align:center">${media === null ? '—' : `<span class="nota" style="color:${corNota(media)};background:${fundoNota(media)}">${media.toFixed(1)}</span>`}</td>
+            <td style="text-align:center">${media === null ? '—' : `<span class="nota" style="color:${corNota(media)};background:${fundoNota(media)}">${media.toFixed(2)}</span>`}</td>
             <td>${chips || '—'}</td>
             <td style="white-space:nowrap">${data}</td>
             <td>${comentarios}</td>

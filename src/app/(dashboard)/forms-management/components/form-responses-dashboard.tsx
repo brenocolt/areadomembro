@@ -525,7 +525,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                         {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
                                                     </div>
                                                     <p className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-full">{getColabName(r.avaliadoId)}</p>
-                                                    <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(1)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
+                                                    <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(2)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
                                                     <p className="text-[11px] text-slate-400">{nomeAvaliacoes(r.qtdRespostas)}</p>
                                                 </div>
                                             ))}
@@ -542,7 +542,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                     </div>
                                                     <div className="flex items-center gap-3 shrink-0">
                                                         <span className="text-[11px] text-slate-400">{nomeAvaliacoes(r.qtdRespostas)}</span>
-                                                        <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(1)}/5</span>
+                                                        <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(2)}/5</span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -622,7 +622,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                         if (p.tipo === 'escala') {
                             const values = itemResponses.map(it => Number(it.valor)).filter(v => !isNaN(v))
-                            const avg = values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1) : '0.0'
+                            const avg = values.length > 0 ? (values.reduce((a, b) => a + b, 0) / values.length).toFixed(2) : '0.00'
 
                             const dist = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }
                             const votersByValue: Record<number, string[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] }
