@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import {
     PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, nomesDosPapeis,
-    linkAnalisarAgenda, gerarHorariosDisponiveis, isDataValida, dataParaChave,
+    linkAnalisarAgenda, linkAdicionarAgenda, gerarHorariosDisponiveis, isDataValida, dataParaChave,
 } from "@/lib/pdi"
 
 interface PainelLiderProps {
@@ -174,8 +174,13 @@ function CardSolicitacaoLider({ s, papeis, tipos, meuPapelId, acting, onAceitar,
                 )}
                 {jaAceitei && s.status === 'agendado' && (
                     <>
-                        <a href={linkAnalisarAgenda(s.data)} target="_blank" rel="noopener">
-                            <Button size="sm" variant="outline" type="button" className="rounded-xl font-bold">Google Agenda</Button>
+                        <a href={linkAdicionarAgenda({
+                            titulo: `Momento de desenvolvimento: ${tiposTexto} — ${s.colaborador?.nome || ''}`,
+                            dataStr: s.data,
+                            horaStr: s.hora,
+                            detalhes: `Colaborador: ${s.colaborador?.nome || ''} / Tipo: ${tiposTexto}${s.descricao ? ' / ' + s.descricao : ''}`,
+                        })} target="_blank" rel="noopener">
+                            <Button size="sm" variant="outline" type="button" className="rounded-xl font-bold">Adicionar ao Google Agenda</Button>
                         </a>
                         <Button size="sm" disabled={acting} onClick={onConcluir} className="rounded-xl font-bold">
                             Concluir momento
