@@ -210,6 +210,7 @@ export type AlocacaoColaborador = {
     email: string
     valor_antigo: number
     valor_novo: number
+    projetos_ativos: string[]
 }
 
 export type AlocacaoResult =
@@ -236,10 +237,9 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         return { skipped: true, reason: 'Nenhuma coluna de "Gerente" ou "Consultores" encontrada no board' }
     }
 
-    // 1ª passada: descobre quais itens estão ativos e quais IDs de pessoa
-    // aparecem nas colunas relevantes desses itens.
-    const personIdsPorItemAtivo: number[][] = []
-    let totalItensAtivos = 0
+    // 1ª passada: descobre quais itens estão ativos, o nome de cada um, e
+    // quais IDs de pessoa aparecem nas colunas relevantes desses itens.
+    const itensAtivos: { nome: string; personIds: number[] }[] = []
     const todosPersonIds = new Set<number>()
 
     for (const item of items) {
@@ -247,7 +247,6 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         const status = normalizeMondayStatus(statusCol?.text?.trim() || '')
         if (status !== 'Ativo') continue
 
-        totalItensAtivos++
         const personIds: number[] = []
         for (const col of colunasPessoas) {
             const valueCol = item.column_values?.find((c: any) => c.id === col.id)
@@ -256,17 +255,19 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
                 todosPersonIds.add(id)
             }
         }
-        personIdsPorItemAtivo.push(personIds)
+        itensAtivos.push({ nome: item.name?.trim() || '(sem nome)', personIds })
     }
 
     const emailById = await fetchMondayUserEmails(Array.from(todosPersonIds))
 
-    // 2ª passada: soma, por e-mail, quantos itens ativos cada pessoa aparece.
-    const contagemPorEmail = new Map<string, number>()
-    for (const personIds of personIdsPorItemAtivo) {
-        const emailsUnicos = new Set(personIds.map(id => emailById.get(id)).filter((e): e is string => !!e))
+    // 2ª passada: agrupa, por e-mail, os nomes dos itens ativos em que cada
+    // pessoa aparece (a contagem é só o tamanho dessa lista).
+    const projetosPorEmail = new Map<string, string[]>()
+    for (const item of itensAtivos) {
+        const emailsUnicos = new Set(item.personIds.map(id => emailById.get(id)).filter((e): e is string => !!e))
         for (const email of emailsUnicos) {
-            contagemPorEmail.set(email, (contagemPorEmail.get(email) || 0) + 1)
+            if (!projetosPorEmail.has(email)) projetosPorEmail.set(email, [])
+            projetosPorEmail.get(email)!.push(item.nome)
         }
     }
 
@@ -278,45 +279,53 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         .neq('cargo_atual', CARGO_FANTASMA)
 
     const emailsUsados = new Set<string>()
+    const todos: AlocacaoColaborador[] = []
     const alterados: AlocacaoColaborador[] = []
 
     for (const colab of colaboradores || []) {
         const email = (colab.email_corporativo || '').toLowerCase().trim()
         if (!email) continue
 
-        const valorNovo = contagemPorEmail.get(email) || 0
-        if (contagemPorEmail.has(email)) emailsUsados.add(email)
+        const projetosAtivos = projetosPorEmail.get(email) || []
+        const valorNovo = projetosAtivos.length
+        if (projetosPorEmail.has(email)) emailsUsados.add(email)
 
         const valorAntigo = Number(colab.projetos || 0)
-        if (valorAntigo === valorNovo) continue
-
-        alterados.push({
+        const registro: AlocacaoColaborador = {
             colaborador_id: colab.id,
             nome: colab.nome,
             email,
             valor_antigo: valorAntigo,
             valor_novo: valorNovo,
-        })
+            projetos_ativos: projetosAtivos,
+        }
+        todos.push(registro)
+        if (valorAntigo !== valorNovo) alterados.push(registro)
     }
 
-    const emailsNaoEncontrados = Array.from(contagemPorEmail.keys()).filter(e => !emailsUsados.has(e))
+    const emailsNaoEncontrados = Array.from(projetosPorEmail.keys()).filter(e => !emailsUsados.has(e))
 
     if (!dryRun) {
-        for (const alteracao of alterados) {
-            await supabase
-                .from('colaboradores')
-                .update({ projetos: alteracao.valor_novo })
-                .eq('id', alteracao.colaborador_id)
+        // O campo `projetos` (e o audit_log) só muda quando a contagem muda
+        // de verdade, mas o detalhe (projetos_ativos_detalhe) é atualizado
+        // sempre, pra nunca ficar com uma lista de nomes desatualizada.
+        for (const registro of todos) {
+            const update: Record<string, any> = { projetos_ativos_detalhe: registro.projetos_ativos }
+            if (registro.valor_antigo !== registro.valor_novo) update.projetos = registro.valor_novo
 
-            await supabase.from('audit_logs').insert({
-                colaborador_id: alteracao.colaborador_id,
-                campo: 'projetos',
-                valor_antigo: String(alteracao.valor_antigo),
-                valor_novo: String(alteracao.valor_novo),
-                editado_por: 'Monday Sync',
-            })
+            await supabase.from('colaboradores').update(update).eq('id', registro.colaborador_id)
+
+            if (registro.valor_antigo !== registro.valor_novo) {
+                await supabase.from('audit_logs').insert({
+                    colaborador_id: registro.colaborador_id,
+                    campo: 'projetos',
+                    valor_antigo: String(registro.valor_antigo),
+                    valor_novo: String(registro.valor_novo),
+                    editado_por: 'Monday Sync',
+                })
+            }
         }
     }
 
-    return { dryRun, totalItensAtivos, colunasConsideradas: colunasPessoas, alterados, emailsNaoEncontrados }
+    return { dryRun, totalItensAtivos: itensAtivos.length, colunasConsideradas: colunasPessoas, alterados, emailsNaoEncontrados }
 }

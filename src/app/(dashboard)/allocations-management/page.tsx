@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock } from "lucide-react"
+import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock, ChevronDown } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useColaborador } from "@/hooks/use-supabase"
 
@@ -16,6 +16,7 @@ interface Colaborador {
     nucleo_atual: string
     projetos: number
     email_corporativo: string
+    projetos_ativos_detalhe: string[] | null
 }
 
 export default function AllocationsManagementPage() {
@@ -29,12 +30,13 @@ export default function AllocationsManagementPage() {
     const [search, setSearch] = useState("")
     const [filterNucleo, setFilterNucleo] = useState("all")
     const [editValues, setEditValues] = useState<Record<string, number>>({})
+    const [expandedId, setExpandedId] = useState<string | null>(null)
 
     const fetchColaboradores = useCallback(async () => {
         setLoading(true)
         const { data } = await supabase
             .from('colaboradores')
-            .select('id, nome, cargo_atual, nucleo_atual, projetos, email_corporativo')
+            .select('id, nome, cargo_atual, nucleo_atual, projetos, email_corporativo, projetos_ativos_detalhe')
             .order('nome', { ascending: true })
 
         if (data) {
@@ -219,17 +221,23 @@ export default function AllocationsManagementPage() {
                                 const isSaving = saving === colab.id
 
                                 return (
-                                    <div key={colab.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                    <div key={colab.id}>
+                                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                         {/* Name */}
-                                        <div className="md:col-span-4 flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setExpandedId(prev => prev === colab.id ? null : colab.id)}
+                                            className="md:col-span-4 flex items-center gap-3 text-left"
+                                        >
                                             <div className="h-9 w-9 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center font-bold text-xs text-indigo-600 dark:text-indigo-400 shrink-0">
                                                 {colab.nome.charAt(0).toUpperCase()}
                                             </div>
-                                            <div className="min-w-0">
+                                            <div className="min-w-0 flex-1">
                                                 <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{colab.nome}</p>
                                                 <p className="text-[10px] text-slate-400 truncate">{colab.email_corporativo}</p>
                                             </div>
-                                        </div>
+                                            <ChevronDown className={`h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform ${expandedId === colab.id ? 'rotate-180' : ''}`} />
+                                        </button>
 
                                         {/* Cargo */}
                                         <div className="md:col-span-2">
@@ -293,6 +301,31 @@ export default function AllocationsManagementPage() {
                                                 </span>
                                             )}
                                         </div>
+                                        </div>
+
+                                        {expandedId === colab.id && (
+                                            <div className="px-4 pb-3 pl-16">
+                                                <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/50 rounded-xl p-3">
+                                                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">
+                                                        Projetos ativos ({(colab.projetos_ativos_detalhe || []).length})
+                                                    </p>
+                                                    {(colab.projetos_ativos_detalhe || []).length === 0 ? (
+                                                        <p className="text-xs text-slate-400 italic">
+                                                            Nenhum projeto ativo sincronizado do Monday para este colaborador.
+                                                        </p>
+                                                    ) : (
+                                                        <ul className="space-y-1">
+                                                            {(colab.projetos_ativos_detalhe || []).map((nome, idx) => (
+                                                                <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                                                                    <FolderKanban className="h-3 w-3 text-slate-400 shrink-0" />
+                                                                    {nome}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             })}
