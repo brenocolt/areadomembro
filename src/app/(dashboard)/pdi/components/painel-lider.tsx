@@ -28,11 +28,13 @@ function DialogSugerirHorario({ solicitacaoId, onClose, onEnviado }: { solicitac
     const [enviando, setEnviando] = useState(false)
     const [erro, setErro] = useState<string | null>(null)
 
-    const hoje = new Date(); hoje.setDate(hoje.getDate() + 1)
+    const hoje = new Date()
     const limite = new Date(); limite.setDate(limite.getDate() + 60)
 
     async function enviar() {
-        if (!data || !isDataValida(data)) { setErro('Escolha um dia útil válido (a partir de amanhã, em até 60 dias).'); return }
+        // A sugestão do líder pode ser no mesmo dia — diferente da
+        // solicitação original, que exige a partir de amanhã.
+        if (!data || !isDataValida(data, true)) { setErro('Escolha um dia útil válido (de hoje até 60 dias à frente).'); return }
         if (!hora) { setErro('Escolha um horário.'); return }
         setEnviando(true)
         setErro(null)
@@ -60,14 +62,14 @@ function DialogSugerirHorario({ solicitacaoId, onClose, onEnviado }: { solicitac
                 <div className="space-y-3 pt-2">
                     <div className="space-y-1.5">
                         <Label>Data</Label>
-                        <Input type="date" min={dataParaChave(hoje)} max={dataParaChave(limite)} value={data} onChange={(e) => setData(e.target.value)} />
+                        <Input type="date" min={dataParaChave(hoje)} max={dataParaChave(limite)} value={data} onChange={(e) => { setData(e.target.value); setHora('') }} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Horário</Label>
                         <Select value={hora} onValueChange={setHora}>
                             <SelectTrigger><SelectValue placeholder="Escolha um horário" /></SelectTrigger>
                             <SelectContent>
-                                {gerarHorariosDisponiveis().map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                                {gerarHorariosDisponiveis(data).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>

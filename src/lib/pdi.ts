@@ -53,11 +53,16 @@ export function resolverPapelId(
 }
 
 // Horários de 09:00 a 17:30 em blocos de 30 min, exceto 12:00–13:00 (§3).
-export function gerarHorariosDisponiveis(): string[] {
+// Quando `dataStr` é o dia de hoje, horários já passados ficam de fora —
+// usado pela sugestão de horário do líder, que agora pode ser no mesmo dia.
+export function gerarHorariosDisponiveis(dataStr?: string): string[] {
     const horarios: string[] = []
+    const agora = new Date()
+    const ehHoje = !!dataStr && dataStr === dataParaChave(agora)
     for (let h = 9; h <= 17; h++) {
         for (const m of [0, 30]) {
             if (h >= 12 && h < 13) continue
+            if (ehHoje && (h < agora.getHours() || (h === agora.getHours() && m <= agora.getMinutes()))) continue
             horarios.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
         }
     }
@@ -73,18 +78,20 @@ export function dataParaChave(date: Date): string {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-// Dia útil, a partir de amanhã, até 60 dias (§3).
-export function isDataValida(dataStr: string): boolean {
+// Dia útil, até 60 dias. Por padrão só a partir de amanhã (§3, solicitação
+// original) — `permitirHoje` libera o dia de hoje também, usado pela
+// sugestão de horário do líder.
+export function isDataValida(dataStr: string, permitirHoje: boolean = false): boolean {
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
-    const amanha = new Date(hoje)
-    amanha.setDate(amanha.getDate() + 1)
+    const minimo = new Date(hoje)
+    if (!permitirHoje) minimo.setDate(minimo.getDate() + 1)
     const limite = new Date(hoje)
     limite.setDate(limite.getDate() + 60)
 
     const data = new Date(dataStr + 'T00:00:00')
     if (isNaN(data.getTime())) return false
-    if (data < amanha || data > limite) return false
+    if (data < minimo || data > limite) return false
     return isDiaUtil(data)
 }
 
