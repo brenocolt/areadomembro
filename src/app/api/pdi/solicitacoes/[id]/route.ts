@@ -206,10 +206,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             return NextResponse.json({ error: 'Esta solicitação já foi encerrada.' }, { status: 400 })
         }
         const { data, hora, motivo } = body
-        if (!data || !isDataValida(data)) {
-            return NextResponse.json({ error: 'Data inválida — escolha um dia útil a partir de amanhã, em até 60 dias.' }, { status: 400 })
+        // A sugestão do líder pode ser no mesmo dia (diferente da solicitação
+        // original, que exige a partir de amanhã) — daí o `true` abaixo.
+        if (!data || !isDataValida(data, true)) {
+            return NextResponse.json({ error: 'Data inválida — escolha um dia útil de hoje até 60 dias à frente.' }, { status: 400 })
         }
-        if (!hora || !gerarHorariosDisponiveis().includes(hora)) {
+        if (!hora || !gerarHorariosDisponiveis(data).includes(hora)) {
             return NextResponse.json({ error: 'Horário inválido.' }, { status: 400 })
         }
 
