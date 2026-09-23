@@ -4,7 +4,8 @@ import {
     RecentActivity,
     QuickActions,
     PendingFormsWidget,
-    PlanoPunicaoAlert
+    PlanoPunicaoAlert,
+    ProjectsOverview
 } from "./components/home-widgets";
 
 export default function DashboardPage() {
@@ -23,6 +24,8 @@ export default function DashboardPage() {
                     <PendingFormsWidget />
                 </div>
             </div>
+
+            <ProjectsOverview />
         </div>
     )
 }
