@@ -69,11 +69,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
     const getColabCargo = (id: string) => colaboradores.find(c => c.id === id)?.cargo_atual || null
 
-    // Avaliado de uma pergunta de escala, NUMA resposta específica — via a
-    // pergunta colaborador_unico "dona" da mesma seção (avaliadoPorPergunta).
-    // Usado para filtrar por cargo (Operacional/Tático/Estratégico) tanto o
-    // ranking quanto a distribuição de cada pergunta.
+    // Formulários de avaliação identificam o avaliado de dois jeitos: por uma
+    // pergunta colaborador_unico na própria seção (Piloto de Elite, NPS
+    // Diretor...) ou, nos direcionados pela aba Público → "quem recebe"
+    // (Piloto de Elite: GP, NPS Liderança...), pelo alvo_colaborador_id da
+    // resposta inteira. O alvo só vale quando o formulário não tem nenhuma
+    // pergunta colaborador_unico — senão uma nota de uma seção sem avaliado
+    // (ex.: a nota da empresa no NPS Projetos) seria atribuída a uma pessoa.
+    const temPerguntaColaborador = perguntas.some(p => p.tipo === 'colaborador_unico')
     const avaliadoIdParaPergunta = (r: any, perguntaId: string): string | undefined => {
+        if (!temPerguntaColaborador) return r.alvo_colaborador_id || undefined
         const avaliadoPerguntaId = avaliadoPorPergunta.get(perguntaId)
         if (!avaliadoPerguntaId) return undefined
         return (r.formulario_respostas_itens || []).find((it: any) => it.pergunta_id === avaliadoPerguntaId)?.valor
@@ -185,15 +190,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         })
     }
 
-    // Ranking de avaliados: formulários de avaliação de pares têm ao menos uma
-    // pergunta "colaborador_unico" (quem está sendo avaliado) + perguntas
-    // "escala" (as notas). A média de cada avaliado agrega todas as notas que
-    // ele recebeu em todas as escalas — resolvidas POR SEÇÃO (avaliadoPorPergunta),
-    // já que um formulário pode ter mais de uma pergunta colaborador_unico
-    // (ex.: NPS Projetos: gerente + até 3 duplas, cada uma avaliando alguém
-    // diferente na MESMA resposta).
+    // Ranking de avaliados: formulários de avaliação têm perguntas "escala"
+    // (as notas) e um avaliado — por pergunta colaborador_unico ou pelo alvo
+    // da resposta (ver avaliadoIdParaPergunta). A média de cada avaliado
+    // agrega todas as notas que ele recebeu em todas as escalas — resolvidas
+    // POR SEÇÃO, já que um formulário pode ter mais de uma pergunta
+    // colaborador_unico (ex.: NPS Projetos: gerente + até 3 duplas, cada uma
+    // avaliando alguém diferente na MESMA resposta).
     const escalaPerguntas = perguntas.filter(p => p.tipo === 'escala')
-    const hasRanking = perguntas.some(p => p.tipo === 'colaborador_unico') && escalaPerguntas.length > 0
+    const hasRanking = escalaPerguntas.length > 0
+        && (temPerguntaColaborador || respostas.some(r => r.alvo_colaborador_id))
 
     let rankingAvaliados: { id: string; nome: string; cargo: string | null; media: number; totalAvaliacoes: number }[] = []
     if (hasRanking) {
@@ -201,13 +207,11 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         displayRespostas.forEach(r => {
             const itens = r.formulario_respostas_itens || []
             escalaPerguntas.forEach(p => {
-                const avaliadoPerguntaId = avaliadoPorPergunta.get(p.id)
-                if (!avaliadoPerguntaId) return
-                const avaliadoId = itens.find((it: any) => it.pergunta_id === avaliadoPerguntaId)?.valor
+                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
                 if (!avaliadoId) return
                 const item = itens.find((it: any) => it.pergunta_id === p.id)
                 const v = Number(item?.valor)
-                if (!isNaN(v) && item?.valor !== null && item?.valor !== undefined) {
+                if (!isNaN(v) && item?.valor !== null && item?.valor !== undefined && item?.valor !== '') {
                     if (!acc[avaliadoId]) acc[avaliadoId] = { soma: 0, qtd: 0, avaliacoes: new Set() }
                     acc[avaliadoId].soma += v
                     acc[avaliadoId].qtd += 1
@@ -244,7 +248,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         escalaPerguntas.forEach(p => {
             const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
             const v = Number(item?.valor)
-            if (!item || isNaN(v)) return
+            if (!item || item.valor === null || item.valor === '' || isNaN(v)) return
             if (filterCargo !== 'todos') {
                 const avaliadoId = avaliadoIdParaPergunta(r, p.id)
                 if (avaliadoId && getColabCargo(avaliadoId) !== filterCargo) return
@@ -253,6 +257,42 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         })
     })
     const mediaGeral = todasNotas.length > 0 ? todasNotas.reduce((a, b) => a + b, 0) / todasNotas.length : null
+
+    // Média por Pergunta (mesmo painel do NPS Projetos): média de cada
+    // pergunta de escala dentro do filtro de cargo e, com "Todos" e mais de
+    // um cargo avaliado, a média de cada cargo naquela pergunta.
+    const mediaPorPergunta = escalaPerguntas.map(p => {
+        let soma = 0
+        let qtd = 0
+        const porCargo: Record<string, { soma: number; qtd: number }> = {}
+        displayRespostas.forEach(r => {
+            const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
+            const v = Number(item?.valor)
+            if (!item || item.valor === null || item.valor === '' || isNaN(v)) return
+            const avaliadoId = avaliadoIdParaPergunta(r, p.id)
+            const cargo = avaliadoId ? getColabCargo(avaliadoId) : null
+            if (filterCargo !== 'todos' && avaliadoId && cargo !== filterCargo) return
+            soma += v
+            qtd++
+            if (cargo) {
+                if (!porCargo[cargo]) porCargo[cargo] = { soma: 0, qtd: 0 }
+                porCargo[cargo].soma += v
+                porCargo[cargo].qtd++
+            }
+        })
+        return {
+            id: p.id as string,
+            titulo: p.titulo as string,
+            media: qtd > 0 ? soma / qtd : null,
+            qtd,
+            porCargo: cargosPresentes.map(c => ({
+                cargo: c,
+                media: porCargo[c]?.qtd ? porCargo[c].soma / porCargo[c].qtd : null,
+            })),
+        }
+    })
+    const barraDaMedia = (m: number) => m >= 4.5 ? 'bg-emerald-500' : m >= 3.5 ? 'bg-amber-500' : 'bg-rose-500'
+    const textoDaMedia = (m: number) => m >= 4.5 ? 'text-emerald-600 dark:text-emerald-400' : m >= 3.5 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
 
     // Avaliados com média (por pessoa) abaixo da Média Geral — mesmo recorte
     // do card "Abaixo da Média" do NPS Projeto, já dentro do filtro de cargo/busca.
@@ -440,6 +480,43 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Competências Avaliadas</h3>
                                 <div className="text-4xl font-black text-violet-500">{escalaPerguntas.length}</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Média por Pergunta */}
+                    {mediaPorPergunta.length > 0 && (
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <BarChart3 className="h-4 w-4 text-violet-500" />
+                                Média por Pergunta
+                                {filterCargo !== 'todos' && <span className="text-xs font-normal text-slate-400">— {filterCargo}</span>}
+                            </h3>
+                            <div className="space-y-4">
+                                {mediaPorPergunta.map(q => (
+                                    <div key={q.id}>
+                                        <div className="flex items-start justify-between gap-3 mb-1.5">
+                                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{q.titulo}</span>
+                                            <span className={`text-sm font-black shrink-0 ${q.media === null ? 'text-slate-400' : textoDaMedia(q.media)}`}>
+                                                {q.media === null ? '—' : q.media.toFixed(2)}
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                            {q.media !== null && (
+                                                <div className={`h-full ${barraDaMedia(q.media)}`} style={{ width: `${(q.media / 5) * 100}%` }} />
+                                            )}
+                                        </div>
+                                        {filterCargo === 'todos' && mostrarAbasCargo && (
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+                                                {q.porCargo.map(pc => (
+                                                    <span key={pc.cargo} className="text-[11px] text-slate-400">
+                                                        {pc.cargo}: <strong className={pc.media === null ? 'text-slate-400' : textoDaMedia(pc.media)}>{pc.media === null ? '—' : pc.media.toFixed(2)}</strong>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
