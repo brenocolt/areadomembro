@@ -344,11 +344,11 @@ export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: Wi
                     )}
 
                     <div className="flex justify-between items-center mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-                        <Button variant="ghost" onClick={() => (passo === 1 ? onCancel() : setPasso(p => p - 1))} className="rounded-xl font-bold text-slate-500">
+                        <Button variant="ghost" onClick={() => { setErro(null); if (passo === 1) onCancel(); else setPasso(p => p - 1) }} className="rounded-xl font-bold text-slate-500">
                             ← {passo === 1 ? 'Cancelar' : 'Voltar'}
                         </Button>
                         {passo < 5 ? (
-                            <Button disabled={!podeAvancar} onClick={() => setPasso(p => p + 1)} className="rounded-xl font-bold px-6">
+                            <Button disabled={!podeAvancar} onClick={() => { setErro(null); setPasso(p => p + 1) }} className="rounded-xl font-bold px-6">
                                 Avançar
                             </Button>
                         ) : (
