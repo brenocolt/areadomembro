@@ -5,7 +5,7 @@
 // Centraliza exatamente o que a especificação pede em registrarEvento(...):
 // "grava o evento, cria as notificações e chama o Slack — a fase 2 só troca
 // o transporte" (botões interativos do Slack, fora do escopo desta fase).
-import { resolverPapelId, formatarDataBr, PdiCargoMapeamento } from '@/lib/pdi'
+import { resolverPapelId, formatarDataBr } from '@/lib/pdi'
 
 type TipoEvento = 'nova' | 'aceite' | 'sugestao' | 'aceite_sugestao' | 'recusa_sugestao' | 'cancelamento' | 'conclusao'
 
@@ -74,10 +74,9 @@ async function resolverDestinatarios(supabase: any, params: RegistrarEventoParam
     switch (params.tipo) {
         case 'nova': {
             adminIds.forEach(id => destinatarios.add(id))
-            const { data: mapeamentos } = await supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual')
             const { data: colaboradores } = await supabase.from('colaboradores').select('id, cargo_atual, nucleo_atual').eq('status', 'Ativo')
             for (const c of (colaboradores || []) as { id: string, cargo_atual: string | null, nucleo_atual: string | null }[]) {
-                const papel = resolverPapelId(c.cargo_atual, c.nucleo_atual, (mapeamentos || []) as PdiCargoMapeamento[])
+                const papel = resolverPapelId(c.cargo_atual, c.nucleo_atual)
                 if (papel && params.cargos.includes(papel)) destinatarios.add(c.id)
             }
             break

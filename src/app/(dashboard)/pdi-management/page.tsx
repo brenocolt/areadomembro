@@ -13,9 +13,10 @@ import { Input } from "@/components/ui/input"
 import { Target, PlusCircle, Pencil, Loader2, BarChart3, Ban } from "lucide-react"
 import { toast } from "sonner"
 import {
-    PdiPapel, PdiTipoMomento, PdiCargoMapeamento,
+    PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, nomesDosPapeis,
     PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS, resolverPapelId,
+    construirPapeisPorNucleo,
 } from "@/lib/pdi"
 import { TipoMomentoDialog } from "./components/tipo-momento-dialog"
 import { DetalheSolicitacaoDialog } from "./components/detalhe-solicitacao-dialog"
@@ -27,7 +28,6 @@ export default function PdiManagementPage() {
     const [tipos, setTipos] = useState<PdiTipoMomento[]>([])
     const [solicitacoes, setSolicitacoes] = useState<any[]>([])
     const [lideresAtivos, setLideresAtivos] = useState<any[]>([])
-    const [mapeamentos, setMapeamentos] = useState<PdiCargoMapeamento[]>([])
     const [eventosSugestao, setEventosSugestao] = useState<any[]>([])
     const [feedEventos, setFeedEventos] = useState<any[]>([])
 
@@ -48,17 +48,13 @@ export default function PdiManagementPage() {
 
         async function fetchTudo() {
             const [
-                { data: papeisData },
                 { data: tiposData },
-                { data: mapeamentosData },
                 { data: solicitacoesData },
                 { data: lideresData },
                 { data: eventosSugestaoData },
                 { data: feedData },
             ] = await Promise.all([
-                supabase.from('pdi_papeis').select('*').order('ordem'),
                 supabase.from('pdi_tipos_momento').select('*').order('ordem'),
-                supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual'),
                 supabase
                     .from('pdi_solicitacoes')
                     .select('*, colaborador:colaborador_id(nome, nucleo_atual), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome)), pdi_eventos(*)')
@@ -68,9 +64,10 @@ export default function PdiManagementPage() {
                 supabase.from('pdi_eventos').select('*, autor:autor_id(nome)').order('criado_em', { ascending: false }).limit(20),
             ])
 
-            setPapeis(papeisData || [])
+            setPapeis(construirPapeisPorNucleo(
+                (lideresData || []).filter((c: any) => c.cargo_atual === 'Tático').map((c: any) => c.nucleo_atual)
+            ))
             setTipos(tiposData || [])
-            setMapeamentos((mapeamentosData || []) as PdiCargoMapeamento[])
             setSolicitacoes(solicitacoesData || [])
             setLideresAtivos(lideresData || [])
             setEventosSugestao(eventosSugestaoData || [])
@@ -108,7 +105,7 @@ export default function PdiManagementPage() {
     const linhasLideres = (() => {
         const todasLinhas = solicitacoes.flatMap(s => (s.pdi_solicitacao_lideres || []).map((l: any) => ({ ...l, statusSolicitacao: s.status })))
         return lideresAtivos.map(c => {
-            const meuPapel = resolverPapelId(c.cargo_atual, c.nucleo_atual, mapeamentos)
+            const meuPapel = resolverPapelId(c.cargo_atual, c.nucleo_atual)
             const papelNome = meuPapel ? (papeis.find(p => p.id === meuPapel)?.nome || meuPapel) : null
             const aceitos = todasLinhas.filter(l => l.lider_id === c.id && l.aceito_em && l.statusSolicitacao !== 'cancelado').length
             const concluidos = todasLinhas.filter(l => l.lider_id === c.id && l.statusSolicitacao === 'concluido').length

@@ -10,9 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Target, Plus, Clock, CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import {
-    PdiPapel, PdiTipoMomento, PdiCargoMapeamento,
+    PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, formatarLista, nomesDosPapeis,
     linkAdicionarAgenda, PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS, resolverPapelId,
+    construirPapeisPorNucleo,
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
@@ -51,20 +52,19 @@ export default function PdiPage() {
     const [view, setView] = useState<'lista' | 'wizard' | 'detalhe'>('lista')
     const [detalheId, setDetalheId] = useState<string | null>(null)
     const [acting, setActing] = useState(false)
-    // Se o colaborador tem um papel de liderança (Closer, Gerente de X,
-    // Diretor...), a aba "Para Eu Atender" (painel do líder, §5) aparece.
+    // Se o colaborador é Tático (líder do núcleo dele) ou Estratégico
+    // (Diretor), a aba "Para Eu Atender" (painel do líder, §5) aparece.
     const [meuPapelId, setMeuPapelId] = useState<string | null>(null)
 
     const fetchTudo = useCallback(async () => {
-        const [{ data: papeisData }, { data: tiposData }, { data: mapeamentos }, res] = await Promise.all([
-            supabase.from('pdi_papeis').select('*').order('ordem'),
+        const [{ data: taticos }, { data: tiposData }, res] = await Promise.all([
+            supabase.from('colaboradores').select('nucleo_atual').eq('cargo_atual', 'Tático').eq('status', 'Ativo'),
             supabase.from('pdi_tipos_momento').select('*').eq('ativo', true).order('ordem'),
-            supabase.from('pdi_cargos').select('papel_id, cargo_atual, nucleo_atual'),
             fetch('/api/pdi/solicitacoes'),
         ])
-        setPapeis(papeisData || [])
+        setPapeis(construirPapeisPorNucleo((taticos || []).map(t => t.nucleo_atual)))
         setTipos(tiposData || [])
-        setMeuPapelId(resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual, (mapeamentos || []) as PdiCargoMapeamento[]))
+        setMeuPapelId(resolverPapelId(colaborador?.cargo_atual, colaborador?.nucleo_atual))
         if (res.ok) {
             const json = await res.json()
             setSolicitacoes(json.solicitacoes || [])

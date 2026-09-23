@@ -15,7 +15,7 @@ import {
     formatarTiposComOpcoes, formatarDataBr,
 } from "@/lib/pdi"
 
-const GRUPOS: PdiGrupoPapel[] = ['Closer', 'Gerentes', 'Outros níveis']
+const GRUPOS: PdiGrupoPapel[] = ['Diretor', 'Tático']
 
 interface WizardProps {
     papeis: PdiPapel[]
