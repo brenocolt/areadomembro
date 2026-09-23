@@ -1,10 +1,9 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
-import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown, Search, Briefcase } from "lucide-react"
-import { avaliadoPerguntaPorSecao } from "@/lib/forms-runtime"
+import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown, Search, Briefcase, Download } from "lucide-react"
 import { loadFormularioPublico, colaboradorNoPublico, type FormularioPublico } from "@/lib/forms-publico"
-import { CARGOS, CARGO_FANTASMA } from "@/lib/cargos"
+import { modeloAvaliacao, normalizarTexto, gerarRelatorioHtml, type ResumoPapel } from "@/lib/forms-avaliacao"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -21,14 +20,15 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
     const [filterAnswerValue, setFilterAnswerValue] = useState<string>('')
     const [groupMode, setGroupMode] = useState<'dashboard' | 'pessoa' | 'mes' | 'pergunta'>('dashboard')
-    const [showFullRanking, setShowFullRanking] = useState(false)
-    const [filterCargo, setFilterCargo] = useState<string>('todos')
+    const [rankingCompleto, setRankingCompleto] = useState<Record<string, boolean>>({})
+    const [filterPapel, setFilterPapel] = useState<string>('todos')
     const [searchAvaliado, setSearchAvaliado] = useState('')
+    const [tituloFormulario, setTituloFormulario] = useState('')
 
     useEffect(() => {
         async function fetch() {
             setLoading(true)
-            const [{ data: pData }, { data: rData }, { data: cData }, publicoData] = await Promise.all([
+            const [{ data: pData }, { data: rData }, { data: cData }, publicoData, { data: fData }] = await Promise.all([
                 supabase.from('formulario_perguntas').select('*').eq('formulario_id', formularioId).order('ordem'),
                 // colaboradores é resolvido duas vezes (autor da resposta e,
                 // em formulários direcionados, o alvo dela) — precisa apontar
@@ -38,13 +38,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     .eq('formulario_id', formularioId).order('enviado_em', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
                 loadFormularioPublico(formularioId),
+                supabase.from('formularios').select('titulo').eq('id', formularioId).maybeSingle(),
             ])
             setPerguntas(pData || [])
             setRespostas(rData || [])
             setColaboradores(cData || [])
             setPublico(publicoData)
-            setFilterCargo('todos')
+            setTituloFormulario(fData?.titulo || 'Formulário')
+            setFilterPapel('todos')
             setSearchAvaliado('')
+            setRankingCompleto({})
 
             // Auto-expand first group
             if (rData && rData.length > 0) {
@@ -67,22 +70,6 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     }
 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
-    const getColabCargo = (id: string) => colaboradores.find(c => c.id === id)?.cargo_atual || null
-
-    // Formulários de avaliação identificam o avaliado de dois jeitos: por uma
-    // pergunta colaborador_unico na própria seção (Piloto de Elite, NPS
-    // Diretor...) ou, nos direcionados pela aba Público → "quem recebe"
-    // (Piloto de Elite: GP, NPS Liderança...), pelo alvo_colaborador_id da
-    // resposta inteira. O alvo só vale quando o formulário não tem nenhuma
-    // pergunta colaborador_unico — senão uma nota de uma seção sem avaliado
-    // (ex.: a nota da empresa no NPS Projetos) seria atribuída a uma pessoa.
-    const temPerguntaColaborador = perguntas.some(p => p.tipo === 'colaborador_unico')
-    const avaliadoIdParaPergunta = (r: any, perguntaId: string): string | undefined => {
-        if (!temPerguntaColaborador) return r.alvo_colaborador_id || undefined
-        const avaliadoPerguntaId = avaliadoPorPergunta.get(perguntaId)
-        if (!avaliadoPerguntaId) return undefined
-        return (r.formulario_respostas_itens || []).find((it: any) => it.pergunta_id === avaliadoPerguntaId)?.valor
-    }
 
     // ── Hooks: devem ficar ANTES de qualquer early return ─────────────────────
 
@@ -110,13 +97,10 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             return d.getFullYear() === filtroMes.ano && d.getMonth() + 1 === filtroMes.mes
         }), [respostas, filtroMes])
 
-    // Pergunta colaborador_unico "dona" de cada pergunta de escala/texto, por
-    // SEÇÃO (ver avaliadoPerguntaPorSecao) — um formulário pode ter mais de
-    // uma pergunta "Selecionar 1 Colaborador" (ex.: NPS Projetos: gerente +
-    // até 3 duplas, cada uma numa seção), e cada nota pertence à seção em
-    // que está, não a uma pergunta fixa única. `perguntas` já vem ordenado
-    // por `ordem` na busca inicial, que é o que a função exige.
-    const avaliadoPorPergunta = useMemo(() => avaliadoPerguntaPorSecao(perguntas), [perguntas])
+    // Quem foi avaliado em cada resposta, em qual papel (aba) e com quais
+    // notas — ver src/lib/forms-avaliacao.ts. `perguntas` já vem ordenado por
+    // `ordem` na busca inicial, que é o que o modelo exige.
+    const modelo = useMemo(() => modeloAvaliacao(perguntas, respostas), [perguntas, respostas])
 
     // ── Early returns (depois de todos os hooks) ───────────────────────────────
 
@@ -161,18 +145,103 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         })
         : monthFilteredRespostas
 
+    // ── Avaliação: papel (aba), busca e resumos ──────────────────────────────
+    // Cada resposta vira uma linha por pessoa avaliada nela. A aba separa os
+    // papéis em que a pessoa foi avaliada (no NPS Projetos: Táticos = quem
+    // aparece em "Quem é o gerente deste projeto?", Operacionais = quem
+    // aparece em "Quem é o(a) consultor(a)..."), e a busca filtra pelo nome
+    // do avaliado. Os dois filtros valem para o dashboard, as listas e o
+    // relatório.
+    const escalaPerguntas = perguntas.filter(p => p.tipo === 'escala')
+    const hasRanking = escalaPerguntas.length > 0 && modelo.papeis.length > 0
+    const mostrarAbasPapel = modelo.papeis.length > 1
+    const papelSelecionado = modelo.papeis.some(p => p.chave === filterPapel) ? filterPapel : 'todos'
+    const busca = normalizarTexto(searchAvaliado)
+    const nomeBateBusca = (avaliadoId: string | null) => !!avaliadoId && normalizarTexto(getColabName(avaliadoId)).includes(busca)
+    const filtroAtivo = papelSelecionado !== 'todos' || !!busca
+
+    const linhasTodas = displayRespostas.flatMap(r => modelo.linhasDaResposta(r))
+    const linhasPapel = papelSelecionado === 'todos' ? linhasTodas : linhasTodas.filter(l => l.papel === papelSelecionado)
+    const linhasVisiveis = busca ? linhasPapel.filter(l => nomeBateBusca(l.avaliadoId)) : linhasPapel
+    const respostaIdsVisiveis = new Set(linhasVisiveis.map(l => l.resposta.id))
+
+    const apenasPapel = papelSelecionado === 'todos' ? undefined : papelSelecionado
+    const resumo = modelo.resumir(linhasVisiveis, apenasPapel)
+    // Referência do "Abaixo da Média": a média do papel inteiro, sem a busca
+    // — senão, buscando uma pessoa, ela seria comparada consigo mesma.
+    const resumoBase = modelo.resumir(linhasPapel, apenasPapel)
+    const mediaDoPapel = (chave: string | null) => resumoBase.papeis.find(p => p.chave === chave)?.media ?? null
+    const mediaGeral = resumo.mediaGeral
+    const totalCriterios = resumo.papeis.reduce((s, p) => s + p.criterios.length, 0)
+    const respostasConsideradas = filtroAtivo ? respostaIdsVisiveis.size : displayRespostas.length
+
+    const rankings = resumo.papeis.filter(p => p.chave !== null && p.ranking.length > 0)
+    const abaixoDaMediaPorPapel = rankings
+        .map(p => {
+            const base = mediaDoPapel(p.chave)
+            return { papel: p, base, itens: base === null ? [] : p.ranking.filter(r => r.media < base).sort((a, b) => a.media - b.media) }
+        })
+        .filter(g => g.itens.length > 0)
+    const mostrarAbaixoDaMedia = abaixoDaMediaPorPapel.length > 0
+    const blocosCriterios = resumo.papeis.filter(p => p.criterios.length > 0)
+
+    // Pergunta visível na aba atual: numa aba específica, só as perguntas
+    // daquele papel (as de outro papel ou sem avaliado ficam de fora).
+    const perguntaNaAba = (perguntaId: string) => papelSelecionado === 'todos' || modelo.papelDaPergunta(perguntaId) === papelSelecionado
+    // Respostas que entram na distribuição de uma pergunta: com busca, as de
+    // perguntas com avaliado exigem que o avaliado dela bata; as sem avaliado
+    // (ex.: "Qual o projeto?") entram se a resposta tem alguém que bate.
+    const respostasDaPergunta = (perguntaId: string) => {
+        if (!busca) return displayRespostas
+        if (modelo.papelDaPergunta(perguntaId)) {
+            return displayRespostas.filter(r => nomeBateBusca(modelo.avaliadoDaPergunta(r, perguntaId)))
+        }
+        return displayRespostas.filter(r => respostaIdsVisiveis.has(r.id))
+    }
+    const respostasLista = filtroAtivo ? displayRespostas.filter(r => respostaIdsVisiveis.has(r.id)) : displayRespostas
+    const perguntasLista = filteredPerguntas.filter(p => perguntaNaAba(p.id))
+
+    const barraDaMedia = (m: number) => m >= 4.5 ? 'bg-emerald-500' : m >= 3.5 ? 'bg-amber-500' : 'bg-rose-500'
+    const textoDaMedia = (m: number) => m >= 4.5 ? 'text-emerald-600 dark:text-emerald-400' : m >= 3.5 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
+    const rotuloAba = modelo.papeis.find(p => p.chave === papelSelecionado)?.label
+
+    const gerarRelatorio = () => {
+        const filtros = [`Mês: ${MESES[filtroMes.mes - 1]}/${filtroMes.ano}`]
+        if (rotuloAba) filtros.push(`Aba: ${rotuloAba}`)
+        if (busca) filtros.push(`Avaliado: "${searchAvaliado.trim()}"`)
+        if (filterPerguntaId && filterAnswerValue.trim()) {
+            const p = perguntas.find(q => q.id === filterPerguntaId)
+            filtros.push(`Resposta "${filterAnswerValue.trim()}" em ${p?.titulo ? p.titulo.replace(/<[^>]*>/g, '') : 'pergunta selecionada'}`)
+        }
+        const html = gerarRelatorioHtml({
+            titulo: tituloFormulario,
+            filtros,
+            resumo,
+            mediaDoPapel,
+            linhas: linhasVisiveis,
+            perguntas,
+            nomeDe: getColabName,
+            mostrarPapel: mostrarAbasPapel && papelSelecionado === 'todos',
+        })
+        const janela = window.open('', '_blank')
+        if (!janela) return
+        janela.document.write(html)
+        janela.document.close()
+        setTimeout(() => janela.print(), 500)
+    }
+
     // Group responses
-    let groups: Record<string, { label: string; respostas: any[] }> = {}
+    const groups: Record<string, { label: string; respostas: any[] }> = {}
 
     if (groupMode === 'pessoa') {
-        displayRespostas.forEach(r => {
+        respostasLista.forEach(r => {
             const personId = r.colaborador_id || 'anon'
             const personName = r.colaboradores?.nome || 'Anônimo'
             if (!groups[personId]) groups[personId] = { label: personName, respostas: [] }
             groups[personId].respostas.push(r)
         })
     } else if (groupMode === 'mes') {
-        displayRespostas.forEach(r => {
+        respostasLista.forEach(r => {
             const date = new Date(r.enviado_em)
             const key = `${date.getFullYear()}-${date.getMonth()}`
             if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
@@ -180,8 +249,9 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
         })
     } else if (groupMode === 'pergunta') {
         perguntas.forEach((p, idx) => {
+            if (!perguntaNaAba(p.id)) return
             groups[p.id] = { label: `${idx + 1}. ${p.titulo}`, respostas: [] }
-            displayRespostas.forEach(r => {
+            respostasDaPergunta(p.id).forEach(r => {
                 const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
                 if (item) {
                     groups[p.id].respostas.push({ ...r, _mappedItem: item, _pergunta: p })
@@ -189,117 +259,6 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             })
         })
     }
-
-    // Ranking de avaliados: formulários de avaliação têm perguntas "escala"
-    // (as notas) e um avaliado — por pergunta colaborador_unico ou pelo alvo
-    // da resposta (ver avaliadoIdParaPergunta). A média de cada avaliado
-    // agrega todas as notas que ele recebeu em todas as escalas — resolvidas
-    // POR SEÇÃO, já que um formulário pode ter mais de uma pergunta
-    // colaborador_unico (ex.: NPS Projetos: gerente + até 3 duplas, cada uma
-    // avaliando alguém diferente na MESMA resposta).
-    const escalaPerguntas = perguntas.filter(p => p.tipo === 'escala')
-    const hasRanking = escalaPerguntas.length > 0
-        && (temPerguntaColaborador || respostas.some(r => r.alvo_colaborador_id))
-
-    let rankingAvaliados: { id: string; nome: string; cargo: string | null; media: number; totalAvaliacoes: number }[] = []
-    if (hasRanking) {
-        const acc: Record<string, { soma: number; qtd: number; avaliacoes: Set<string> }> = {}
-        displayRespostas.forEach(r => {
-            const itens = r.formulario_respostas_itens || []
-            escalaPerguntas.forEach(p => {
-                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
-                if (!avaliadoId) return
-                const item = itens.find((it: any) => it.pergunta_id === p.id)
-                const v = Number(item?.valor)
-                if (!isNaN(v) && item?.valor !== null && item?.valor !== undefined && item?.valor !== '') {
-                    if (!acc[avaliadoId]) acc[avaliadoId] = { soma: 0, qtd: 0, avaliacoes: new Set() }
-                    acc[avaliadoId].soma += v
-                    acc[avaliadoId].qtd += 1
-                    acc[avaliadoId].avaliacoes.add(r.id)
-                }
-            })
-        })
-        rankingAvaliados = Object.entries(acc)
-            .map(([id, d]) => ({ id, nome: getColabName(id), cargo: getColabCargo(id), media: d.qtd > 0 ? d.soma / d.qtd : 0, totalAvaliacoes: d.avaliacoes.size }))
-            .sort((a, b) => b.media - a.media)
-    }
-
-    // Cargos (Operacional/Tático/Estratégico) realmente presentes entre os
-    // avaliados deste formulário — só mostra as abas de filtro quando faz
-    // sentido (mais de um cargo avaliado). A conta fantasma Administrador
-    // nunca aparece aqui, mesmo que por engano tenha sido avaliada.
-    const cargosPresentes = CARGOS.filter(c => c !== CARGO_FANTASMA && rankingAvaliados.some(r => r.cargo === c))
-    const mostrarAbasCargo = cargosPresentes.length > 1
-
-    // Ranking filtrado pelo cargo selecionado e pela busca por nome —
-    // aplicado ao Ranking dos Avaliados, ao "Abaixo da Média" e às perguntas
-    // de escala/seleção/colaborador do detalhamento por pergunta abaixo.
-    const buscaNormalizada = searchAvaliado.trim().toLowerCase()
-    const rankingFiltrado = rankingAvaliados
-        .filter(r => filterCargo === 'todos' || r.cargo === filterCargo)
-        .filter(r => !buscaNormalizada || r.nome.toLowerCase().includes(buscaNormalizada))
-
-    // Média Geral (mesmo padrão da aba de NPS Projeto): todas as notas de
-    // escala do mês, sem agrupar por avaliado — dá o número que aparece nos
-    // cards de KPI do dashboard. Quando uma aba de cargo está selecionada,
-    // só entram notas cujo avaliado é daquele cargo.
-    const todasNotas: number[] = []
-    displayRespostas.forEach(r => {
-        escalaPerguntas.forEach(p => {
-            const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
-            const v = Number(item?.valor)
-            if (!item || item.valor === null || item.valor === '' || isNaN(v)) return
-            if (filterCargo !== 'todos') {
-                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
-                if (avaliadoId && getColabCargo(avaliadoId) !== filterCargo) return
-            }
-            todasNotas.push(v)
-        })
-    })
-    const mediaGeral = todasNotas.length > 0 ? todasNotas.reduce((a, b) => a + b, 0) / todasNotas.length : null
-
-    // Média por Pergunta (mesmo painel do NPS Projetos): média de cada
-    // pergunta de escala dentro do filtro de cargo e, com "Todos" e mais de
-    // um cargo avaliado, a média de cada cargo naquela pergunta.
-    const mediaPorPergunta = escalaPerguntas.map(p => {
-        let soma = 0
-        let qtd = 0
-        const porCargo: Record<string, { soma: number; qtd: number }> = {}
-        displayRespostas.forEach(r => {
-            const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
-            const v = Number(item?.valor)
-            if (!item || item.valor === null || item.valor === '' || isNaN(v)) return
-            const avaliadoId = avaliadoIdParaPergunta(r, p.id)
-            const cargo = avaliadoId ? getColabCargo(avaliadoId) : null
-            if (filterCargo !== 'todos' && avaliadoId && cargo !== filterCargo) return
-            soma += v
-            qtd++
-            if (cargo) {
-                if (!porCargo[cargo]) porCargo[cargo] = { soma: 0, qtd: 0 }
-                porCargo[cargo].soma += v
-                porCargo[cargo].qtd++
-            }
-        })
-        return {
-            id: p.id as string,
-            titulo: p.titulo as string,
-            media: qtd > 0 ? soma / qtd : null,
-            qtd,
-            porCargo: cargosPresentes.map(c => ({
-                cargo: c,
-                media: porCargo[c]?.qtd ? porCargo[c].soma / porCargo[c].qtd : null,
-            })),
-        }
-    })
-    const barraDaMedia = (m: number) => m >= 4.5 ? 'bg-emerald-500' : m >= 3.5 ? 'bg-amber-500' : 'bg-rose-500'
-    const textoDaMedia = (m: number) => m >= 4.5 ? 'text-emerald-600 dark:text-emerald-400' : m >= 3.5 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
-
-    // Avaliados com média (por pessoa) abaixo da Média Geral — mesmo recorte
-    // do card "Abaixo da Média" do NPS Projeto, já dentro do filtro de cargo/busca.
-    const abaixoDaMedia = (hasRanking && mediaGeral !== null)
-        ? rankingFiltrado.filter(r => r.media < mediaGeral).sort((a, b) => a.media - b.media)
-        : []
-    const mostrarAbaixoDaMedia = abaixoDaMedia.length > 0 && mediaGeral !== null
 
     const MEDAL_STYLES = [
         { badge: 'bg-amber-400 text-amber-950', card: 'border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5' },
@@ -410,28 +369,36 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             className="h-8 px-3 text-xs rounded-xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300 placeholder:text-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-400 min-w-[160px]"
                         />
                     )}
+
+                    <button
+                        onClick={gerarRelatorio}
+                        title="Gera o relatório com os filtros aplicados (mês, aba, busca e resposta)"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-violet-600 hover:bg-violet-700 text-white transition-colors whitespace-nowrap"
+                    >
+                        <Download className="h-3.5 w-3.5" />Relatório PDF
+                    </button>
                 </div>
             </div>
 
-            {/* Cargo tabs + busca por avaliado — só no dashboard, e só quando o
-                formulário avalia pessoas (hasRanking) */}
-            {groupMode === 'dashboard' && hasRanking && (
+            {/* Abas por papel + busca por avaliado — só quando o formulário
+                avalia pessoas (hasRanking); valem em todos os modos e no relatório */}
+            {hasRanking && (
                 <div className="flex flex-wrap items-center gap-2 -mt-2">
-                    {mostrarAbasCargo && (
+                    {mostrarAbasPapel && (
                         <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-xl p-0.5">
                             <button
-                                onClick={() => setFilterCargo('todos')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${filterCargo === 'todos' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                                onClick={() => setFilterPapel('todos')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${papelSelecionado === 'todos' ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
                             >
                                 <Briefcase className="h-3 w-3 inline mr-1" />Todos
                             </button>
-                            {cargosPresentes.map(cargo => (
+                            {modelo.papeis.map(papel => (
                                 <button
-                                    key={cargo}
-                                    onClick={() => setFilterCargo(cargo)}
-                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${filterCargo === cargo ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
+                                    key={papel.chave}
+                                    onClick={() => setFilterPapel(papel.chave)}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${papelSelecionado === papel.chave ? 'bg-white dark:bg-slate-700 text-violet-700 dark:text-violet-300 shadow-sm' : 'text-slate-500'}`}
                                 >
-                                    {cargo}
+                                    {papel.label}
                                 </button>
                             ))}
                         </div>
@@ -467,142 +434,158 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                     {escalaPerguntas.length > 0 && (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral{filterCargo !== 'todos' ? ` (${filterCargo})` : ''}</h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Média Geral{rotuloAba ? ` (${rotuloAba})` : ''}</h3>
                                 <div className="flex items-end gap-3">
                                     <span className={`text-4xl font-black ${mediaGeral === null ? 'text-slate-400' : mediaGeral >= 4.5 ? 'text-emerald-500' : mediaGeral >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{mediaGeral === null ? '—' : mediaGeral.toFixed(2)}</span>
-                                    <span className="text-sm font-medium text-slate-400 mb-1">/5 ({todasNotas.length} notas)</span>
+                                    <span className="text-sm font-medium text-slate-400 mb-1">/5 ({resumo.qtdNotas} notas)</span>
                                 </div>
                             </div>
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Total Respostas</h3>
-                                <div className="text-4xl font-black text-slate-700 dark:text-slate-300">{monthFilteredRespostas.length}</div>
+                                <div className="text-4xl font-black text-slate-700 dark:text-slate-300">{respostasConsideradas}</div>
                             </div>
                             <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Competências Avaliadas</h3>
-                                <div className="text-4xl font-black text-violet-500">{escalaPerguntas.length}</div>
+                                <div className="text-4xl font-black text-violet-500">{totalCriterios}</div>
                             </div>
                         </div>
                     )}
 
-                    {/* Média por Pergunta */}
-                    {mediaPorPergunta.length > 0 && (
+                    {/* Média por Pergunta — pelo critério (competência) de cada
+                        pergunta; critérios repetidos no mesmo papel viram uma linha */}
+                    {blocosCriterios.length > 0 && (
                         <div className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                                 <BarChart3 className="h-4 w-4 text-violet-500" />
                                 Média por Pergunta
-                                {filterCargo !== 'todos' && <span className="text-xs font-normal text-slate-400">— {filterCargo}</span>}
+                                {rotuloAba && <span className="text-xs font-normal text-slate-400">— {rotuloAba}</span>}
                             </h3>
-                            <div className="space-y-4">
-                                {mediaPorPergunta.map(q => (
-                                    <div key={q.id}>
-                                        <div className="flex items-start justify-between gap-3 mb-1.5">
-                                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{q.titulo}</span>
-                                            <span className={`text-sm font-black shrink-0 ${q.media === null ? 'text-slate-400' : textoDaMedia(q.media)}`}>
-                                                {q.media === null ? '—' : q.media.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                            {q.media !== null && (
-                                                <div className={`h-full ${barraDaMedia(q.media)}`} style={{ width: `${(q.media / 5) * 100}%` }} />
-                                            )}
-                                        </div>
-                                        {filterCargo === 'todos' && mostrarAbasCargo && (
-                                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
-                                                {q.porCargo.map(pc => (
-                                                    <span key={pc.cargo} className="text-[11px] text-slate-400">
-                                                        {pc.cargo}: <strong className={pc.media === null ? 'text-slate-400' : textoDaMedia(pc.media)}>{pc.media === null ? '—' : pc.media.toFixed(2)}</strong>
-                                                    </span>
-                                                ))}
-                                            </div>
+                            <div className={`grid grid-cols-1 ${blocosCriterios.length > 1 ? 'md:grid-cols-2' : ''} gap-6`}>
+                                {blocosCriterios.map(bloco => (
+                                    <div key={bloco.chave ?? 'geral'}>
+                                        {blocosCriterios.length > 1 && (
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 mb-3">
+                                                {bloco.label}{bloco.media !== null && <span className="font-normal text-slate-400 normal-case"> — média {bloco.media.toFixed(2)}</span>}
+                                            </p>
                                         )}
+                                        <div className="space-y-3">
+                                            {bloco.criterios.map(c => (
+                                                <div key={c.chave}>
+                                                    <div className="flex items-start justify-between gap-3 mb-1">
+                                                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{c.label}</span>
+                                                        <span className={`text-sm font-black shrink-0 ${c.media === null ? 'text-slate-400' : textoDaMedia(c.media)}`}>
+                                                            {c.media === null ? '—' : c.media.toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                        {c.media !== null && (
+                                                            <div className={`h-full ${barraDaMedia(c.media)}`} style={{ width: `${(c.media / 5) * 100}%` }} />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* Ranking de avaliados (médias das perguntas de escala por pessoa avaliada) + Abaixo da Média */}
-                    {hasRanking && rankingFiltrado.length > 0 && (() => {
-                        const mostrarRankingCompleto = showFullRanking || !!buscaNormalizada
-                        return (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                            <div className={`${mostrarAbaixoDaMedia ? 'lg:col-span-2' : 'lg:col-span-3'} bg-gradient-to-br from-violet-50 to-white dark:from-violet-500/10 dark:to-slate-800/50 p-5 rounded-2xl border border-violet-100 dark:border-violet-500/20`}>
-                                <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                        <Trophy className="h-4 w-4 text-amber-500" />
-                                        Ranking dos Avaliados
-                                        <span className="text-xs font-normal text-slate-400">— média das notas recebidas</span>
-                                    </h3>
-                                    {rankingFiltrado.length > 3 && !buscaNormalizada && (
-                                        <button
-                                            onClick={() => setShowFullRanking(v => !v)}
-                                            className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
-                                        >
-                                            {showFullRanking ? 'Ver apenas top 3' : `Ver ranking completo (${rankingFiltrado.length})`}
-                                        </button>
+                    {/* Ranking por papel (Top 3 de cada aba) + Abaixo da Média */}
+                    {hasRanking && rankings.length > 0 && (() => {
+                        const varios = rankings.length > 1
+                        const renderRanking = (bloco: ResumoPapel) => {
+                            const chave = bloco.chave ?? 'geral'
+                            const completo = rankingCompleto[chave] || !!busca
+                            const itens = completo ? bloco.ranking : bloco.ranking.slice(0, 3)
+                            const nomeAvaliacoes = (n: number) => `${n} avaliação${n !== 1 ? 'ões' : ''}`
+                            return (
+                                <div key={chave} className={`${varios ? '' : (mostrarAbaixoDaMedia ? 'lg:col-span-2' : 'lg:col-span-3')} bg-gradient-to-br from-violet-50 to-white dark:from-violet-500/10 dark:to-slate-800/50 p-5 rounded-2xl border border-violet-100 dark:border-violet-500/20`}>
+                                    <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                        <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <Trophy className="h-4 w-4 text-amber-500" />
+                                            {varios ? `Top 3 ${bloco.label}` : 'Ranking dos Avaliados'}
+                                            {!varios && <span className="text-xs font-normal text-slate-400">— média das notas recebidas</span>}
+                                        </h3>
+                                        {bloco.ranking.length > 3 && !busca && (
+                                            <button
+                                                onClick={() => setRankingCompleto(prev => ({ ...prev, [chave]: !prev[chave] }))}
+                                                className="text-xs font-bold text-violet-600 dark:text-violet-400 hover:underline"
+                                            >
+                                                {rankingCompleto[chave] ? 'Ver apenas top 3' : `Ver ranking completo (${bloco.ranking.length})`}
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {!completo && !varios ? (
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            {itens.map((r, i) => (
+                                                <div key={r.avaliadoId} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${MEDAL_STYLES[i].card}`}>
+                                                    <div className={`flex items-center justify-center w-9 h-9 rounded-full font-black text-sm ${MEDAL_STYLES[i].badge}`}>
+                                                        {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
+                                                    </div>
+                                                    <p className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-full">{getColabName(r.avaliadoId)}</p>
+                                                    <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(1)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
+                                                    <p className="text-[11px] text-slate-400">{nomeAvaliacoes(r.qtdRespostas)}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+                                            {itens.map((r, i) => (
+                                                <div key={r.avaliadoId} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${i < 3 ? MEDAL_STYLES[i].card : 'bg-white dark:bg-transparent border-slate-100 dark:border-slate-800'}`}>
+                                                    <div className="flex items-center gap-3 min-w-0">
+                                                        <span className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${i < 3 ? MEDAL_STYLES[i].badge : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                                                            {i + 1}
+                                                        </span>
+                                                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{getColabName(r.avaliadoId)}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 shrink-0">
+                                                        <span className="text-[11px] text-slate-400">{nomeAvaliacoes(r.qtdRespostas)}</span>
+                                                        <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(1)}/5</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
+                            )
+                        }
 
-                                {!mostrarRankingCompleto ? (
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        {rankingFiltrado.slice(0, 3).map((r, i) => (
-                                            <div key={r.id} className={`flex flex-col items-center text-center gap-2 p-4 rounded-xl border ${MEDAL_STYLES[i].card}`}>
-                                                <div className={`flex items-center justify-center w-9 h-9 rounded-full font-black text-sm ${MEDAL_STYLES[i].badge}`}>
-                                                    {i === 0 ? <Trophy className="h-4 w-4" /> : <Medal className="h-4 w-4" />}
+                        return (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                {rankings.map(renderRanking)}
+
+                                {mostrarAbaixoDaMedia && (
+                                    <div className="bg-rose-50 dark:bg-rose-500/5 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
+                                        <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <TrendingDown className="h-3.5 w-3.5" />
+                                            Abaixo da Média{!varios && abaixoDaMediaPorPapel[0].base !== null ? ` (${abaixoDaMediaPorPapel[0].base.toFixed(2)})` : ''}
+                                        </h3>
+                                        <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
+                                            {abaixoDaMediaPorPapel.map(g => (
+                                                <div key={g.papel.chave ?? 'geral'} className="space-y-2">
+                                                    {varios && (
+                                                        <p className="text-[11px] font-bold text-rose-500/80">{g.papel.label} — média {g.base!.toFixed(2)}</p>
+                                                    )}
+                                                    {g.itens.map(c => (
+                                                        <div key={c.avaliadoId} className="flex items-center justify-between gap-2">
+                                                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{getColabName(c.avaliadoId)}</span>
+                                                            <span className="text-sm font-black text-rose-500 shrink-0">{c.media.toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <p className="font-bold text-sm text-slate-900 dark:text-white truncate max-w-full">{r.nome}</p>
-                                                <p className="text-2xl font-black text-violet-600 dark:text-violet-400">{r.media.toFixed(1)}<span className="text-sm text-slate-400 font-bold">/5</span></p>
-                                                <p className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
-                                        {rankingFiltrado.map((r, i) => (
-                                            <div key={r.id} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${i < 3 ? MEDAL_STYLES[i].card : 'bg-white dark:bg-transparent border-slate-100 dark:border-slate-800'}`}>
-                                                <div className="flex items-center gap-3 min-w-0">
-                                                    <span className={`shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-black ${i < 3 ? MEDAL_STYLES[i].badge : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                                                        {i + 1}
-                                                    </span>
-                                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{r.nome}</span>
-                                                </div>
-                                                <div className="flex items-center gap-3 shrink-0">
-                                                    <span className="text-[11px] text-slate-400">{r.totalAvaliacoes} avaliação{r.totalAvaliacoes !== 1 ? 'ões' : ''}</span>
-                                                    <span className="font-bold text-violet-600 dark:text-violet-400 text-sm">{r.media.toFixed(1)}/5</span>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>
-
-                            {mostrarAbaixoDaMedia && (
-                                <div className="bg-rose-50 dark:bg-rose-500/5 p-5 rounded-2xl border border-rose-100 dark:border-rose-500/20">
-                                    <h3 className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <TrendingDown className="h-3.5 w-3.5" />Abaixo da Média ({mediaGeral!.toFixed(2)})
-                                    </h3>
-                                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                                        {abaixoDaMedia.map((c, i) => (
-                                            <div key={i} className="flex items-center justify-between gap-2">
-                                                <span className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{c.nome}</span>
-                                                <span className="text-sm font-black text-rose-500 shrink-0">{c.media.toFixed(2)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                         )
                     })()}
 
                     {perguntas.map((p, idx) => {
-                        const itemResponses = displayRespostas
-                            .filter(r => {
-                                if (filterCargo === 'todos') return true
-                                const avaliadoId = avaliadoIdParaPergunta(r, p.id)
-                                if (!avaliadoId) return true
-                                return getColabCargo(avaliadoId) === filterCargo
-                            })
+                        if (!perguntaNaAba(p.id)) return null
+                        const itemResponses = respostasDaPergunta(p.id)
                             .flatMap(r =>
                                 (r.formulario_respostas_itens || [])
                                     .filter((it: any) => it.pergunta_id === p.id)
@@ -857,7 +840,9 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                                 </div>
                                             ) : (
                                                 <div className="space-y-3 ml-11">
-                                                    {filteredPerguntas.map((p, pi) => {
+                                                    {perguntasLista.map((p) => {
+                                                        // Com busca, esconde as seções sobre outras pessoas da mesma resposta.
+                                                        if (busca && modelo.papelDaPergunta(p.id) && !nomeBateBusca(modelo.avaliadoDaPergunta(resposta, p.id))) return null
                                                         const item = items.find((it: any) => it.pergunta_id === p.id)
                                                         const questionIdx = perguntas.findIndex(q => q.id === p.id)
                                                         const isFilteredQuestion = filterAnswerValue.trim() && p.id === filterPerguntaId
