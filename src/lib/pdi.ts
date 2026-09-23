@@ -18,14 +18,6 @@ export interface PdiTipoMomento {
     ordem: number
 }
 
-export type PdiGrupoPapel = 'Diretor' | 'Tático'
-
-// Agrupamento visual do passo 1 do wizard: "Diretor" (papel_id === 'diretor')
-// ou "Tático" (um por núcleo — ver construirPapeisPorNucleo).
-export function grupoDoPapel(papelId: string): PdiGrupoPapel {
-    return papelId === 'diretor' ? 'Diretor' : 'Tático'
-}
-
 // Resolve o papel de liderança de um colaborador direto do cargo_atual/
 // nucleo_atual dele — sem passar por uma tabela de mapeamento mantida à
 // parte (o antigo `pdi_cargos`, removido: ficava desatualizado sempre que
