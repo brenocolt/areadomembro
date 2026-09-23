@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
-import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2 } from "lucide-react"
+import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock } from "lucide-react"
 import { useSession } from "next-auth/react"
+import { useColaborador } from "@/hooks/use-supabase"
 
 interface Colaborador {
     id: string
@@ -19,6 +20,9 @@ interface Colaborador {
 
 export default function AllocationsManagementPage() {
     const { data: session } = useSession()
+    const { colaborador: meuColaborador, role } = useColaborador()
+    const isAdmin = role === 'ADMIN' || role === 'admin'
+    const podeEditar = isAdmin || meuColaborador?.cargo_atual === 'Estratégico'
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState<string | null>(null)
     const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
@@ -126,7 +130,8 @@ export default function AllocationsManagementPage() {
                         Gestão de <span className="text-primary">Alocações</span>
                     </h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Gerencie a quantidade de projetos alocados para cada consultor.
+                        Quantidade de projetos em execução por colaborador, sincronizada automaticamente com o Monday.
+                        {!podeEditar && ' Edição manual disponível apenas para nível Estratégico.'}
                     </p>
                 </div>
             </div>
@@ -238,41 +243,55 @@ export default function AllocationsManagementPage() {
 
                                         {/* Stepper */}
                                         <div className="md:col-span-2 flex items-center justify-center gap-1">
-                                            <button
-                                                onClick={() => decrement(colab.id)}
-                                                className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                            >
-                                                <Minus className="h-3.5 w-3.5" />
-                                            </button>
-                                            <div className={`h-8 w-14 rounded-lg flex items-center justify-center text-sm font-black transition-colors ${
-                                                changed
-                                                    ? 'bg-primary/10 text-primary border-2 border-primary/30'
-                                                    : 'bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700'
-                                            }`}>
-                                                {val}
-                                            </div>
-                                            <button
-                                                onClick={() => increment(colab.id)}
-                                                className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                            >
-                                                <Plus className="h-3.5 w-3.5" />
-                                            </button>
+                                            {podeEditar ? (
+                                                <>
+                                                    <button
+                                                        onClick={() => decrement(colab.id)}
+                                                        className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                    >
+                                                        <Minus className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <div className={`h-8 w-14 rounded-lg flex items-center justify-center text-sm font-black transition-colors ${
+                                                        changed
+                                                            ? 'bg-primary/10 text-primary border-2 border-primary/30'
+                                                            : 'bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700'
+                                                    }`}>
+                                                        {val}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => increment(colab.id)}
+                                                        className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div className="h-8 w-14 rounded-lg flex items-center justify-center text-sm font-black bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700">
+                                                    {val}
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Save */}
                                         <div className="md:col-span-2 flex justify-center">
-                                            <Button
-                                                size="sm"
-                                                onClick={() => saveAllocation(colab.id)}
-                                                disabled={!changed || isSaving}
-                                                className={`h-8 px-4 rounded-xl text-xs font-bold transition-all ${
-                                                    changed
-                                                        ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm'
-                                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
-                                                }`}
-                                            >
-                                                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" /> Salvar</>}
-                                            </Button>
+                                            {podeEditar ? (
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => saveAllocation(colab.id)}
+                                                    disabled={!changed || isSaving}
+                                                    className={`h-8 px-4 rounded-xl text-xs font-bold transition-all ${
+                                                        changed
+                                                            ? 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm'
+                                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                                                    }`}
+                                                >
+                                                    {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" /> Salvar</>}
+                                                </Button>
+                                            ) : (
+                                                <span className="flex items-center gap-1 text-[10px] text-slate-400" title="Apenas usuários de nível Estratégico podem editar">
+                                                    <Lock className="h-3 w-3" /> Bloqueado
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 )
