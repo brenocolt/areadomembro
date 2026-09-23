@@ -7,6 +7,7 @@
 // como no Vercel).
 import { createClient } from '@supabase/supabase-js'
 import { CARGO_FANTASMA } from './cargos'
+import { ProjetoAtivoDetalhe } from './pipj-projetos'
 
 const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN || ''
 const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID || ''
@@ -210,7 +211,7 @@ export type AlocacaoColaborador = {
     email: string
     valor_antigo: number
     valor_novo: number
-    projetos_ativos: string[]
+    projetos_ativos: ProjetoAtivoDetalhe[]
 }
 
 export type AlocacaoResult =
@@ -219,6 +220,8 @@ export type AlocacaoResult =
         dryRun: boolean
         totalItensAtivos: number
         colunasConsideradas: { id: string; title: string }[]
+        colunaDataInicio: string | null
+        colunaDataFim: string | null
         alterados: AlocacaoColaborador[]
         emailsNaoEncontrados: string[]
     }
@@ -237,9 +240,14 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         return { skipped: true, reason: 'Nenhuma coluna de "Gerente" ou "Consultores" encontrada no board' }
     }
 
-    // 1ª passada: descobre quais itens estão ativos, o nome de cada um, e
-    // quais IDs de pessoa aparecem nas colunas relevantes desses itens.
-    const itensAtivos: { nome: string; personIds: number[] }[] = []
+    // Colunas de data são descobertas pelo título, do mesmo jeito que as de
+    // pessoas — não dependem de um ID fixo de coluna no Monday.
+    const colunaDataInicio = columns.find(c => /in[íi]cio/i.test(c.title)) || null
+    const colunaDataFim = columns.find(c => /fim|t[ée]rmino|conclus[ãa]o/i.test(c.title)) || null
+
+    // 1ª passada: descobre quais itens estão ativos, nome/datas de cada um,
+    // e quais IDs de pessoa aparecem nas colunas relevantes desses itens.
+    const itensAtivos: { nome: string; dataInicio: string | null; dataFim: string | null; personIds: number[] }[] = []
     const todosPersonIds = new Set<number>()
 
     for (const item of items) {
@@ -255,19 +263,28 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
                 todosPersonIds.add(id)
             }
         }
-        itensAtivos.push({ nome: item.name?.trim() || '(sem nome)', personIds })
+
+        const dataInicioCol = colunaDataInicio && item.column_values?.find((c: any) => c.id === colunaDataInicio!.id)
+        const dataFimCol = colunaDataFim && item.column_values?.find((c: any) => c.id === colunaDataFim!.id)
+
+        itensAtivos.push({
+            nome: item.name?.trim() || '(sem nome)',
+            dataInicio: dataInicioCol?.text?.trim() || null,
+            dataFim: dataFimCol?.text?.trim() || null,
+            personIds,
+        })
     }
 
     const emailById = await fetchMondayUserEmails(Array.from(todosPersonIds))
 
-    // 2ª passada: agrupa, por e-mail, os nomes dos itens ativos em que cada
-    // pessoa aparece (a contagem é só o tamanho dessa lista).
-    const projetosPorEmail = new Map<string, string[]>()
+    // 2ª passada: agrupa, por e-mail, os itens ativos (nome + datas) em que
+    // cada pessoa aparece — a contagem é só o tamanho dessa lista.
+    const projetosPorEmail = new Map<string, ProjetoAtivoDetalhe[]>()
     for (const item of itensAtivos) {
         const emailsUnicos = new Set(item.personIds.map(id => emailById.get(id)).filter((e): e is string => !!e))
         for (const email of emailsUnicos) {
             if (!projetosPorEmail.has(email)) projetosPorEmail.set(email, [])
-            projetosPorEmail.get(email)!.push(item.nome)
+            projetosPorEmail.get(email)!.push({ nome: item.nome, data_inicio: item.dataInicio, data_fim: item.dataFim })
         }
     }
 
@@ -327,5 +344,13 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         }
     }
 
-    return { dryRun, totalItensAtivos: itensAtivos.length, colunasConsideradas: colunasPessoas, alterados, emailsNaoEncontrados }
+    return {
+        dryRun,
+        totalItensAtivos: itensAtivos.length,
+        colunasConsideradas: colunasPessoas,
+        colunaDataInicio: colunaDataInicio?.title || null,
+        colunaDataFim: colunaDataFim?.title || null,
+        alterados,
+        emailsNaoEncontrados,
+    }
 }
