@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
+import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
 import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock, ChevronDown } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useColaborador } from "@/hooks/use-supabase"
@@ -16,7 +18,7 @@ interface Colaborador {
     nucleo_atual: string
     projetos: number
     email_corporativo: string
-    projetos_ativos_detalhe: string[] | null
+    projetos_ativos_detalhe: any[] | null
 }
 
 export default function AllocationsManagementPage() {
@@ -37,6 +39,8 @@ export default function AllocationsManagementPage() {
         const { data } = await supabase
             .from('colaboradores')
             .select('id, nome, cargo_atual, nucleo_atual, projetos, email_corporativo, projetos_ativos_detalhe')
+            .eq('status', 'Ativo')
+            .neq('cargo_atual', CARGO_FANTASMA)
             .order('nome', { ascending: true })
 
         if (data) {
@@ -59,9 +63,15 @@ export default function AllocationsManagementPage() {
         return matchSearch && matchNucleo
     })
 
-    const totalProjetos = colaboradores.reduce((sum, c) => sum + (c.projetos || 0), 0)
+    const totalAlocacoes = colaboradores.reduce((sum, c) => sum + (c.projetos || 0), 0)
+    const projetosDistintos = new Set(
+        colaboradores
+            .flatMap(c => (c.projetos_ativos_detalhe || []).map(normalizarProjetoDetalhe))
+            .filter(p => p.status === 'Ativo')
+            .map(p => p.nome)
+    ).size
     const colabsComProjetos = colaboradores.filter(c => (c.projetos || 0) > 0).length
-    const mediaProjetos = colaboradores.length > 0 ? (totalProjetos / colaboradores.length).toFixed(1) : '0'
+    const mediaProjetos = colaboradores.length > 0 ? (totalAlocacoes / colaboradores.length).toFixed(1) : '0'
 
     function increment(id: string) {
         setEditValues(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }))
@@ -112,8 +122,8 @@ export default function AllocationsManagementPage() {
         return (
             <div className="space-y-6">
                 <div className="h-10 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse w-1/3" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {[1, 2, 3].map(i => <div key={i} className="h-28 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {[1, 2, 3, 4].map(i => <div key={i} className="h-28 bg-slate-100 dark:bg-white/5 rounded-2xl animate-pulse" />)}
                 </div>
                 <div className="h-96 bg-slate-100 dark:bg-white/5 rounded-3xl animate-pulse" />
             </div>
@@ -139,16 +149,26 @@ export default function AllocationsManagementPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/50 rounded-2xl p-5 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
                         <div className="bg-violet-50 dark:bg-violet-500/10 p-2 rounded-xl">
                             <FolderKanban className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                         </div>
-                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total de Projetos</p>
+                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Projetos Distintos</p>
                     </div>
-                    <p className="text-3xl font-black text-slate-900 dark:text-white">{totalProjetos}</p>
-                    <p className="text-xs text-slate-500 mt-1">Alocados na equipe</p>
+                    <p className="text-3xl font-black text-slate-900 dark:text-white">{projetosDistintos}</p>
+                    <p className="text-xs text-slate-500 mt-1">Ativos no Monday</p>
+                </div>
+                <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/50 rounded-2xl p-5 shadow-sm">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="bg-cyan-50 dark:bg-cyan-500/10 p-2 rounded-xl">
+                            <Briefcase className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+                        </div>
+                        <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total de Alocações</p>
+                    </div>
+                    <p className="text-3xl font-black text-slate-900 dark:text-white">{totalAlocacoes}</p>
+                    <p className="text-xs text-slate-500 mt-1">Soma das alocações (1 por pessoa em cada projeto)</p>
                 </div>
                 <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/50 rounded-2xl p-5 shadow-sm">
                     <div className="flex items-center gap-3 mb-3">
@@ -219,6 +239,9 @@ export default function AllocationsManagementPage() {
                                 const val = editValues[colab.id] || 0
                                 const changed = hasChanged(colab.id)
                                 const isSaving = saving === colab.id
+                                const projetosAtivosColab = (colab.projetos_ativos_detalhe || [])
+                                    .map(normalizarProjetoDetalhe)
+                                    .filter(p => p.status === 'Ativo')
 
                                 return (
                                     <div key={colab.id}>
@@ -307,18 +330,23 @@ export default function AllocationsManagementPage() {
                                             <div className="px-4 pb-3 pl-16">
                                                 <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800/50 rounded-xl p-3">
                                                     <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-2">
-                                                        Projetos ativos ({(colab.projetos_ativos_detalhe || []).length})
+                                                        Projetos ativos ({projetosAtivosColab.length})
                                                     </p>
-                                                    {(colab.projetos_ativos_detalhe || []).length === 0 ? (
+                                                    {projetosAtivosColab.length === 0 ? (
                                                         <p className="text-xs text-slate-400 italic">
                                                             Nenhum projeto ativo sincronizado do Monday para este colaborador.
                                                         </p>
                                                     ) : (
                                                         <ul className="space-y-1">
-                                                            {(colab.projetos_ativos_detalhe || []).map((nome, idx) => (
+                                                            {projetosAtivosColab.map((p, idx) => (
                                                                 <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                                                                     <FolderKanban className="h-3 w-3 text-slate-400 shrink-0" />
-                                                                    {nome}
+                                                                    {p.nome}
+                                                                    {p.data_inicio && (
+                                                                        <span className="text-slate-400">
+                                                                            · desde {new Date(p.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                                        </span>
+                                                                    )}
                                                                 </li>
                                                             ))}
                                                         </ul>

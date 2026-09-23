@@ -4,6 +4,7 @@ import { CARGO_FANTASMA } from '@/lib/cargos'
 import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from '@/lib/pipj-cargo-rules'
 import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
 import { getAvaliacoesNpsGenericoSinteticas } from '@/lib/nps-projetos-generico'
+import { contarProjetosNoMes, normalizarProjetoDetalhe } from '@/lib/pipj-projetos'
 
 // Business Rules Constants — indexadas pela chave resolvida por
 // resolvePipjCargoKey (cargo simplificado + núcleo), não mais diretamente
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
     // fantasma de administrador não recebem PIPJ nos lançamentos)
     const { data: colaboradores, error: colabError } = await supabaseAdmin
       .from('colaboradores')
-      .select('id, nome, cargo_atual, nucleo_atual, nivel_consultor, projetos, pontos_negativos, saldo_pipj')
+      .select('id, nome, cargo_atual, nucleo_atual, nivel_consultor, projetos, projetos_ativos_detalhe, pontos_negativos, saldo_pipj')
       .eq('status', 'Ativo')
       .neq('cargo_atual', CARGO_FANTASMA)
       .order('nome', { ascending: true })
@@ -275,7 +276,15 @@ export async function POST(req: NextRequest) {
       const cargo = colab.cargo_atual || 'Operacional'
       const pipjCargoKey = resolvePipjCargoKey(cargo, colab.nucleo_atual)
       const nivel = colab.nivel_consultor || 'Júnior'
-      const projetos = projetosHistoricoMap.has(colab.id) ? projetosHistoricoMap.get(colab.id)! : (colab.projetos || 0)
+      // Quantos dos projetos ativos desse colaborador contam para o mês/ano
+      // sendo lançado — regra da quinzena: projeto iniciado a partir do dia
+      // 16 só conta a partir do mês seguinte (ver src/lib/pipj-projetos.ts).
+      // Sem sincronização do Monday ainda (detalhe nulo), cai no histórico
+      // de auditoria antigo, e na falta dele, no valor corrente.
+      const detalheProjetos = (colab as any).projetos_ativos_detalhe
+      const projetos = Array.isArray(detalheProjetos)
+        ? contarProjetosNoMes(detalheProjetos.map(normalizarProjetoDetalhe), mes, ano)
+        : (projetosHistoricoMap.has(colab.id) ? projetosHistoricoMap.get(colab.id)! : (colab.projetos || 0))
       const pontosNegativosAtual = colab.pontos_negativos || 0
       const pontosNegativos = Math.max(0, pontosNegativosAtual - (adicoesFuturasMap.get(colab.id) || 0) + (remocoesFuturasMap.get(colab.id) || 0))
 

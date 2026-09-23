@@ -5,6 +5,7 @@ import { CriteriaCard } from "./components/criteria-card";
 import { PipjForecastCard } from "./components/pipj-forecast-card";
 import { PipjSolicitacoesCard } from "./components/pipj-solicitacoes-card";
 import { FadeIn } from "./components/motion-wrapper";
+import { CalendarClock } from "lucide-react";
 
 export default function WalletPage() {
     return (
@@ -25,6 +26,14 @@ export default function WalletPage() {
                     </FadeIn>
                     <FadeIn delay={0.15} direction="up">
                         <CriteriaCard />
+                    </FadeIn>
+                    <FadeIn delay={0.18} direction="up">
+                        <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-4">
+                            <CalendarClock className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <strong>Contagem de projetos por quinzena:</strong> um projeto que começa na segunda quinzena do mês (a partir do dia 16) só entra na sua contagem de PIPJ a partir do lançamento do mês seguinte. Por exemplo, um projeto iniciado em 20/08 conta a partir do PIPJ de setembro, não do de agosto.
+                            </p>
+                        </div>
                     </FadeIn>
                 </div>
                 <div className="lg:col-span-1 flex flex-col gap-6">

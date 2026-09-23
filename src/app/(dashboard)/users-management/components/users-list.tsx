@@ -10,6 +10,7 @@ import { Search, Pencil, UserX, UserCheck, Shield, Mail } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 import { desligarMembro, reativarMembro } from "@/lib/admin-actions"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { EditUserAccessDialog } from "./edit-user-access-dialog"
 
 type PendingAction = { id: string, name: string, type: 'desligar' | 'reativar' }
@@ -28,6 +29,7 @@ export function UsersList() {
             const { data } = await supabase
                 .from('colaboradores')
                 .select('*, users!inner(role), milhas_saldo(saldo_disponivel)')
+                .neq('cargo_atual', CARGO_FANTASMA)
                 .order('nome', { ascending: true })
 
             if (data) {
