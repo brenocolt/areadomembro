@@ -13,7 +13,6 @@ import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
-import { CARGO_FANTASMA } from "@/lib/cargos"
 import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
 
 export function PlanoPunicaoAlert() {
@@ -119,14 +118,18 @@ export function MetricCards() {
         if (colaboradorId) fetch()
     }, [colaboradorId])
 
+    const projetosAtivos = (colaborador?.projetos_ativos_detalhe || [])
+        .map(normalizarProjetoDetalhe)
+        .filter((p: { status: string }) => p.status === 'Ativo')
+
     if (loading) return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            {[...Array(3)].map((_, i) => <Card key={i} className="h-32 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-2xl border-none" />)}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            {[...Array(4)].map((_, i) => <Card key={i} className="h-32 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-2xl border-none" />)}
         </div>
     )
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             {/* Plano de Punição */}
             <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
                 <div className="flex justify-between items-start mb-4">
@@ -142,6 +145,29 @@ export function MetricCards() {
                     <div className="text-3xl font-display font-bold text-slate-900 dark:text-white mt-1">
                         {colaborador?.pontos_negativos || 0} pts
                     </div>
+                </div>
+            </Card>
+
+            {/* Projetos */}
+            <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl p-6 relative overflow-hidden group hover:shadow-md transition-all duration-300">
+                <div className="flex justify-between items-start mb-4">
+                    <div className="h-12 w-12 rounded-xl bg-indigo-50 dark:bg-indigo-900/10 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform duration-300">
+                        <FolderKanban className="h-6 w-6" />
+                    </div>
+                    <Badge variant="secondary" className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-none">
+                        {projetosAtivos.length > 0 ? 'Ativo' : 'Sem projetos'}
+                    </Badge>
+                </div>
+                <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Projetos</span>
+                    <div className="text-3xl font-display font-bold text-slate-900 dark:text-white mt-1">
+                        {colaborador?.projetos || 0}
+                    </div>
+                    {projetosAtivos.length > 0 && (
+                        <p className="text-xs text-slate-500 mt-1 truncate">
+                            {projetosAtivos.map((p: { nome: string }) => p.nome).join(', ')}
+                        </p>
+                    )}
                 </div>
             </Card>
 
@@ -471,94 +497,6 @@ export function QuickActions() {
                         </div>
                     </DialogContent>
                 </Dialog>
-            </CardContent>
-        </Card>
-    )
-}
-
-type ColaboradorProjetos = {
-    id: string
-    nome: string
-    projetos: number | null
-    projetos_ativos_detalhe: any[] | null
-}
-
-export function ProjectsOverview() {
-    const [colaboradores, setColaboradores] = useState<ColaboradorProjetos[]>([])
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        async function fetchProjetos() {
-            const { data } = await supabase
-                .from('colaboradores')
-                .select('id, nome, projetos, projetos_ativos_detalhe')
-                .eq('status', 'Ativo')
-                .neq('cargo_atual', CARGO_FANTASMA)
-                .order('nome', { ascending: true })
-
-            if (data) setColaboradores(data as ColaboradorProjetos[])
-            setLoading(false)
-        }
-        fetchProjetos()
-    }, [])
-
-    if (loading) return (
-        <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl mt-6">
-            <CardContent className="p-6"><div className="h-40 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" /></CardContent>
-        </Card>
-    )
-
-    const membrosComProjetos = colaboradores.map(c => ({
-        ...c,
-        projetosAtivos: (c.projetos_ativos_detalhe || [])
-            .map(normalizarProjetoDetalhe)
-            .filter(p => p.status === 'Ativo')
-    }))
-
-    const projetosDistintos = new Set(
-        membrosComProjetos.flatMap(c => c.projetosAtivos.map(p => p.nome))
-    ).size
-
-    const totalAlocacoes = colaboradores.reduce((sum, c) => sum + (c.projetos || 0), 0)
-
-    return (
-        <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl mt-6">
-            <CardHeader className="border-b border-slate-50 dark:border-slate-800/50 pb-4 flex flex-row items-center justify-between">
-                <div>
-                    <CardTitle className="text-lg font-display">Projetos por Membro</CardTitle>
-                    <p className="text-sm text-slate-500 mt-1">
-                        {projetosDistintos} {projetosDistintos === 1 ? 'projeto distinto' : 'projetos distintos'} · {totalAlocacoes} {totalAlocacoes === 1 ? 'alocação' : 'alocações'}
-                    </p>
-                </div>
-                <Link href="/allocations-management">
-                    <Button variant="outline" size="sm" className="gap-2">
-                        Ver tudo <ArrowRight className="h-4 w-4" />
-                    </Button>
-                </Link>
-            </CardHeader>
-            <CardContent className="p-6">
-                {membrosComProjetos.length > 0 ? (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                        {membrosComProjetos.map(c => (
-                            <div key={c.id} className="py-3 flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                    <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{c.nome}</p>
-                                    <p className="text-xs text-slate-500 mt-0.5 truncate">
-                                        {c.projetosAtivos.length > 0
-                                            ? c.projetosAtivos.map(p => p.nome).join(', ')
-                                            : 'Sem projetos ativos'}
-                                    </p>
-                                </div>
-                                <div className="shrink-0 flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                                    <FolderKanban className="h-4 w-4" />
-                                    <span className="text-sm font-bold text-slate-900 dark:text-white">{c.projetos || 0}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <p className="text-sm text-slate-400 italic text-center py-8">Nenhum membro encontrado</p>
-                )}
             </CardContent>
         </Card>
     )
