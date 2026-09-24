@@ -6,9 +6,9 @@
 // senão uma linha pode cair em duas páginas ou em nenhuma.
 export const TAMANHO_PAGINA = 1000
 
-export async function buscarTodasPaginas<T>(
-    consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
-): Promise<{ data: T[]; error: unknown }> {
+export async function buscarTodasPaginas<T, E = unknown>(
+    consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: E | null }>,
+): Promise<{ data: T[]; error: E | null }> {
     const todas: T[] = []
     for (let de = 0; ; de += TAMANHO_PAGINA) {
         const { data, error } = await consulta(de, de + TAMANHO_PAGINA - 1)

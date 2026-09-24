@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { mesReferenciaFromDate } from "@/lib/nps-period"
 import { competenciaLabel } from "@/lib/forms-runtime"
-import { isSchemaDesatualizado } from "@/lib/db-compat"
+import { isSchemaDesatualizado, type ErroPostgrest } from "@/lib/db-compat"
+import { buscarTodasPaginas } from "@/lib/paginacao"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 import { MessageSquare, Zap, Award, FolderKanban, Star, TrendingUp } from "lucide-react"
@@ -134,12 +135,15 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
 
             // Mesmo raciocínio para `alvo_colaborador_id` (migração 20260824):
             // sem a coluna, restam as respostas do modelo antigo, em que quem
-            // foi avaliado vem na pergunta do tipo colaborador_unico.
-            const respostasQuery = (colunas: string) => supabase
+            // foi avaliado vem na pergunta do tipo colaborador_unico. Em
+            // páginas: a API corta em 1000 linhas sem avisar.
+            const respostasQuery = (colunas: string) => buscarTodasPaginas<any, ErroPostgrest>((de, ate) => supabase
                 .from('formulario_respostas')
                 .select(colunas)
                 .in('formulario_id', formularioIds)
                 .order('enviado_em', { ascending: true })
+                .order('id')
+                .range(de, ate))
 
             const respostasComAlvo = await respostasQuery('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
             const respostasData = isSchemaDesatualizado(respostasComAlvo.error)

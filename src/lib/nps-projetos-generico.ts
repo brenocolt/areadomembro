@@ -1,5 +1,7 @@
-import { isSchemaDesatualizado } from './db-compat'
+import { isSchemaDesatualizado, type ErroPostgrest } from './db-compat'
 import { avaliadoPerguntaPorSecao } from './forms-runtime'
+import { janelaEnvioDaReferencia } from './nps-period'
+import { buscarTodasPaginas } from './paginacao'
 import { mesReferenciaFromDate } from './nps-period'
 
 // NPS Projetos — Fase B: soma às avaliações históricas do formulário fixo
@@ -91,8 +93,8 @@ export async function getAvaliacoesNpsGenericoSinteticas(
     const { data: perguntasRows } = await client
         .from('formulario_perguntas')
         .select('id, formulario_id, tipo, competencia, ordem')
-    const todasPerguntas = (perguntasRows || []) as { id: string, formulario_id: string, tipo: string, competencia?: string | null, ordem?: number }[]
-    const perguntas = todasPerguntas.filter(p => formIds.includes(p.formulario_id))
+        .in('formulario_id', formIds)
+    const perguntas = (perguntasRows || []) as { id: string, formulario_id: string, tipo: string, competencia?: string | null, ordem?: number }[]
 
     const perguntasPorForm = new Map<string, typeof perguntas>()
     for (const p of perguntas) {
@@ -106,10 +108,19 @@ export async function getAvaliacoesNpsGenericoSinteticas(
         avaliadoPorFormPergunta.set(formId, avaliadoPerguntaPorSecao(ordenadas))
     }
 
-    const comAlvo = await client
-        .from('formulario_respostas')
-        .select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
-        .in('formulario_id', formIds)
+    // O banco já devolve só o necessário: sem as cópias do histórico (ver
+    // abaixo), só o período pedido (quando há filtro) e em páginas — a API
+    // corta em 1000 linhas sem avisar, e este formulário ganha ~110 por mês.
+    const janela = janelaEnvioDaReferencia(filtro)
+    const comAlvo = await buscarTodasPaginas<any, ErroPostgrest>((de, ate) => {
+        let q = client
+            .from('formulario_respostas')
+            .select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
+            .in('formulario_id', formIds)
+            .is('alvo_colaborador_id', null)
+        if (janela) q = q.gte('enviado_em', janela.desde).lt('enviado_em', janela.ate)
+        return q.order('enviado_em').order('id').range(de, ate)
+    })
     if (isSchemaDesatualizado(comAlvo.error)) return []
     const respostas = (comAlvo.data || []) as { id: string, formulario_id: string, enviado_em: string, alvo_colaborador_id?: string | null, formulario_respostas_itens?: { pergunta_id: string, valor: string | null }[] }[]
 
@@ -118,7 +129,8 @@ export async function getAvaliacoesNpsGenericoSinteticas(
         // Cópias do histórico de avaliacoes_nps importadas pela migração
         // 20260914 (as únicas com alvo_colaborador_id: o NPS Projetos não é
         // direcionado). Essas avaliações já chegam a quem chama direto de
-        // avaliacoes_nps — lê-las aqui também as contaria duas vezes.
+        // avaliacoes_nps — lê-las aqui também as contaria duas vezes. O
+        // banco já as exclui; a checagem fica por garantia.
         if (r.alvo_colaborador_id) continue
 
         // Mesmo mês de referência de avaliacoes_nps e do NPS Interno: a

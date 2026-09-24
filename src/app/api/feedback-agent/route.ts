@@ -2,12 +2,15 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import Anthropic from '@anthropic-ai/sdk'
-import { mesReferenciaFromDate } from '@/lib/nps-period'
+import { mesReferenciaFromDate, janelaEnvioDaReferencia, janelaEnvioUltimosMeses } from '@/lib/nps-period'
+import { buscarTodasPaginas } from '@/lib/paginacao'
 import { isCargoGerencial, isCargoAssessorGP } from '@/lib/cargos'
 import { getRespostasFormulariosSobreColaborador, getRespostasFormulariosGeral } from '@/lib/forms-avaliacoes-membro'
 import { stripHtml } from '@/lib/forms-runtime'
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001'
+// Quantos meses (de referência) o agente recebe por fonte — ver bucketsToObject.
+const MESES_RECENTES = 6
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 // Rótulos amigáveis das métricas do NPS Externo/Projeto
@@ -55,7 +58,7 @@ function addMetric(bucket: MonthBucket, label: string, valor: number) {
 function bucketsToObject(map: Map<string, MonthBucket>) {
     return Array.from(map.values())
         .sort((a, b) => a.key.localeCompare(b.key))
-        .slice(-6) // apenas os 6 meses mais recentes
+        .slice(-MESES_RECENTES) // apenas os meses mais recentes
         .map(b => ({
             mes: b.label,
             avaliacoes: b.n,
@@ -80,12 +83,17 @@ async function gatherEvaluations(targetId: string | undefined, filtro?: Filtro) 
     const externoMap = new Map<string, MonthBucket>()
     let externoTotal = 0
     try {
-        let query = supabase
-            .from('avaliacoes_nps')
-            .select('mes, ano, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico, suporte, relacionamento, resolutividade, lideranca, nps_geral, feedback_texto, tipo_avaliacao, created_at')
-        if (targetId) query = query.eq('colaborador_id', targetId)
-        const { data } = await query
-        for (const r of data || []) {
+        // Em páginas (a API corta em 1000 linhas) e, com filtro, só o período.
+        const { data } = await buscarTodasPaginas<any>((de, ate) => {
+            let query = supabase
+                .from('avaliacoes_nps')
+                .select('id, mes, ano, comunicacao, dedicacao, confianca, pontualidade, organizacao, proatividade, qualidade_entregas, dominio_tecnico, suporte, relacionamento, resolutividade, lideranca, nps_geral, feedback_texto, tipo_avaliacao, created_at')
+            if (targetId) query = query.eq('colaborador_id', targetId)
+            if (filtro?.mes) query = query.eq('mes', filtro.mes)
+            if (filtro?.ano) query = query.eq('ano', filtro.ano)
+            return query.order('created_at').order('id').range(de, ate)
+        })
+        for (const r of data) {
             // mês de referência da avaliação; cai para created_at se faltar
             let mes = Number(r.mes), ano = Number(r.ano)
             if (!mes || !ano) { const ref = mesReferenciaFromDate(r.created_at); mes = ref.mes; ano = ref.ano }
@@ -105,15 +113,17 @@ async function gatherEvaluations(targetId: string | undefined, filtro?: Filtro) 
     // ── Avaliações recebidas em formulários ─────────────────────────────────
     // Com targetId: só as respostas em que o AVALIADO é ele (direcionado via
     // Quem Recebe, ou com uma pergunta "Selecionar 1 Colaborador"). Sem
-    // targetId (modo geral): TODAS as respostas de TODOS os formulários,
-    // agregadas por Tipo de Formulário (a "pasta" em Gestão de Formulários)
-    // — o agente enxerga a empresa inteira, sem estar preso a uma pessoa.
+    // targetId (modo geral): as respostas de TODOS os formulários, agregadas
+    // por Tipo de Formulário (a "pasta" em Gestão de Formulários) — o agente
+    // enxerga a empresa inteira, sem estar preso a uma pessoa. No modo geral
+    // o banco devolve só o período usado: o do filtro ou, sem filtro, os
+    // últimos meses que o agente recebe (bucketsToObject).
     const formulariosMap = new Map<string, Map<string, MonthBucket>>()
     let formulariosTotal = 0
     try {
         const respostas = targetId
             ? await getRespostasFormulariosSobreColaborador(supabase, targetId)
-            : await getRespostasFormulariosGeral(supabase)
+            : await getRespostasFormulariosGeral(supabase, filtro ? janelaEnvioDaReferencia(filtro) : janelaEnvioUltimosMeses(MESES_RECENTES))
         for (const r of respostas) {
             const escalaPerguntas = r.perguntas.filter(p => p.tipo === 'escala')
             const textoPerguntas = r.perguntas.filter(p => p.tipo === 'texto' || p.tipo === 'texto_longo' || p.tipo === 'paragrafo')
@@ -195,7 +205,7 @@ export async function POST(request: Request) {
         const semDados = dados.npsExterno.total === 0 && dados.avaliacoesFormularios.total === 0
         const periodoLabel = filtro
             ? `${filtro.mes ? MESES[filtro.mes - 1] : 'todos os meses'}${filtro.ano ? ` de ${filtro.ano}` : ''}`
-            : 'todo o histórico disponível'
+            : `os ${MESES_RECENTES} meses mais recentes com avaliações`
 
         const systemPrompt = targetId
             ? `Você é o Agente de Feedback da Produtiva Júnior. Sua missão é ler as avaliações internas recebidas por um membro e devolver um feedback qualitativo, humano e construtivo — como um mentor que leu com atenção o que os colegas escreveram, não como um relatório estatístico.
