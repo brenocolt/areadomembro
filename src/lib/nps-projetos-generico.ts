@@ -1,5 +1,6 @@
 import { isSchemaDesatualizado } from './db-compat'
 import { avaliadoPerguntaPorSecao } from './forms-runtime'
+import { mesReferenciaFromDate } from './nps-period'
 
 // NPS Projetos — Fase B: soma às avaliações históricas do formulário fixo
 // de antes da Fase C (tabela avaliacoes_nps — /nps-projeto virou um
@@ -107,16 +108,22 @@ export async function getAvaliacoesNpsGenericoSinteticas(
 
     const comAlvo = await client
         .from('formulario_respostas')
-        .select('id, formulario_id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')
+        .select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
         .in('formulario_id', formIds)
     if (isSchemaDesatualizado(comAlvo.error)) return []
-    const respostas = (comAlvo.data || []) as { id: string, formulario_id: string, enviado_em: string, formulario_respostas_itens?: { pergunta_id: string, valor: string | null }[] }[]
+    const respostas = (comAlvo.data || []) as { id: string, formulario_id: string, enviado_em: string, alvo_colaborador_id?: string | null, formulario_respostas_itens?: { pergunta_id: string, valor: string | null }[] }[]
 
     const resultado: AvaliacaoNpsSintetica[] = []
     for (const r of respostas) {
-        const d = new Date(r.enviado_em)
-        const mes = d.getMonth() + 1
-        const ano = d.getFullYear()
+        // Cópias do histórico de avaliacoes_nps importadas pela migração
+        // 20260914 (as únicas com alvo_colaborador_id: o NPS Projetos não é
+        // direcionado). Essas avaliações já chegam a quem chama direto de
+        // avaliacoes_nps — lê-las aqui também as contaria duas vezes.
+        if (r.alvo_colaborador_id) continue
+
+        // Mesmo mês de referência de avaliacoes_nps e do NPS Interno: a
+        // avaliação enviada num mês é sobre o mês anterior.
+        const { mes, ano } = mesReferenciaFromDate(r.enviado_em)
         if (filtro?.mes && mes !== filtro.mes) continue
         if (filtro?.ano && ano !== filtro.ano) continue
 
