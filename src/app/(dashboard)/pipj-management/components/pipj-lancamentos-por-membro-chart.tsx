@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { BarChart3, CalendarDays } from "lucide-react"
 
 const MESES = [
@@ -16,20 +15,6 @@ const MESES = [
 function getYearOptions() {
     const current = new Date().getFullYear()
     return [current - 1, current, current + 1]
-}
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        return (
-            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-white/10 shadow-lg text-sm">
-                <p className="font-bold text-slate-800 dark:text-white mb-1">{label || payload[0].payload.name}</p>
-                <p className="text-emerald-600 dark:text-emerald-400">
-                    <span className="font-semibold">R$ {Number(payload[0].value).toFixed(2).replace('.', ',')}</span>
-                </p>
-            </div>
-        )
-    }
-    return null
 }
 
 export function PipjLancamentosPorMembroChart() {
@@ -117,34 +102,32 @@ export function PipjLancamentosPorMembroChart() {
                     </p>
                 )}
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="p-0">
                 {loading ? (
-                    <div className="h-[320px] animate-pulse bg-slate-100 dark:bg-white/5 rounded-2xl" />
+                    <div className="h-[420px] m-6 animate-pulse bg-slate-100 dark:bg-white/5 rounded-2xl" />
                 ) : data.length === 0 ? (
-                    <div className="flex items-center justify-center h-[320px] text-slate-400 dark:text-slate-500 text-sm">
+                    <div className="flex items-center justify-center h-40 text-slate-400 dark:text-slate-500 text-sm">
                         Nenhum lançamento de PIPJ para {MESES[mes - 1]}/{ano}.
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <div style={{ width: Math.max(data.length * 60, 600), height: 340 }}>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 60 }}>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
-                                    <XAxis
-                                        dataKey="name"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }}
-                                        angle={-40}
-                                        textAnchor="end"
-                                        interval={0}
-                                    />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} width={60} />
-                                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                                    <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </div>
+                    <div className="max-h-[420px] overflow-y-auto divide-y divide-slate-100 dark:divide-white/5">
+                        {data.map((r, i) => (
+                            <div key={i} className="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                                        ${i === 0 ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' :
+                                            i === 1 ? 'bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300' :
+                                                i === 2 ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                                    'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400'}`}>
+                                        {i + 1}
+                                    </div>
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{r.name}</p>
+                                </div>
+                                <span className={`text-sm font-bold ${r.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                    R$ {r.value.toFixed(2).replace('.', ',')}
+                                </span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </CardContent>

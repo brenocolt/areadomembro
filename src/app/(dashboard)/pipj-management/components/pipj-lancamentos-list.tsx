@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { supabase } from "@/lib/supabase"
+import { CARGO_FANTASMA } from "@/lib/cargos"
 import { RotateCcw, Loader2, ListChecks } from "lucide-react"
 import { toast } from "sonner"
 
@@ -29,10 +30,51 @@ export function PipjLancamentosList() {
         setLoading(true)
         const { data } = await supabase
             .from('lancamentos_pipj')
-            .select('id, mes, ano, total_lancado, total_colaboradores, revertido_em, created_at')
+            .select('id, mes, ano, revertido_em, created_at')
             .order('created_at', { ascending: false })
             .limit(12)
-        if (data) setLancamentos(data as Lancamento[])
+
+        if (!data || data.length === 0) {
+            setLancamentos([])
+            setLoading(false)
+            return
+        }
+
+        // total_lancado/total_colaboradores gravados na própria linha de
+        // lancamentos_pipj só são preenchidos DEPOIS que todos os
+        // colaboradores são processados no lançamento (ver api/pipj/lancar) —
+        // se a requisição falhar/expirar no meio do caminho, a linha fica
+        // travada em zero mesmo com transações reais já gravadas. Por isso
+        // calculamos os totais ao vivo a partir de transacoes_pipj (fonte de
+        // verdade, mesma usada pela reversão), em vez de confiar nessas
+        // colunas. Filtra desligados/conta fantasma igual aos outros
+        // gráficos de PIPJ, pra bater com "Valores Lançados de PIPJ por
+        // Colaborador".
+        const ids = data.map(l => l.id)
+        const { data: transacoes } = await supabase
+            .from('transacoes_pipj')
+            .select('lancamento_id, tipo, valor, colaboradores(status, cargo_atual)')
+            .in('lancamento_id', ids)
+
+        const totaisPorLancamento = new Map<string, { total: number, colaboradores: number }>()
+        for (const t of (transacoes || []) as any[]) {
+            const colab = t.colaboradores
+            if (!colab || colab.status === 'Desligado' || colab.cargo_atual === CARGO_FANTASMA) continue
+            const atual = totaisPorLancamento.get(t.lancamento_id) || { total: 0, colaboradores: 0 }
+            if (t.tipo === 'ENTRADA') {
+                atual.total += Number(t.valor || 0)
+                atual.colaboradores += 1
+            } else {
+                atual.total -= Number(t.valor || 0)
+            }
+            totaisPorLancamento.set(t.lancamento_id, atual)
+        }
+
+        setLancamentos(data.map(l => ({
+            ...l,
+            total_lancado: Math.round((totaisPorLancamento.get(l.id)?.total || 0) * 100) / 100,
+            total_colaboradores: totaisPorLancamento.get(l.id)?.colaboradores || 0,
+        })) as Lancamento[])
         setLoading(false)
     }
 

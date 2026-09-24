@@ -57,7 +57,7 @@ function parseBankingInfo(descricao: string) {
     return { motivo, dados }
 }
 
-type SortKey = 'data_desc' | 'data_asc' | 'valor_desc' | 'valor_asc'
+type SortKey = 'data_desc' | 'data_asc' | 'valor_desc' | 'valor_asc' | 'decisao_desc' | 'decisao_asc'
 
 // ─── Shared Filter Bar ──────────────────────────────────────────────────────
 
@@ -76,6 +76,13 @@ interface FilterBarProps {
     onSort: (v: SortKey) => void
     availableTypes: string[]
     showStatus?: boolean
+    // Filtro/ordenação por data de decisão (aprovação/rejeição) — só faz
+    // sentido no histórico, onde as solicitações já foram decididas.
+    showDecisionDate?: boolean
+    dataDecisaoInicio?: string
+    onDataDecisaoInicio?: (v: string) => void
+    dataDecisaoFim?: string
+    onDataDecisaoFim?: (v: string) => void
 }
 
 function FilterBar({
@@ -87,6 +94,11 @@ function FilterBar({
     sortKey, onSort,
     availableTypes,
     showStatus = false,
+    showDecisionDate = false,
+    dataDecisaoInicio = '',
+    onDataDecisaoInicio = () => {},
+    dataDecisaoFim = '',
+    onDataDecisaoFim = () => {},
 }: FilterBarProps) {
     const hasFilters =
         search ||
@@ -94,6 +106,7 @@ function FilterBar({
         tipoFilter !== 'all' ||
         minValor ||
         maxValor ||
+        (showDecisionDate && (dataDecisaoInicio || dataDecisaoFim)) ||
         sortKey !== 'data_desc'
 
     const clearAll = () => {
@@ -102,6 +115,8 @@ function FilterBar({
         onTipoFilter('all')
         onMinValor('')
         onMaxValor('')
+        onDataDecisaoInicio('')
+        onDataDecisaoFim('')
         onSort('data_desc')
     }
 
@@ -156,8 +171,14 @@ function FilterBar({
                         <SelectValue placeholder="Ordenar por" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="data_desc">📅 Data: Mais recente</SelectItem>
-                        <SelectItem value="data_asc">📅 Data: Mais antiga</SelectItem>
+                        <SelectItem value="data_desc">📅 Data solicitação: Mais recente</SelectItem>
+                        <SelectItem value="data_asc">📅 Data solicitação: Mais antiga</SelectItem>
+                        {showDecisionDate && (
+                            <>
+                                <SelectItem value="decisao_desc">✅ Data decisão: Mais recente</SelectItem>
+                                <SelectItem value="decisao_asc">✅ Data decisão: Mais antiga</SelectItem>
+                            </>
+                        )}
                         <SelectItem value="valor_desc">💰 Valor: Maior</SelectItem>
                         <SelectItem value="valor_asc">💰 Valor: Menor</SelectItem>
                     </SelectContent>
@@ -202,6 +223,28 @@ function FilterBar({
                     />
                 </div>
             </div>
+
+            {/* Row 3: decision date range (only where decisions exist) */}
+            {showDecisionDate && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-slate-400 shrink-0">Data da decisão:</span>
+                    <div className="flex items-center gap-1.5">
+                        <Input
+                            value={dataDecisaoInicio}
+                            onChange={e => onDataDecisaoInicio(e.target.value)}
+                            type="date"
+                            className="h-7 w-36 text-xs bg-slate-50 dark:bg-slate-900 border-none rounded-xl"
+                        />
+                        <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+                        <Input
+                            value={dataDecisaoFim}
+                            onChange={e => onDataDecisaoFim(e.target.value)}
+                            type="date"
+                            className="h-7 w-36 text-xs bg-slate-50 dark:bg-slate-900 border-none rounded-xl"
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -540,6 +583,8 @@ export function SaqueHistoryList() {
     const [tipoFilter, setTipoFilter] = useState('all')
     const [minValor, setMinValor] = useState('')
     const [maxValor, setMaxValor] = useState('')
+    const [dataDecisaoInicio, setDataDecisaoInicio] = useState('')
+    const [dataDecisaoFim, setDataDecisaoFim] = useState('')
     const [sortKey, setSortKey] = useState<SortKey>('data_desc')
 
     useEffect(() => {
@@ -599,15 +644,26 @@ export function SaqueHistoryList() {
             list = list.filter(s => Number(s.valor) <= Number(maxValor))
         }
 
+        if (dataDecisaoInicio) {
+            const inicio = new Date(dataDecisaoInicio + 'T00:00:00').getTime()
+            list = list.filter(s => s.data_aprovacao && new Date(s.data_aprovacao).getTime() >= inicio)
+        }
+        if (dataDecisaoFim) {
+            const fim = new Date(dataDecisaoFim + 'T23:59:59').getTime()
+            list = list.filter(s => s.data_aprovacao && new Date(s.data_aprovacao).getTime() <= fim)
+        }
+
         list.sort((a, b) => {
             if (sortKey === 'valor_desc') return Number(b.valor) - Number(a.valor)
             if (sortKey === 'valor_asc') return Number(a.valor) - Number(b.valor)
+            if (sortKey === 'decisao_desc') return new Date(b.data_aprovacao || 0).getTime() - new Date(a.data_aprovacao || 0).getTime()
+            if (sortKey === 'decisao_asc') return new Date(a.data_aprovacao || 0).getTime() - new Date(b.data_aprovacao || 0).getTime()
             if (sortKey === 'data_asc') return new Date(a.data_solicitacao).getTime() - new Date(b.data_solicitacao).getTime()
             return new Date(b.data_solicitacao).getTime() - new Date(a.data_solicitacao).getTime()
         })
 
         return list
-    }, [saques, search, statusFilter, tipoFilter, minValor, maxValor, sortKey])
+    }, [saques, search, statusFilter, tipoFilter, minValor, maxValor, dataDecisaoInicio, dataDecisaoFim, sortKey])
 
     if (loading) return <Card className="h-48 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-3xl border-none" />
 
@@ -639,6 +695,9 @@ export function SaqueHistoryList() {
                     sortKey={sortKey} onSort={setSortKey}
                     availableTypes={availableTypes}
                     showStatus={true}
+                    showDecisionDate={true}
+                    dataDecisaoInicio={dataDecisaoInicio} onDataDecisaoInicio={setDataDecisaoInicio}
+                    dataDecisaoFim={dataDecisaoFim} onDataDecisaoFim={setDataDecisaoFim}
                 />
             )}
 
@@ -705,9 +764,13 @@ export function SaqueHistoryList() {
                                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
                                             📅 Solicitado em {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
                                         </span>
-                                        {s.status === 'APROVADO' && s.data_aprovacao && (
-                                            <span className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-2 py-1 rounded-lg">
-                                                ✅ Aprovado em {new Date(s.data_aprovacao).toLocaleDateString('pt-BR')}{s.aprovado_por ? ` por ${s.aprovado_por}` : ''}
+                                        {(s.status === 'APROVADO' || s.status === 'REJEITADO') && (
+                                            <span className={
+                                                s.status === 'APROVADO'
+                                                    ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-2 py-1 rounded-lg'
+                                                    : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 px-2 py-1 rounded-lg'
+                                            }>
+                                                {s.status === 'APROVADO' ? '✅ Aprovado' : '❌ Rejeitado'} {s.data_aprovacao ? `em ${new Date(s.data_aprovacao).toLocaleDateString('pt-BR')}` : '(data não registrada)'}{s.aprovado_por ? ` por ${s.aprovado_por}` : ''}
                                             </span>
                                         )}
                                     </div>
