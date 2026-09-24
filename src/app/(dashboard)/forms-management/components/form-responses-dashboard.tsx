@@ -5,6 +5,8 @@ import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3,
 import { loadFormularioPublico, colaboradorNoPublico, type FormularioPublico } from "@/lib/forms-publico"
 import { modeloAvaliacao, normalizarTexto, gerarRelatorioHtml, type ResumoPapel } from "@/lib/forms-avaliacao"
 import { buscarTodasPaginas } from "@/lib/paginacao"
+import { mesDaResposta, mesReferenciaFromDate } from "@/lib/nps-period"
+import { formulariosDeMesAvaliado, buscarIndiceDeRespostas, mesesDoIndice, janelaDoMes, chaveDoMes, type MesComRespostas } from "@/lib/forms-mes-avaliado"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -22,7 +24,15 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
     const [colaboradores, setColaboradores] = useState<any[]>([])
     const [publicos, setPublicos] = useState<FormularioPublico[]>([])
     const [titulosFormularios, setTitulosFormularios] = useState<Record<string, string>>({})
+    // Formulários em que o mês de uma resposta é o mês avaliado (o anterior
+    // ao envio) — NPS Interno e NPS Projetos, ver formulariosDeMesAvaliado.
+    const [formsMesAvaliado, setFormsMesAvaliado] = useState<Set<string>>(new Set())
     const [loading, setLoading] = useState(true)
+    // Estrutura carregada para estes ids (vazio enquanto carrega) — só
+    // então a busca do mês roda, com os ids e o mês certos.
+    const [carregadoKey, setCarregadoKey] = useState('')
+    const [loadingMes, setLoadingMes] = useState(true)
+    const [mesesComRespostas, setMesesComRespostas] = useState<MesComRespostas[]>([])
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
     const [filterAnswerValue, setFilterAnswerValue] = useState<string>('')
@@ -32,25 +42,24 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
     const [searchAvaliado, setSearchAvaliado] = useState('')
     const [tituloFormulario, setTituloFormulario] = useState('')
 
+    // Duas buscas: ao abrir o formulário/tipo, a estrutura (perguntas,
+    // membros, público) e um índice leve dos meses com respostas; a cada mês
+    // escolhido, só as respostas daquele mês. Assim o painel não baixa o
+    // histórico inteiro (o NPS Projetos ganha ~110 respostas por mês).
+    // `cancelado`: numa troca rápida, a busca antiga não sobrescreve a nova.
     useEffect(() => {
-        // Troca rápida de formulário/tipo: a busca antiga não pode
-        // sobrescrever a nova quando termina depois.
         let cancelado = false
         async function fetch() {
             setLoading(true)
+            setCarregadoKey('')
             const ids = idsKey ? idsKey.split(',') : []
-            const [{ data: pData }, { data: rData }, { data: cData }, publicosData, { data: fData }] = await Promise.all([
+            const [{ data: pData }, { data: cData }, publicosData, { data: fData }, mesAvaliadoSet, indice] = await Promise.all([
                 supabase.from('formulario_perguntas').select('*').in('formulario_id', ids).order('ordem'),
-                // colaboradores é resolvido duas vezes (autor da resposta e,
-                // em formulários direcionados, o alvo dela) — precisa apontar
-                // pra FK explícita, senão o PostgREST não sabe desambiguar.
-                // Em páginas: um tipo inteiro passa das 1000 linhas da API.
-                buscarTodasPaginas((de, ate) => supabase.from('formulario_respostas')
-                    .select('*, formulario_respostas_itens(*), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
-                    .in('formulario_id', ids).order('enviado_em', { ascending: false }).order('id').range(de, ate)),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
                 Promise.all(ids.map(id => loadFormularioPublico(id))),
                 supabase.from('formularios').select('id, titulo').in('id', ids),
+                formulariosDeMesAvaliado(ids),
+                buscarIndiceDeRespostas(ids),
             ])
             if (cancelado) return
             // As perguntas de cada formulário precisam ficar juntas e na
@@ -60,32 +69,67 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                 (ids.indexOf(a.formulario_id) - ids.indexOf(b.formulario_id)) || ((a.ordem ?? 0) - (b.ordem ?? 0)))
             const titulos: Record<string, string> = {}
             for (const f of fData || []) titulos[f.id] = f.titulo
+            // Mês aberto de início: o atual ou, nos de mês avaliado, o
+            // anterior (as respostas enviadas agora são sobre ele).
+            const hoje = new Date()
+            setFiltroMes(ids.length > 0 && ids.every(id => mesAvaliadoSet.has(id))
+                ? mesReferenciaFromDate(hoje)
+                : { mes: hoje.getMonth() + 1, ano: hoje.getFullYear() })
             setPerguntas(perguntasOrdenadas)
-            setRespostas(rData || [])
+            setRespostas([])
+            setMesesComRespostas(mesesDoIndice(indice, mesAvaliadoSet))
             setColaboradores(cData || [])
             setPublicos(publicosData)
             setTitulosFormularios(titulos)
+            setFormsMesAvaliado(mesAvaliadoSet)
             setTituloFormulario(titulo || (ids.length === 1 ? titulos[ids[0]] : '') || 'Formulário')
             setFilterPapel('todos')
             setSearchAvaliado('')
             setRankingCompleto({})
-
-            // Auto-expand first group
-            if (rData && rData.length > 0) {
-                if (groupMode === 'pessoa') {
-                    const firstPerson = rData[0].colaborador_id || rData[0].colaboradores?.nome || 'anon'
-                    setExpandedGroups({ [firstPerson]: true })
-                } else if (groupMode === 'mes') {
-                    const firstDate = new Date(rData[0].enviado_em)
-                    setExpandedGroups({ [`${firstDate.getFullYear()}-${firstDate.getMonth()}`]: true })
-                }
-            }
-
+            setCarregadoKey(idsKey)
             setLoading(false)
         }
         fetch()
         return () => { cancelado = true }
     }, [idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Respostas do mês escolhido. colaboradores é resolvido duas vezes (autor
+    // da resposta e, em formulários direcionados, o alvo dela) — precisa
+    // apontar pra FK explícita, senão o PostgREST não sabe desambiguar.
+    useEffect(() => {
+        if (!carregadoKey) return
+        let cancelado = false
+        async function fetchMes() {
+            setLoadingMes(true)
+            const ids = carregadoKey.split(',')
+            const janela = janelaDoMes(filtroMes, ids, formsMesAvaliado)
+            const { data: rData } = await buscarTodasPaginas((de, ate) => supabase.from('formulario_respostas')
+                .select('*, formulario_respostas_itens(*), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
+                .in('formulario_id', ids)
+                .gte('enviado_em', janela.desde).lt('enviado_em', janela.ate)
+                .order('enviado_em', { ascending: false }).order('id')
+                .range(de, ate))
+            if (cancelado) return
+            setRespostas(rData)
+
+            // Auto-expand first group
+            const primeira = rData.find((r: any) => {
+                const m = mesDaResposta(r.enviado_em, formsMesAvaliado.has(r.formulario_id))
+                return m.mes === filtroMes.mes && m.ano === filtroMes.ano
+            })
+            if (primeira) {
+                if (groupMode === 'pessoa') {
+                    setExpandedGroups({ [primeira.colaborador_id || primeira.colaboradores?.nome || 'anon']: true })
+                } else if (groupMode === 'mes') {
+                    const m = mesDaResposta(primeira.enviado_em, formsMesAvaliado.has(primeira.formulario_id))
+                    setExpandedGroups({ [`${m.ano}-${m.mes - 1}`]: true })
+                }
+            }
+            setLoadingMes(false)
+        }
+        fetchMes()
+        return () => { cancelado = true }
+    }, [carregadoKey, filtroMes.mes, filtroMes.ano]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const toggleGroup = (key: string) => {
         setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }))
@@ -98,31 +142,32 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
     const numeroPergunta = (p: any) => perguntas.filter(q => q.formulario_id === p.formulario_id).findIndex(q => q.id === p.id) + 1
     const rotuloPergunta = (p: any) => `${variosFormularios ? `[${titulosFormularios[p.formulario_id] || 'Formulário'}] ` : ''}${numeroPergunta(p)}. ${p.titulo}`
 
+    // Mês de cada resposta (ver mesDaResposta) e se o painel inteiro conta
+    // pelo mês avaliado — muda só os rótulos.
+    const mesDe = (r: any) => mesDaResposta(r.enviado_em, formsMesAvaliado.has(r.formulario_id))
+    const usaMesAvaliado = !!idsKey && idsKey.split(',').every(id => formsMesAvaliado.has(id))
+    const rotuloMes = usaMesAvaliado ? 'Mês avaliado' : 'Mês'
+
     // ── Hooks: devem ficar ANTES de qualquer early return ─────────────────────
 
-    // Meses disponíveis: todos que têm respostas + mês atual
+    // Meses disponíveis: todos que têm respostas (índice leve) + o mês aberto de início
     const mesesDisponiveis = useMemo(() => {
-        const seen = new Set<string>()
-        const n = new Date()
-        seen.add(`${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`)
-        for (const r of respostas) {
-            const d = new Date(r.enviado_em)
-            seen.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-        }
+        const seen = new Set(mesesComRespostas.map(m => m.key))
+        seen.add(chaveDoMes(usaMesAvaliado ? mesReferenciaFromDate(new Date()) : mesDaResposta(new Date().toISOString(), false)))
         return Array.from(seen)
             .sort((a, b) => b.localeCompare(a))
             .map(key => {
                 const [ano, mes] = key.split('-').map(Number)
                 return { key, mes, ano, label: `${MESES_CURTOS[mes - 1]}/${ano}` }
             })
-    }, [respostas])
+    }, [mesesComRespostas, usaMesAvaliado])
 
-    // Respostas do mês selecionado
+    // Respostas do mês selecionado (a busca traz um dia de folga de cada lado)
     const monthFilteredRespostas = useMemo(() =>
         respostas.filter(r => {
-            const d = new Date(r.enviado_em)
-            return d.getFullYear() === filtroMes.ano && d.getMonth() + 1 === filtroMes.mes
-        }), [respostas, filtroMes])
+            const m = mesDaResposta(r.enviado_em, formsMesAvaliado.has(r.formulario_id))
+            return m.ano === filtroMes.ano && m.mes === filtroMes.mes
+        }), [respostas, filtroMes, formsMesAvaliado])
 
     // Quem foi avaliado em cada resposta, em qual papel (aba) e com quais
     // notas — ver src/lib/forms-avaliacao.ts. `perguntas` já vem ordenado por
@@ -140,7 +185,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
         return <div className="p-8 text-center text-slate-400 text-sm">Carregando respostas...</div>
     }
 
-    if (respostas.length === 0) {
+    if (mesesComRespostas.length === 0) {
         return (
             <div className="p-8 text-center text-slate-400">
                 <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -238,7 +283,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
     const rotuloAba = modelo.papeis.find(p => p.chave === papelSelecionado)?.label
 
     const gerarRelatorio = () => {
-        const filtros = [`Mês: ${MESES[filtroMes.mes - 1]}/${filtroMes.ano}`]
+        const filtros = [`${rotuloMes}: ${MESES[filtroMes.mes - 1]}/${filtroMes.ano}`]
         if (rotuloAba) filtros.push(`Aba: ${rotuloAba}`)
         if (busca) filtros.push(`Avaliado: "${searchAvaliado.trim()}"`)
         if (filterPerguntaId && filterAnswerValue.trim()) {
@@ -274,9 +319,9 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
         })
     } else if (groupMode === 'mes') {
         respostasLista.forEach(r => {
-            const date = new Date(r.enviado_em)
-            const key = `${date.getFullYear()}-${date.getMonth()}`
-            if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
+            const m = mesDe(r)
+            const key = `${m.ano}-${m.mes - 1}`
+            if (!groups[key]) groups[key] = { label: `${MESES[m.mes - 1]} ${m.ano}`, respostas: [] }
             groups[key].respostas.push(r)
         })
     } else if (groupMode === 'pergunta') {
@@ -317,7 +362,10 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
             {/* Month filter bar */}
             <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/60">
                 <Calendar className="h-4 w-4 text-violet-500 shrink-0" />
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Mês:</span>
+                <span
+                    className="text-xs font-bold text-slate-500 uppercase tracking-wider"
+                    title={usaMesAvaliado ? 'Avaliação mensal: a resposta enviada num mês é sobre o mês anterior (o mesmo mês usado em Performance e PIPJ)' : undefined}
+                >{rotuloMes}:</span>
                 <div className="flex flex-wrap gap-1.5">
                     {mesesDisponiveis.map(m => {
                         const isSelected = m.mes === filtroMes.mes && m.ano === filtroMes.ano
@@ -333,10 +381,13 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                     })}
                 </div>
                 <span className="text-xs text-slate-400 ml-auto">
-                    {monthFilteredRespostas.length} resposta{monthFilteredRespostas.length !== 1 ? 's' : ''} em {MESES[filtroMes.mes - 1]}/{filtroMes.ano}
+                    {loadingMes ? 'Carregando...' : <>{monthFilteredRespostas.length} resposta{monthFilteredRespostas.length !== 1 ? 's' : ''} {usaMesAvaliado ? 'sobre' : 'em'} {MESES[filtroMes.mes - 1]}/{filtroMes.ano}</>}
                 </span>
             </div>
 
+            {loadingMes ? (
+                <div className="p-8 text-center text-slate-400 text-sm">Carregando respostas de {MESES[filtroMes.mes - 1]}/{filtroMes.ano}...</div>
+            ) : (<>
             {/* Controls bar */}
             <div className="flex flex-wrap items-center gap-3 mb-2">
                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-300">
@@ -934,7 +985,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                     <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
                         <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <Users className="h-4 w-4 text-violet-500" />
-                            Participação em {MESES[filtroMes.mes - 1]}/{filtroMes.ano} — {respondentes.length} de {audienciaEsperada.length} membros responderam
+                            Participação {usaMesAvaliado ? 'na avaliação de' : 'em'} {MESES[filtroMes.mes - 1]}/{filtroMes.ano} — {respondentes.length} de {audienciaEsperada.length} membros responderam
                         </h3>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -970,6 +1021,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                     </div>
                 )
             })()}
+            </>)}
         </div>
     )
 }
