@@ -8,13 +8,19 @@ import { modeloAvaliacao, normalizarTexto, gerarRelatorioHtml, type ResumoPapel 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
-export function FormResponsesDashboard({ formularioId }: { formularioId: string }) {
+// Um formulário (formularioId) ou vários ao mesmo tempo (formularioIds —
+// ex.: todos os de um mesmo Tipo do Formulário, somados num painel só, com
+// `titulo` para o cabeçalho do relatório).
+export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: { formularioId?: string; formularioIds?: string[]; titulo?: string }) {
+    const idsKey = (formularioIds ?? (formularioId ? [formularioId] : [])).join(',')
+    const variosFormularios = (formularioIds?.length ?? 0) > 1
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [respostas, setRespostas] = useState<any[]>([])
     const now = new Date()
     const [filtroMes, setFiltroMes] = useState<{ mes: number; ano: number }>({ mes: now.getMonth() + 1, ano: now.getFullYear() })
     const [colaboradores, setColaboradores] = useState<any[]>([])
-    const [publico, setPublico] = useState<FormularioPublico | null>(null)
+    const [publicos, setPublicos] = useState<FormularioPublico[]>([])
+    const [titulosFormularios, setTitulosFormularios] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(true)
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
     const [filterPerguntaId, setFilterPerguntaId] = useState<string>('')
@@ -28,23 +34,32 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     useEffect(() => {
         async function fetch() {
             setLoading(true)
-            const [{ data: pData }, { data: rData }, { data: cData }, publicoData, { data: fData }] = await Promise.all([
-                supabase.from('formulario_perguntas').select('*').eq('formulario_id', formularioId).order('ordem'),
+            const ids = idsKey ? idsKey.split(',') : []
+            const [{ data: pData }, { data: rData }, { data: cData }, publicosData, { data: fData }] = await Promise.all([
+                supabase.from('formulario_perguntas').select('*').in('formulario_id', ids).order('ordem'),
                 // colaboradores é resolvido duas vezes (autor da resposta e,
                 // em formulários direcionados, o alvo dela) — precisa apontar
                 // pra FK explícita, senão o PostgREST não sabe desambiguar.
                 supabase.from('formulario_respostas')
                     .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
-                    .eq('formulario_id', formularioId).order('enviado_em', { ascending: false }),
+                    .in('formulario_id', ids).order('enviado_em', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
-                loadFormularioPublico(formularioId),
-                supabase.from('formularios').select('titulo').eq('id', formularioId).maybeSingle(),
+                Promise.all(ids.map(id => loadFormularioPublico(id))),
+                supabase.from('formularios').select('id, titulo').in('id', ids),
             ])
-            setPerguntas(pData || [])
+            // As perguntas de cada formulário precisam ficar juntas e na
+            // ordem dele (ver modeloAvaliacao) — o `order` do banco intercala
+            // formulários diferentes.
+            const perguntasOrdenadas = [...(pData || [])].sort((a: any, b: any) =>
+                (ids.indexOf(a.formulario_id) - ids.indexOf(b.formulario_id)) || ((a.ordem ?? 0) - (b.ordem ?? 0)))
+            const titulos: Record<string, string> = {}
+            for (const f of fData || []) titulos[f.id] = f.titulo
+            setPerguntas(perguntasOrdenadas)
             setRespostas(rData || [])
             setColaboradores(cData || [])
-            setPublico(publicoData)
-            setTituloFormulario(fData?.titulo || 'Formulário')
+            setPublicos(publicosData)
+            setTitulosFormularios(titulos)
+            setTituloFormulario(titulo || (ids.length === 1 ? titulos[ids[0]] : '') || 'Formulário')
             setFilterPapel('todos')
             setSearchAvaliado('')
             setRankingCompleto({})
@@ -63,13 +78,18 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             setLoading(false)
         }
         fetch()
-    }, [formularioId])
+    }, [idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const toggleGroup = (key: string) => {
         setExpandedGroups(prev => ({ ...prev, [key]: !prev[key] }))
     }
 
     const getColabName = (id: string) => colaboradores.find(c => c.id === id)?.nome || id
+
+    // Com vários formulários, cada pergunta leva a numeração do próprio
+    // formulário e o título dele na frente.
+    const numeroPergunta = (p: any) => perguntas.filter(q => q.formulario_id === p.formulario_id).findIndex(q => q.id === p.id) + 1
+    const rotuloPergunta = (p: any) => `${variosFormularios ? `[${titulosFormularios[p.formulario_id] || 'Formulário'}] ` : ''}${numeroPergunta(p)}. ${p.titulo}`
 
     // ── Hooks: devem ficar ANTES de qualquer early return ─────────────────────
 
@@ -100,7 +120,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
     // Quem foi avaliado em cada resposta, em qual papel (aba) e com quais
     // notas — ver src/lib/forms-avaliacao.ts. `perguntas` já vem ordenado por
     // `ordem` na busca inicial, que é o que o modelo exige.
-    const modelo = useMemo(() => modeloAvaliacao(perguntas, respostas), [perguntas, respostas])
+    // Quem não está mais no cadastro (membro removido) fica fora: sem isso ele
+    // apareceria no ranking pelo id.
+    const modelo = useMemo(() => {
+        const ativos = new Set(colaboradores.map(c => c.id))
+        return modeloAvaliacao(perguntas, respostas, { avaliadoValido: id => ativos.has(id) })
+    }, [perguntas, respostas, colaboradores])
 
     // ── Early returns (depois de todos os hooks) ───────────────────────────────
 
@@ -248,9 +273,9 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
             groups[key].respostas.push(r)
         })
     } else if (groupMode === 'pergunta') {
-        perguntas.forEach((p, idx) => {
+        perguntas.forEach(p => {
             if (!perguntaNaAba(p.id)) return
-            groups[p.id] = { label: `${idx + 1}. ${p.titulo}`, respostas: [] }
+            groups[p.id] = { label: rotuloPergunta(p), respostas: [] }
             respostasDaPergunta(p.id).forEach(r => {
                 const item = r.formulario_respostas_itens?.find((it: any) => it.pergunta_id === p.id)
                 if (item) {
@@ -352,9 +377,10 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             className="appearance-none pl-8 pr-4 py-1.5 text-xs font-bold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-none focus:ring-2 focus:ring-violet-500 cursor-pointer min-w-[140px]"
                         >
                             <option value="">Todas as perguntas</option>
-                            {perguntas.map((p, i) => (
-                                <option key={p.id} value={p.id}>{i + 1}. {p.titulo.substring(0, 40)}{p.titulo.length > 40 ? '...' : ''}</option>
-                            ))}
+                            {perguntas.map(p => {
+                                const rotulo = rotuloPergunta(p)
+                                return <option key={p.id} value={p.id}>{rotulo.substring(0, 60)}{rotulo.length > 60 ? '...' : ''}</option>
+                            })}
                         </select>
                         <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 pointer-events-none text-slate-400" />
                     </div>
@@ -583,7 +609,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         )
                     })()}
 
-                    {perguntas.map((p, idx) => {
+                    {perguntas.map(p => {
                         if (!perguntaNaAba(p.id)) return null
                         const itemResponses = respostasDaPergunta(p.id)
                             .flatMap(r =>
@@ -614,7 +640,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         if (itemResponses.length === 0) {
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{idx + 1}. {p.titulo}</h3>
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{rotuloPergunta(p)}</h3>
                                     <p className="text-sm text-slate-400">Nenhuma resposta para esta pergunta.</p>
                                 </div>
                             )
@@ -636,7 +662,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                             
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{rotuloPergunta(p)}</h3>
                                     <div className="flex flex-col sm:flex-row gap-8 items-center">
                                         <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-[#0F172A] rounded-xl border border-slate-100 dark:border-slate-800 w-32 shrink-0 shadow-sm">
                                             <span className={`text-4xl font-black ${Number(avg) >= 4.5 ? 'text-emerald-500' : Number(avg) >= 3.5 ? 'text-amber-500' : 'text-rose-500'}`}>{avg}</span>
@@ -682,7 +708,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{rotuloPergunta(p)}</h3>
                                     <div className="space-y-3">
                                         {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([option, count]) => {
                                             const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
@@ -723,7 +749,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
 
                             return (
                                 <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{idx + 1}. {p.titulo}</h3>
+                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4">{rotuloPergunta(p)}</h3>
                                     <div className="space-y-3">
                                         {Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([colabId, count]) => {
                                             const pct = totalAnswers > 0 ? (count / totalAnswers) * 100 : 0
@@ -749,7 +775,7 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                         // For texto and other types
                         return (
                             <div key={p.id} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{idx + 1}. {p.titulo}</h3>
+                                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">{rotuloPergunta(p)}</h3>
                                 <div className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-[#0F172A] p-3 rounded-lg border border-slate-100 dark:border-slate-800/50 inline-block">
                                     Esta pergunta recebeu <strong className="text-violet-600 dark:text-violet-400">{itemResponses.length}</strong> resposta(s) em texto. Mude para a visualização "Destrinchada" ou "Por Pessoa" para ler as respostas detalhadamente.
                                 </div>
@@ -841,15 +867,16 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                                             ) : (
                                                 <div className="space-y-3 ml-11">
                                                     {perguntasLista.map((p) => {
+                                                        // Com vários formulários, só as perguntas do formulário desta resposta.
+                                                        if (p.formulario_id !== resposta.formulario_id) return null
                                                         // Com busca, esconde as seções sobre outras pessoas da mesma resposta.
                                                         if (busca && modelo.papelDaPergunta(p.id) && !nomeBateBusca(modelo.avaliadoDaPergunta(resposta, p.id))) return null
                                                         const item = items.find((it: any) => it.pergunta_id === p.id)
-                                                        const questionIdx = perguntas.findIndex(q => q.id === p.id)
                                                         const isFilteredQuestion = filterAnswerValue.trim() && p.id === filterPerguntaId
                                                         return (
                                                             <div key={p.id} className={`p-3 rounded-xl border ${isFilteredQuestion ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/30' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800/80'}`}>
                                                                 <div className={`text-[10px] font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5 ${isFilteredQuestion ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
-                                                                    {questionIdx + 1}. {p.titulo}
+                                                                    {rotuloPergunta(p)}
                                                                     {isFilteredQuestion && <span className="bg-violet-200 dark:bg-violet-500/30 text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded text-[9px] font-black normal-case tracking-normal">filtro</span>}
                                                                 </div>
                                                                 {item ? renderValue(p, item) : (
@@ -884,10 +911,12 @@ export function FormResponsesDashboard({ formularioId }: { formularioId: string 
                 // do formulário (aba Público) — lista vazia = Todos. Sem isso, a
                 // lista de "Não responderam" incluía todo mundo cadastrado, mesmo
                 // gente de fora do público-alvo de formulários direcionados.
-                const quemResponde = publico?.quemResponde ?? []
-                const audienciaEsperada = quemResponde.length === 0
+                // Com vários formulários, vale a união: basta estar no
+                // público de um deles (e um público vazio já é "Todos").
+                const todosRespondem = publicos.length === 0 || publicos.some(p => p.quemResponde.length === 0)
+                const audienciaEsperada = todosRespondem
                     ? colaboradores
-                    : colaboradores.filter(c => colaboradorNoPublico(c, quemResponde))
+                    : colaboradores.filter(c => publicos.some(p => colaboradorNoPublico(c, p.quemResponde)))
 
                 const naoRespondentes = audienciaEsperada.filter(c => !respondentesIds.has(c.id))
                 const respondentes = Object.entries(respondentesMap)

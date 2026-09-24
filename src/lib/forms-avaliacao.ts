@@ -14,7 +14,22 @@
 import { avaliadoPerguntaPorSecao, competenciaLabel, stripHtml } from './forms-runtime'
 
 const TIPOS_TEXTO = new Set(['texto', 'texto_longo', 'paragrafo'])
-export const PAPEL_ALVO = '__alvo__'
+
+// Papéis (abas). Só o NPS Projetos separa de verdade: quem aparece em "Quem é
+// o gerente deste projeto?" é Tático, quem aparece em "Quem é o(a)
+// consultor(a)...?" é Operacional. Qualquer outra forma de apontar o
+// avaliado (outra pergunta de colaborador, ou o alvo de um formulário
+// direcionado) é um papel só — assim formulários do mesmo tipo (ex.: Piloto
+// de Elite, que usa a pergunta, e Piloto de Elite: GP, que é direcionado)
+// somam no mesmo ranking.
+export const PAPEL_TATICO = 'taticos'
+export const PAPEL_OPERACIONAL = 'operacionais'
+export const PAPEL_GERAL = 'avaliados'
+const ROTULO_PAPEL: Record<string, string> = {
+    [PAPEL_TATICO]: 'Táticos',
+    [PAPEL_OPERACIONAL]: 'Operacionais',
+    [PAPEL_GERAL]: 'Avaliados',
+}
 
 export interface Papel {
     chave: string
@@ -82,35 +97,58 @@ export function notaValida(valor: unknown): number | null {
     return isNaN(v) ? null : v
 }
 
-function rotuloPapel(chave: string, tituloPergunta: string): string {
-    if (chave === PAPEL_ALVO) return 'Avaliados'
-    if (chave.includes('gerente')) return 'Táticos'
-    if (chave.includes('consultor')) return 'Operacionais'
-    return tituloPergunta || 'Avaliados'
+function papelDaPerguntaColaborador(titulo: string | null | undefined): string {
+    const t = normalizarTexto(textoLimpo(titulo))
+    if (t.includes('gerente')) return PAPEL_TATICO
+    if (t.includes('consultor')) return PAPEL_OPERACIONAL
+    return PAPEL_GERAL
 }
 
-// `perguntas` precisa vir na ordem do formulário (campo `ordem`).
-export function modeloAvaliacao(perguntas: any[], respostas: any[]) {
+// Aceita um ou mais formulários ao mesmo tempo (ex.: todos os de um mesmo
+// tipo). `perguntas` precisa vir com as de cada formulário juntas e na ordem
+// do formulário (campo `ordem`). `avaliadoValido`, se informado, descarta as
+// avaliações sobre quem não existe mais no cadastro (membro removido) — sem
+// isso ele apareceria no ranking pelo id, sem nome.
+export function modeloAvaliacao(
+    perguntas: any[],
+    respostas: any[],
+    opcoes?: { avaliadoValido?: (id: string) => boolean },
+) {
     const porId = new Map<string, any>(perguntas.map(p => [p.id, p]))
-    const temPerguntaColaborador = perguntas.some(p => p.tipo === 'colaborador_unico')
-    // O alvo da resposta só vale quando não há pergunta de colaborador —
-    // senão uma nota de uma seção sem avaliado seria atribuída a uma pessoa.
-    const temAlvo = !temPerguntaColaborador && respostas.some(r => r.alvo_colaborador_id)
-    const donoPorSecao = avaliadoPerguntaPorSecao(perguntas)
+    const formDaPergunta = (perguntaId: string) => porId.get(perguntaId)?.formulario_id
+    const formsComPergunta = new Set(perguntas.filter(p => p.tipo === 'colaborador_unico').map(p => p.formulario_id))
+    // O alvo da resposta só vale em formulário sem pergunta de colaborador —
+    // senão uma nota de uma seção sem avaliado (ex.: a nota da empresa no NPS
+    // Projetos) seria atribuída a uma pessoa.
+    const formsComAlvo = new Set(respostas
+        .filter(r => r.alvo_colaborador_id && !formsComPergunta.has(r.formulario_id))
+        .map(r => r.formulario_id))
+    const usaPergunta = (perguntaId: string) => formsComPergunta.has(formDaPergunta(perguntaId))
+
+    // Dono (pergunta de colaborador) de cada pergunta, por seção e formulário
+    // a formulário — a seção de um não pode "vazar" para o seguinte.
+    const donoPorSecao = new Map<string, string>()
+    const perguntasPorForm = new Map<string, any[]>()
+    for (const p of perguntas) {
+        const lista = perguntasPorForm.get(p.formulario_id) || []
+        lista.push(p)
+        perguntasPorForm.set(p.formulario_id, lista)
+    }
+    for (const lista of perguntasPorForm.values()) {
+        for (const [perguntaId, dono] of avaliadoPerguntaPorSecao(lista)) donoPorSecao.set(perguntaId, dono)
+    }
 
     const donoDaPergunta = (perguntaId: string): string | undefined =>
         porId.get(perguntaId)?.tipo === 'colaborador_unico' ? perguntaId : donoPorSecao.get(perguntaId)
 
-    const chavePapelDoDono = (donoId: string) => normalizarTexto(textoLimpo(porId.get(donoId)?.titulo)) || donoId
-
     const papelDaPergunta = (perguntaId: string): string | null => {
-        if (!temPerguntaColaborador) return temAlvo ? PAPEL_ALVO : null
+        if (!usaPergunta(perguntaId)) return formsComAlvo.has(formDaPergunta(perguntaId)) ? PAPEL_GERAL : null
         const dono = donoDaPergunta(perguntaId)
-        return dono ? chavePapelDoDono(dono) : null
+        return dono ? papelDaPerguntaColaborador(porId.get(dono)?.titulo) : null
     }
 
     const avaliadoDaPergunta = (resposta: any, perguntaId: string): string | null => {
-        if (!temPerguntaColaborador) return resposta.alvo_colaborador_id || null
+        if (!usaPergunta(perguntaId)) return resposta.alvo_colaborador_id || null
         const dono = donoDaPergunta(perguntaId)
         if (!dono) return null
         return (resposta.formulario_respostas_itens || []).find((it: any) => it.pergunta_id === dono)?.valor || null
@@ -125,8 +163,7 @@ export function modeloAvaliacao(perguntas: any[], respostas: any[]) {
         if (p.tipo !== 'escala') continue
         const papel = papelDaPergunta(p.id)
         if (papel && !papeis.some(x => x.chave === papel)) {
-            const dono = temPerguntaColaborador ? donoDaPergunta(p.id) : undefined
-            papeis.push({ chave: papel, label: rotuloPapel(papel, dono ? textoLimpo(porId.get(dono)?.titulo) : '') })
+            papeis.push({ chave: papel, label: ROTULO_PAPEL[papel] })
         }
         const label = rotuloCriterio(p)
         const chave = normalizarTexto(label)
@@ -142,7 +179,7 @@ export function modeloAvaliacao(perguntas: any[], respostas: any[]) {
             if (!p) continue
             const ehNota = p.tipo === 'escala'
             if (!ehNota && !TIPOS_TEXTO.has(p.tipo)) continue
-            const grupo = temPerguntaColaborador ? (donoDaPergunta(p.id) ?? '') : ''
+            const grupo = usaPergunta(p.id) ? (donoDaPergunta(p.id) ?? '') : ''
             let linha = grupos.get(grupo)
             if (!linha) {
                 linha = { resposta, papel: papelDaPergunta(p.id), avaliadoId: avaliadoDaPergunta(resposta, p.id), notas: [], textos: [] }
@@ -155,7 +192,9 @@ export function modeloAvaliacao(perguntas: any[], respostas: any[]) {
                 linha.textos.push({ perguntaId: p.id, valor: String(it.valor) })
             }
         }
-        return Array.from(grupos.values()).filter(l => l.notas.length > 0 || l.textos.length > 0)
+        return Array.from(grupos.values()).filter(l =>
+            (l.notas.length > 0 || l.textos.length > 0)
+            && !(l.avaliadoId && opcoes?.avaliadoValido && !opcoes.avaliadoValido(l.avaliadoId)))
     }
 
     const criterioDaPergunta = (perguntaId: string) => normalizarTexto(rotuloCriterio(porId.get(perguntaId) || {}))
@@ -220,7 +259,6 @@ export function modeloAvaliacao(perguntas: any[], respostas: any[]) {
     }
 
     return {
-        temPerguntaColaborador,
         papeis,
         criteriosPorPapel,
         papelDaPergunta,

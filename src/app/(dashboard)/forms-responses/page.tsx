@@ -1,14 +1,16 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search, Trophy, TrendingDown } from "lucide-react"
+import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search, Trophy, TrendingDown, Folder, FolderOpen } from "lucide-react"
 import { FormResponsesDashboard } from "../forms-management/components/form-responses-dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export default function FormsResponsesPage() {
     const [formularios, setFormularios] = useState<any[]>([])
+    // Um formulário (id), todos os de um tipo ('tipo:<nome>') ou o NPS Projeto antigo.
     const [selectedFormId, setSelectedFormId] = useState<string | 'nps_projeto' | null>(null)
+    const [tiposAbertos, setTiposAbertos] = useState<Record<string, boolean>>({})
     const [loading, setLoading] = useState(true)
 
     // NPS Projeto State
@@ -50,7 +52,7 @@ export default function FormsResponsesPage() {
         async function fetchForms() {
             setLoading(true)
             const [{ data }, { data: colabs }] = await Promise.all([
-                supabase.from('formularios').select('id, titulo').order('created_at', { ascending: false }),
+                supabase.from('formularios').select('id, titulo, tipo_formulario').order('created_at', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome').order('nome'),
             ])
 
@@ -259,6 +261,26 @@ export default function FormsResponsesPage() {
         }
     }
 
+    // Lista agrupada por Tipo do Formulário, como as pastas da Gestão de
+    // Formulários. Clicar no tipo abre o painel com todos os formulários
+    // dele somados (e o relatório segue os filtros desse painel).
+    const SEM_TIPO = 'Sem tipo'
+    const pastasMap = new Map<string, any[]>()
+    for (const f of formularios) {
+        const nome = (f.tipo_formulario || '').trim() || SEM_TIPO
+        pastasMap.set(nome, [...(pastasMap.get(nome) || []), f])
+    }
+    const pastas = Array.from(pastasMap.entries())
+        .map(([nome, forms]) => ({ nome, forms }))
+        .sort((a, b) => {
+            if (a.nome === SEM_TIPO) return 1
+            if (b.nome === SEM_TIPO) return -1
+            return a.nome.localeCompare(b.nome, 'pt-BR')
+        })
+    const pastaSelecionada = selectedFormId?.startsWith('tipo:')
+        ? pastas.find(p => `tipo:${p.nome}` === selectedFormId)
+        : undefined
+
     return (
         <div className="flex flex-col gap-8 pb-8">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -305,18 +327,51 @@ export default function FormsResponsesPage() {
 
                             <div className="h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
 
-                            {formularios.map(form => (
-                                <button
-                                    key={form.id}
-                                    onClick={() => setSelectedFormId(form.id)}
-                                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all text-left ${selectedFormId === form.id ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'bg-transparent border border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}
-                                >
-                                    <div className="flex items-center gap-3 font-bold text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                        <FileText className={`h-4 w-4 shrink-0 ${selectedFormId === form.id ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400'}`} />
-                                        <span className="truncate">{form.titulo}</span>
+                            {pastas.map(pasta => {
+                                const chaveTipo = `tipo:${pasta.nome}`
+                                const tipoSelecionado = selectedFormId === chaveTipo
+                                const aberto = tiposAbertos[pasta.nome] ?? pasta.forms.some(f => f.id === selectedFormId)
+                                return (
+                                    <div key={pasta.nome}>
+                                        <div className={`flex items-center rounded-xl transition-all ${tipoSelecionado ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'border border-transparent text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50'}`}>
+                                            <button
+                                                onClick={() => { setSelectedFormId(chaveTipo); setTiposAbertos(v => ({ ...v, [pasta.nome]: true })) }}
+                                                title="Ver todos os formulários deste tipo juntos"
+                                                className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left font-bold text-sm"
+                                            >
+                                                {aberto
+                                                    ? <FolderOpen className={`h-4 w-4 shrink-0 ${tipoSelecionado ? 'text-violet-600 dark:text-violet-400' : 'text-amber-500'}`} />
+                                                    : <Folder className={`h-4 w-4 shrink-0 ${tipoSelecionado ? 'text-violet-600 dark:text-violet-400' : 'text-amber-500'}`} />}
+                                                <span className="truncate">{pasta.nome}</span>
+                                                <span className="text-[10px] font-bold text-slate-400 shrink-0">{pasta.forms.length}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setTiposAbertos(v => ({ ...v, [pasta.nome]: !aberto }))}
+                                                aria-label={aberto ? 'Recolher' : 'Expandir'}
+                                                className="p-3 text-slate-400 hover:text-violet-600"
+                                            >
+                                                {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                            </button>
+                                        </div>
+                                        {aberto && (
+                                            <div className="ml-4 pl-2 border-l border-slate-100 dark:border-slate-800 flex flex-col gap-1 mt-1 mb-2">
+                                                {pasta.forms.map(form => (
+                                                    <button
+                                                        key={form.id}
+                                                        onClick={() => setSelectedFormId(form.id)}
+                                                        className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all text-left ${selectedFormId === form.id ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'bg-transparent border border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3 font-bold text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                                            <FileText className={`h-4 w-4 shrink-0 ${selectedFormId === form.id ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400'}`} />
+                                                            <span className="truncate">{form.titulo}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                </button>
-                            ))}
+                                )
+                            })}
                         </>
                     )}
                 </div>
@@ -330,7 +385,11 @@ export default function FormsResponsesPage() {
                         </div>
                     )}
 
-                    {selectedFormId && selectedFormId !== 'nps_projeto' && (
+                    {pastaSelecionada && (
+                        <FormResponsesDashboard key={selectedFormId} formularioIds={pastaSelecionada.forms.map(f => f.id)} titulo={pastaSelecionada.nome} />
+                    )}
+
+                    {selectedFormId && selectedFormId !== 'nps_projeto' && !selectedFormId.startsWith('tipo:') && (
                         <FormResponsesDashboard formularioId={selectedFormId} />
                     )}
 
