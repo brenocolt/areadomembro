@@ -13,4 +13,7 @@ export async function register() {
 
     const { scheduleDailyMondaySync } = await import('./lib/monday-sync-scheduler')
     scheduleDailyMondaySync()
+
+    const { scheduleReunioesProcessamento } = await import('./lib/reunioes-scheduler')
+    scheduleReunioesProcessamento()
 }

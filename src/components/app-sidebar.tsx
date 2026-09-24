@@ -19,6 +19,7 @@ import {
     LogOut,
     Briefcase,
     Target,
+    QrCode,
 } from "lucide-react"
 
 import {
@@ -52,6 +53,7 @@ const memberItems = [
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
     { title: "Minhas Milhas", url: "/milhas", icon: Ticket },
     { title: "Punições", url: "/punishments", icon: AlertTriangle },
+    { title: "Presença em Reuniões", url: "/presenca", icon: QrCode },
 ]
 
 const managementItems = [
@@ -65,6 +67,7 @@ const managementItems = [
     { title: "Gestão de Usuários", url: "/users-management", icon: User },
     { title: "Gestão de Ausências", url: "/absences-management", icon: CalendarDays },
     { title: "Gestão de Alocações", url: "/allocations-management", icon: Briefcase },
+    { title: "Gestão de Reuniões", url: "/reunioes-management", icon: QrCode },
 ]
 
 function NavGroup({ label, items, pathname }: { label: string; items: typeof memberItems; pathname: string }) {
@@ -116,7 +119,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
     const filteredMemberItems = (isAdmin || !allowedPages
         ? memberItems
-        : memberItems.filter(item => allowedPages.includes(item.url))
+        // /presenca é sempre acessível (ver RouteGuard)
+        : memberItems.filter(item => item.url === '/presenca' || allowedPages.includes(item.url))
     ).filter(item => {
         // Hide NPS Gerente for non-gerente, non-admin users
         if (item.url === '/nps-gerente' && !isAdmin && !isGerente) return false

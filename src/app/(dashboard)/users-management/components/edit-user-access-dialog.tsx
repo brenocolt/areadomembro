@@ -14,8 +14,9 @@ import { useSession } from "next-auth/react"
 import { CARGOS } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 
-// "Perfil" não entra aqui de propósito: /profile agora é sempre acessível a
-// todo mundo (ver RouteGuard), não depende mais de páginas permitidas.
+// "Perfil" e "Presença em Reuniões" não entram aqui de propósito: /profile e
+// /presenca são sempre acessíveis a todo mundo (ver RouteGuard), não
+// dependem de páginas permitidas.
 const ALL_PAGES = [
     { label: "Início", path: "/" },
     { label: "Minhas Atividades", path: "/minhas-prioridades" },
@@ -37,6 +38,7 @@ const ALL_PAGES = [
     { label: "Gestão de Usuários", path: "/users-management" },
     { label: "Gestão de Ausências", path: "/absences-management" },
     { label: "Gestão de Alocações", path: "/allocations-management" },
+    { label: "Gestão de Reuniões", path: "/reunioes-management" },
 ]
 
 interface EditUserAccessDialogProps {

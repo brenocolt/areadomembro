@@ -29,7 +29,11 @@ export async function authenticate(
         }
         throw error;
     }
-    redirect('/');
+    // Volta para a página que pediu o login (ex.: o QR code de presença em
+    // reunião abre /presenca?...). Só caminhos internos — nada de URL externa.
+    const destino = formData.get('redirectTo');
+    const seguro = typeof destino === 'string' && destino.startsWith('/') && !destino.startsWith('//') && !destino.startsWith('/\\');
+    redirect(seguro ? destino : '/');
 }
 
 export async function resetPasswordLocal(email: string, dataNascimento: string, cpf: string) {

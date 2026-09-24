@@ -2,11 +2,12 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { AlertOctagon, Check, X, Search, RefreshCw, Trash2, FileQuestion } from "lucide-react"
+import { AlertOctagon, Check, X, Search, RefreshCw, Trash2, FileQuestion, QrCode } from "lucide-react"
 import { toast } from "sonner"
 
 interface PrePontuado {
@@ -19,6 +20,7 @@ interface PrePontuado {
     created_at: string
     colaboradores?: { nome: string, cargo_atual?: string | null, status?: string | null }
     formularios?: { titulo: string, tipo_formulario?: string | null } | null
+    reunioes?: { titulo: string } | null
 }
 
 export function PrePontuadosView() {
@@ -29,10 +31,18 @@ export function PrePontuadosView() {
 
     const fetch = async () => {
         setLoading(true)
-        const { data, error } = await supabase
+        const selectBase = '*, colaboradores(nome, cargo_atual, status), formularios(titulo, tipo_formulario)'
+        let { data, error } = await supabase
             .from('pontos_pre_pontuacao')
-            .select('*, colaboradores(nome, cargo_atual, status), formularios(titulo, tipo_formulario)')
+            .select(`${selectBase}, reunioes(titulo)`)
             .order('created_at', { ascending: false })
+        // reunioes/reuniao_id vêm da migração 20260924 — sem ela, lê sem o vínculo.
+        if (isSchemaDesatualizado(error)) {
+            ({ data, error } = await supabase
+                .from('pontos_pre_pontuacao')
+                .select(selectBase)
+                .order('created_at', { ascending: false }))
+        }
         // Membros desligados e contas fantasma saem das telas de gestão.
         if (!error && data) setItems((data as any[]).filter(i => i.colaboradores?.status !== 'Desligado' && i.colaboradores?.cargo_atual !== CARGO_FANTASMA) as any)
         setLoading(false)
@@ -48,7 +58,7 @@ export function PrePontuadosView() {
             data: new Date().toISOString(),
             cargo_na_epoca: item.colaboradores?.cargo_atual || '—',
             motivo: item.descricao,
-            descricao: `Confirmação de pré-pontuação${item.formularios?.titulo ? ` (formulário: ${item.formularios.titulo})` : ''}.`,
+            descricao: `Confirmação de pré-pontuação${item.formularios?.titulo ? ` (formulário: ${item.formularios.titulo})` : item.reunioes?.titulo ? ` (reunião: ${item.reunioes.titulo})` : ''}.`,
             pontuacao: 1,
         })
         if (ocErr) {
@@ -101,7 +111,7 @@ export function PrePontuadosView() {
                         </div>
                         <div>
                             <CardTitle className="text-base font-bold text-slate-900 dark:text-white">Usuários Pré Pontuados</CardTitle>
-                            <p className="text-xs text-slate-500">Sinalizados automaticamente (ex: não envio de formulário) ou manualmente. Confirmar gera uma ocorrência.</p>
+                            <p className="text-xs text-slate-500">Sinalizados automaticamente (ex: não envio de formulário, atraso ou falta em reunião) ou manualmente. Confirmar gera uma ocorrência.</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -155,6 +165,11 @@ export function PrePontuadosView() {
                                             {item.formularios?.titulo && (
                                                 <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
                                                     <FileQuestion className="h-3 w-3" /> {item.formularios.titulo}
+                                                </span>
+                                            )}
+                                            {item.reunioes?.titulo && (
+                                                <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                                    <QrCode className="h-3 w-3" /> {item.reunioes.titulo}
                                                 </span>
                                             )}
                                         </div>

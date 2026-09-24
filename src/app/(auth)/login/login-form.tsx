@@ -41,6 +41,17 @@ export function LoginForm() {
             const formData = new FormData();
             formData.append('email', values.email);
             formData.append('password', values.password);
+            // O middleware manda para /login?callbackUrl=<URL absoluta>;
+            // só o caminho interno é repassado.
+            const callbackUrl = new URLSearchParams(window.location.search).get('callbackUrl');
+            if (callbackUrl) {
+                try {
+                    const destino = new URL(callbackUrl, window.location.origin);
+                    if (destino.origin === window.location.origin) {
+                        formData.append('redirectTo', destino.pathname + destino.search);
+                    }
+                } catch { /* callbackUrl malformado: segue para a home */ }
+            }
             const result = await authenticate(undefined, formData);
             if (result) {
                 setErrorMessage(result);
