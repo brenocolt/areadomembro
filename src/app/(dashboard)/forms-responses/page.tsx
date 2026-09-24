@@ -1,15 +1,16 @@
 "use client"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search, Trophy, TrendingDown } from "lucide-react"
+import { FileText, Users, Star, MessageSquare, Calendar, ChevronDown, ChevronUp, BarChart3, AlertCircle, Download, Filter, Search, Trophy, TrendingDown, Folder, FolderOpen } from "lucide-react"
 import { FormResponsesDashboard } from "../forms-management/components/form-responses-dashboard"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { avaliadoPerguntaPorSecao } from "@/lib/forms-runtime"
 
 export default function FormsResponsesPage() {
     const [formularios, setFormularios] = useState<any[]>([])
+    // Um formulário (id), todos os de um tipo ('tipo:<nome>') ou o NPS Projeto antigo.
     const [selectedFormId, setSelectedFormId] = useState<string | 'nps_projeto' | null>(null)
+    const [tiposAbertos, setTiposAbertos] = useState<Record<string, boolean>>({})
     const [loading, setLoading] = useState(true)
 
     // NPS Projeto State
@@ -51,7 +52,7 @@ export default function FormsResponsesPage() {
         async function fetchForms() {
             setLoading(true)
             const [{ data }, { data: colabs }] = await Promise.all([
-                supabase.from('formularios').select('id, titulo').order('created_at', { ascending: false }),
+                supabase.from('formularios').select('id, titulo, tipo_formulario').order('created_at', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome').order('nome'),
             ])
 
@@ -143,19 +144,15 @@ export default function FormsResponsesPage() {
         return yb * 12 + mb - (ya * 12 + ma)
     })
 
-    // PDF generation function
+    // Relatório do NPS Projeto (avaliacoes_nps) — segue os filtros da tela
+    // (mês, tipo e busca). Os demais formulários geram o relatório pelo botão
+    // do próprio FormResponsesDashboard, com os filtros de lá.
     async function generatePDF() {
         if (typeof window === 'undefined') return
 
-        const selectedFormTitle = selectedFormId === 'nps_projeto'
-            ? 'NPS Projeto'
-            : formularios.find(f => f.id === selectedFormId)?.titulo || 'Formulário'
+        const selectedFormTitle = 'NPS Projeto'
 
-        let htmlContent = ''
-
-        if (selectedFormId === 'nps_projeto') {
-            // Build NPS content
-            htmlContent = sortedNpsKeys.map(key => {
+        const htmlContent = sortedNpsKeys.map(key => {
                 const [year, monthIdx] = key.split('-').map(Number)
                 const monthRespostas = groupedNps[key]
                 const monthLabel = `${MESES[monthIdx]} ${year}`
@@ -168,7 +165,7 @@ export default function FormsResponsesPage() {
                     else if (r.nps_geral <= 3.5) detratores++
                     else neutros++
                 })
-                const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
+                const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(2) : '0'
 
                     const rows = monthRespostas.map(r => {
                         const sendDate = new Date(r.created_at)
@@ -197,7 +194,7 @@ export default function FormsResponsesPage() {
                             </td>
                             <td style="padding:16px 12px; vertical-align:top; text-align:center;">
                                 <div style="display:inline-block; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:14px; color:${r.nps_geral >= 4.5 ? '#10b981' : r.nps_geral <= 3.5 ? '#ef4444' : '#f59e0b'}; background:${r.nps_geral >= 4.5 ? '#ecfdf5' : r.nps_geral <= 3.5 ? '#fef2f2' : '#fffbeb'}">
-                                    ${Number(r.nps_geral).toFixed(1)}/5
+                                    ${Number(r.nps_geral).toFixed(2)}/5
                                 </div>
                             </td>
                             <td style="padding:16px 12px; vertical-align:top;">
@@ -219,154 +216,6 @@ export default function FormsResponsesPage() {
                     </div>
                 `
             }).join('')
-        } else {
-                // Gerador de PDF genérico — mesmo padrão do NPS Projeto acima:
-                // agrupado por mês, com cabeçalho de Média/Promotores/
-                // Neutros/Detratores (quando o formulário tem perguntas de
-                // escala) e tabela com chips de nota + comentários.
-                let groups: Record<string, { label: string; respostas: any[] }> = {}
-                // colaboradores é resolvido duas vezes (autor e, em
-                // formulários direcionados, o alvo) — precisa apontar pra FK
-                // explícita, senão o PostgREST não sabe desambiguar.
-                const [rawResp, colabsResp] = await Promise.all([
-                    supabase.from('formulario_respostas')
-                        .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
-                        .eq('formulario_id', selectedFormId).order('enviado_em', { ascending: false }),
-                    supabase.from('colaboradores').select('id, nome'),
-                ])
-                if (rawResp.data) {
-                    rawResp.data.forEach(r => {
-                        const date = new Date(r.enviado_em)
-                        const key = `${date.getFullYear()}-${date.getMonth()}`
-                        if (!groups[key]) groups[key] = { label: `${MESES[date.getMonth()]} ${date.getFullYear()}`, respostas: [] }
-                        groups[key].respostas.push(r)
-                    })
-                }
-                const colabNomeMap = new Map((colabsResp.data || []).map((c: any) => [c.id, c.nome]))
-                const getNome = (id: string) => colabNomeMap.get(id) || id
-
-                // Perguntas do formulário, ordenadas — só pra resolver, POR
-                // SEÇÃO, qual pergunta colaborador_unico é "dona" de cada
-                // pergunta de escala/texto (ver avaliadoPerguntaPorSecao).
-                // Necessário porque um formulário pode ter mais de uma
-                // pergunta "Selecionar 1 Colaborador" (ex.: NPS Projetos:
-                // gerente + até 3 duplas), cada uma avaliando uma pessoa
-                // diferente dentro da MESMA resposta — sem isso, as notas de
-                // todo mundo se misturariam numa média só.
-                const { data: perguntasOrdenadas } = await supabase
-                    .from('formulario_perguntas')
-                    .select('id, tipo, titulo, competencia, ordem')
-                    .eq('formulario_id', selectedFormId)
-                    .order('ordem', { ascending: true })
-                const avaliadoPorPergunta = avaliadoPerguntaPorSecao(perguntasOrdenadas || [])
-
-                // Quebra uma resposta em uma ou mais "linhas" — uma por
-                // pessoa avaliada. Formulário direcionado (r.alvo definido)
-                // é sempre sobre uma pessoa só, então vira uma linha com
-                // TODOS os itens; sem alvo, agrupa pela seção — cobre tanto
-                // o modelo de seção única (Piloto de Elite) quanto o de
-                // múltiplas seções (NPS Projetos).
-                const linhasDaResposta = (r: any) => {
-                    const itens = r.formulario_respostas_itens || []
-                    const escalaItens = itens.filter((it: any) => it.formulario_perguntas?.tipo === 'escala')
-                    const textoItens = itens.filter((it: any) => ['texto', 'texto_longo', 'paragrafo'].includes(it.formulario_perguntas?.tipo))
-
-                    const montaLinha = (avaliadoNome: string | null, escala: any[], texto: any[]) => ({
-                        avaliadoNome, escalaItens: escala, textoItens: texto,
-                        media: escala.length > 0 ? escala.reduce((s: number, it: any) => s + Number(it.valor || 0), 0) / escala.length : null,
-                    })
-
-                    if (r.alvo?.nome) {
-                        return [montaLinha(r.alvo.nome, escalaItens, textoItens)]
-                    }
-
-                    const gruposPorPerguntaAvaliado = new Map<string, { escala: any[]; texto: any[] }>()
-                    const semSecao: { escala: any[]; texto: any[] } = { escala: [], texto: [] }
-                    const grupoDe = (perguntaId: string) => {
-                        const chave = avaliadoPorPergunta.get(perguntaId)
-                        if (!chave) return semSecao
-                        if (!gruposPorPerguntaAvaliado.has(chave)) gruposPorPerguntaAvaliado.set(chave, { escala: [], texto: [] })
-                        return gruposPorPerguntaAvaliado.get(chave)!
-                    }
-                    escalaItens.forEach((it: any) => grupoDe(it.pergunta_id).escala.push(it))
-                    textoItens.forEach((it: any) => grupoDe(it.pergunta_id).texto.push(it))
-
-                    const linhas = Array.from(gruposPorPerguntaAvaliado.entries()).map(([avaliadoPerguntaId, grupo]) => {
-                        const avaliadoItem = itens.find((it: any) => it.pergunta_id === avaliadoPerguntaId)
-                        const avaliadoNome = avaliadoItem?.valor ? getNome(avaliadoItem.valor) : null
-                        return montaLinha(avaliadoNome, grupo.escala, grupo.texto)
-                    })
-                    if (semSecao.escala.length > 0 || semSecao.texto.length > 0 || linhas.length === 0) {
-                        linhas.push(montaLinha(null, semSecao.escala, semSecao.texto))
-                    }
-                    return linhas
-                }
-
-                htmlContent = Object.keys(groups).map(key => {
-                    const group = groups[key]
-
-                    let sumScore = 0, countScore = 0, promotores = 0, neutros = 0, detratores = 0
-                    group.respostas.forEach(r => {
-                        linhasDaResposta(r).forEach(({ media }) => {
-                            if (media === null) return
-                            sumScore += media; countScore++
-                            if (media >= 4.5) promotores++
-                            else if (media <= 3.5) detratores++
-                            else neutros++
-                        })
-                    })
-                    const mediaLabel = countScore > 0 ? (sumScore / countScore).toFixed(1) : null
-                    const headerStats = mediaLabel
-                        ? `Média: ${mediaLabel}/5 (P: ${promotores}, N: ${neutros}, D: ${detratores})`
-                        : `${group.respostas.length} resposta${group.respostas.length !== 1 ? 's' : ''}`
-
-                    const rows = group.respostas.flatMap((r: any) => {
-                        const sendDate = new Date(r.enviado_em)
-                        const dateStr = sendDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                        const authorName = r.colaboradores?.nome || 'Anônimo'
-
-                        return linhasDaResposta(r).map(({ escalaItens, textoItens, avaliadoNome, media }) => {
-                            const respondente = authorName + (avaliadoNome ? ` — sobre ${avaliadoNome}` : '')
-
-                            const scoresHtml = escalaItens.map((it: any) => {
-                                const v = Number(it.valor || 0)
-                                const color = v >= 4 ? '#10b981' : v >= 3 ? '#f59e0b' : '#ef4444'
-                                const label = String(it.formulario_perguntas?.competencia || it.formulario_perguntas?.titulo || 'Nota')
-                                const shortLabel = label.length > 16 ? label.slice(0, 16) + '…' : label
-                                return `<div style="display:inline-block; margin-right:12px; margin-bottom:8px; background:#f8fafc; padding:4px 8px; border-radius:6px; border:1px solid #e2e8f0;">
-                                    <small style="color:#64748b; font-size:9px; text-transform:uppercase; display:block; margin-bottom:2px;">${shortLabel}</small>
-                                    <strong style="color:${color}; font-size:12px;">${v}</strong>
-                                </div>`
-                            }).join('')
-                            const feedbackHtml = textoItens.map((it: any) => it.valor).filter(Boolean).join('<br/>') || '—'
-
-                            return `<tr style="border-bottom: 1px solid #e2e8f0;">
-                                <td style="padding:16px 12px; vertical-align:top;">
-                                    <div style="font-weight:bold; color:#0f172a;">${respondente}</div>
-                                </td>
-                                <td style="padding:16px 12px; vertical-align:top; text-align:center;">
-                                    ${media !== null
-                                    ? `<div style="display:inline-block; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:14px; color:${media >= 4.5 ? '#10b981' : media <= 3.5 ? '#ef4444' : '#f59e0b'}; background:${media >= 4.5 ? '#ecfdf5' : media <= 3.5 ? '#fef2f2' : '#fffbeb'}">${media.toFixed(1)}/5</div>`
-                                    : '—'}
-                                </td>
-                                <td style="padding:16px 12px; vertical-align:top;">${scoresHtml || '—'}</td>
-                                <td style="white-space:nowrap; padding:16px 12px;">${dateStr}</td>
-                                <td style="max-width:250px;word-wrap:break-word; padding:16px 12px;">${feedbackHtml}</td>
-                            </tr>`
-                        })
-                    }).join('')
-
-                    return `
-                        <div class="month-section">
-                            <h2>${group.label} — ${headerStats}</h2>
-                            <table>
-                                <thead><tr><th>Respondente</th><th>Nota</th><th>Detalhamento</th><th>Data</th><th>Comentários</th></tr></thead>
-                                <tbody>${rows}</tbody>
-                            </table>
-                        </div>
-                    `
-                }).join('')
-        }
 
         const fullHtml = `<!DOCTYPE html>
 <html>
@@ -412,6 +261,26 @@ export default function FormsResponsesPage() {
         }
     }
 
+    // Lista agrupada por Tipo do Formulário, como as pastas da Gestão de
+    // Formulários. Clicar no tipo abre o painel com todos os formulários
+    // dele somados (e o relatório segue os filtros desse painel).
+    const SEM_TIPO = 'Sem tipo'
+    const pastasMap = new Map<string, any[]>()
+    for (const f of formularios) {
+        const nome = (f.tipo_formulario || '').trim() || SEM_TIPO
+        pastasMap.set(nome, [...(pastasMap.get(nome) || []), f])
+    }
+    const pastas = Array.from(pastasMap.entries())
+        .map(([nome, forms]) => ({ nome, forms }))
+        .sort((a, b) => {
+            if (a.nome === SEM_TIPO) return 1
+            if (b.nome === SEM_TIPO) return -1
+            return a.nome.localeCompare(b.nome, 'pt-BR')
+        })
+    const pastaSelecionada = selectedFormId?.startsWith('tipo:')
+        ? pastas.find(p => `tipo:${p.nome}` === selectedFormId)
+        : undefined
+
     return (
         <div className="flex flex-col gap-8 pb-8">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -426,7 +295,7 @@ export default function FormsResponsesPage() {
                         </p>
                     </div>
                 </div>
-                {selectedFormId && (
+                {selectedFormId === 'nps_projeto' && (
                     <Button
                         onClick={generatePDF}
                         className="bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl h-11 px-6 shadow-sm flex items-center gap-2"
@@ -458,18 +327,51 @@ export default function FormsResponsesPage() {
 
                             <div className="h-px bg-slate-100 dark:bg-slate-800 my-2"></div>
 
-                            {formularios.map(form => (
-                                <button
-                                    key={form.id}
-                                    onClick={() => setSelectedFormId(form.id)}
-                                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all text-left ${selectedFormId === form.id ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'bg-transparent border border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}
-                                >
-                                    <div className="flex items-center gap-3 font-bold text-sm overflow-hidden whitespace-nowrap text-ellipsis">
-                                        <FileText className={`h-4 w-4 shrink-0 ${selectedFormId === form.id ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400'}`} />
-                                        <span className="truncate">{form.titulo}</span>
+                            {pastas.map(pasta => {
+                                const chaveTipo = `tipo:${pasta.nome}`
+                                const tipoSelecionado = selectedFormId === chaveTipo
+                                const aberto = tiposAbertos[pasta.nome] ?? pasta.forms.some(f => f.id === selectedFormId)
+                                return (
+                                    <div key={pasta.nome}>
+                                        <div className={`flex items-center rounded-xl transition-all ${tipoSelecionado ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'border border-transparent text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50'}`}>
+                                            <button
+                                                onClick={() => { setSelectedFormId(chaveTipo); setTiposAbertos(v => ({ ...v, [pasta.nome]: true })) }}
+                                                title="Ver todos os formulários deste tipo juntos"
+                                                className="flex-1 min-w-0 flex items-center gap-3 p-3 text-left font-bold text-sm"
+                                            >
+                                                {aberto
+                                                    ? <FolderOpen className={`h-4 w-4 shrink-0 ${tipoSelecionado ? 'text-violet-600 dark:text-violet-400' : 'text-amber-500'}`} />
+                                                    : <Folder className={`h-4 w-4 shrink-0 ${tipoSelecionado ? 'text-violet-600 dark:text-violet-400' : 'text-amber-500'}`} />}
+                                                <span className="truncate">{pasta.nome}</span>
+                                                <span className="text-[10px] font-bold text-slate-400 shrink-0">{pasta.forms.length}</span>
+                                            </button>
+                                            <button
+                                                onClick={() => setTiposAbertos(v => ({ ...v, [pasta.nome]: !aberto }))}
+                                                aria-label={aberto ? 'Recolher' : 'Expandir'}
+                                                className="p-3 text-slate-400 hover:text-violet-600"
+                                            >
+                                                {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                            </button>
+                                        </div>
+                                        {aberto && (
+                                            <div className="ml-4 pl-2 border-l border-slate-100 dark:border-slate-800 flex flex-col gap-1 mt-1 mb-2">
+                                                {pasta.forms.map(form => (
+                                                    <button
+                                                        key={form.id}
+                                                        onClick={() => setSelectedFormId(form.id)}
+                                                        className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all text-left ${selectedFormId === form.id ? 'bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/30 text-violet-700 dark:text-violet-300' : 'bg-transparent border border-transparent text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800/50'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3 font-bold text-sm overflow-hidden whitespace-nowrap text-ellipsis">
+                                                            <FileText className={`h-4 w-4 shrink-0 ${selectedFormId === form.id ? 'text-violet-600 dark:text-violet-400' : 'text-slate-400'}`} />
+                                                            <span className="truncate">{form.titulo}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                </button>
-                            ))}
+                                )
+                            })}
                         </>
                     )}
                 </div>
@@ -483,7 +385,11 @@ export default function FormsResponsesPage() {
                         </div>
                     )}
 
-                    {selectedFormId && selectedFormId !== 'nps_projeto' && (
+                    {pastaSelecionada && (
+                        <FormResponsesDashboard key={selectedFormId} formularioIds={pastaSelecionada.forms.map(f => f.id)} titulo={pastaSelecionada.nome} />
+                    )}
+
+                    {selectedFormId && selectedFormId !== 'nps_projeto' && !selectedFormId.startsWith('tipo:') && (
                         <FormResponsesDashboard formularioId={selectedFormId} />
                     )}
 
@@ -680,7 +586,7 @@ export default function FormsResponsesPage() {
                                                                                 <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
                                                                                     <div className="flex justify-between items-center mb-1">
                                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(2)}</span>
                                                                                     </div>
                                                                                     <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                                                         <div className="h-full rounded-full bg-violet-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
@@ -702,7 +608,7 @@ export default function FormsResponsesPage() {
                                                                                 <div key={f.k} className="bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl">
                                                                                     <div className="flex justify-between items-center mb-1">
                                                                                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.l}</span>
-                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(1)}</span>
+                                                                                        <span className="font-black text-sm text-slate-700 dark:text-slate-300">{avg.toFixed(2)}</span>
                                                                                     </div>
                                                                                     <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                                                                         <div className="h-full rounded-full bg-amber-500 transition-all" style={{width: `${(avg/5)*100}%`}} />
@@ -824,7 +730,7 @@ export default function FormsResponsesPage() {
                                             else if (r.nps_geral <= 3.5) detratores++
                                             else neutros++
                                         })
-                                        const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(1) : '0'
+                                        const npsScore = monthRespostas.length > 0 ? (sumScore / monthRespostas.length).toFixed(2) : '0'
                                         const isPromotorGlobal = Number(npsScore) >= 4.5
                                         const isDetratorGlobal = Number(npsScore) <= 3.5
 
@@ -879,7 +785,7 @@ export default function FormsResponsesPage() {
                                                                             </div>
                                                                         </div>
                                                                         <div className={`text-2xl font-black px-3 py-1 rounded-xl ${isPromotor ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' : isDetrator ? 'text-rose-600 bg-rose-50 dark:bg-rose-500/10' : 'text-amber-600 bg-amber-50 dark:bg-amber-500/10'}`}>
-                                                                            {Number(resposta.nps_geral).toFixed(1)}<span className="text-xs font-bold opacity-50">/5</span>
+                                                                            {Number(resposta.nps_geral).toFixed(2)}<span className="text-xs font-bold opacity-50">/5</span>
                                                                         </div>
                                                                     </div>
 
