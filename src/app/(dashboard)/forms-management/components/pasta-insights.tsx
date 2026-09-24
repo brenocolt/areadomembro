@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { Trophy, Medal, Loader2, Calendar } from "lucide-react"
 import { modeloAvaliacao, type ItemRanking } from "@/lib/forms-avaliacao"
+import { buscarTodasPaginas } from "@/lib/paginacao"
 
 interface Props {
     // Formulários desta pasta (mesmo Tipo do Formulário). Entram os que
@@ -47,7 +48,9 @@ export function PastaInsights({ formularioIds }: Props) {
             if (ids.length === 0) { setPerguntas([]); setRespostas([]); setLoading(false); return }
             const [{ data: pData }, { data: rData }, { data: cData }] = await Promise.all([
                 supabase.from('formulario_perguntas').select('id, formulario_id, tipo, titulo, competencia, ordem').in('formulario_id', ids),
-                supabase.from('formulario_respostas').select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)').in('formulario_id', ids),
+                buscarTodasPaginas((de, ate) => supabase.from('formulario_respostas')
+                    .select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
+                    .in('formulario_id', ids).order('id').range(de, ate)),
                 supabase.from('colaboradores').select('id, nome'),
             ])
             if (cancelado) return

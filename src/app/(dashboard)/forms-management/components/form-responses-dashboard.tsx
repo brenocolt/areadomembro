@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { Users, Star, Calendar, User, ChevronDown, ChevronUp, Filter, BarChart3, Trophy, Medal, TrendingDown, Search, Briefcase, Download } from "lucide-react"
 import { loadFormularioPublico, colaboradorNoPublico, type FormularioPublico } from "@/lib/forms-publico"
 import { modeloAvaliacao, normalizarTexto, gerarRelatorioHtml, type ResumoPapel } from "@/lib/forms-avaliacao"
+import { buscarTodasPaginas } from "@/lib/paginacao"
 
 const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 const MESES_CURTOS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -32,6 +33,9 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
     const [tituloFormulario, setTituloFormulario] = useState('')
 
     useEffect(() => {
+        // Troca rápida de formulário/tipo: a busca antiga não pode
+        // sobrescrever a nova quando termina depois.
+        let cancelado = false
         async function fetch() {
             setLoading(true)
             const ids = idsKey ? idsKey.split(',') : []
@@ -40,13 +44,15 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                 // colaboradores é resolvido duas vezes (autor da resposta e,
                 // em formulários direcionados, o alvo dela) — precisa apontar
                 // pra FK explícita, senão o PostgREST não sabe desambiguar.
-                supabase.from('formulario_respostas')
-                    .select('*, formulario_respostas_itens(*, formulario_perguntas(*)), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
-                    .in('formulario_id', ids).order('enviado_em', { ascending: false }),
+                // Em páginas: um tipo inteiro passa das 1000 linhas da API.
+                buscarTodasPaginas((de, ate) => supabase.from('formulario_respostas')
+                    .select('*, formulario_respostas_itens(*), colaboradores!formulario_respostas_colaborador_id_fkey(nome), alvo:colaboradores!formulario_respostas_alvo_colaborador_id_fkey(nome)')
+                    .in('formulario_id', ids).order('enviado_em', { ascending: false }).order('id').range(de, ate)),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
                 Promise.all(ids.map(id => loadFormularioPublico(id))),
                 supabase.from('formularios').select('id, titulo').in('id', ids),
             ])
+            if (cancelado) return
             // As perguntas de cada formulário precisam ficar juntas e na
             // ordem dele (ver modeloAvaliacao) — o `order` do banco intercala
             // formulários diferentes.
@@ -78,6 +84,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
             setLoading(false)
         }
         fetch()
+        return () => { cancelado = true }
     }, [idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const toggleGroup = (key: string) => {
