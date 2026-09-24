@@ -1,5 +1,6 @@
-import { mesReferenciaFromDate } from './nps-period'
-import { isSchemaDesatualizado } from './db-compat'
+import { mesReferenciaFromDate, janelaEnvioDaReferencia } from './nps-period'
+import { isSchemaDesatualizado, type ErroPostgrest } from './db-compat'
+import { buscarTodasPaginas } from './paginacao'
 
 // Formulários marcados como fonte do NPS Interno (formularios.nps_interno) —
 // ver migração 20260905_formularios_subaba_nome_nps_interno.sql. Vários
@@ -30,7 +31,11 @@ type RespostaRow = { id: string; formulario_id: string; enviado_em: string; alvo
 // direcionados, ver src/lib/forms-publico.ts) e a resposta de uma pergunta
 // do tipo colaborador_unico (modelo antigo, ainda usado pelo Piloto de
 // Elite) — mesmo raciocínio de FormularioCompetenciasView.
-async function carregarRespostasNpsInterno(supabaseAdmin: any): Promise<{ perguntasPorForm: Map<string, PerguntaRow[]>; respostas: RespostaRow[] }> {
+//
+// `filtro` (mês de referência) faz o banco devolver só as respostas daquele
+// período em vez do histórico todo; a leitura é em páginas porque a API
+// corta em 1000 linhas sem avisar (esses formulários somam centenas por mês).
+async function carregarRespostasNpsInterno(supabaseAdmin: any, filtro?: { mes?: number; ano?: number }): Promise<{ perguntasPorForm: Map<string, PerguntaRow[]>; respostas: RespostaRow[] }> {
   const formIds = await getNpsInternoFormIds(supabaseAdmin)
   if (formIds.length === 0) return { perguntasPorForm: new Map(), respostas: [] }
 
@@ -49,12 +54,15 @@ async function carregarRespostasNpsInterno(supabaseAdmin: any): Promise<{ pergun
   // `alvo_colaborador_id` só existe a partir da migração 20260824 — sem
   // ela, o PostgREST recusa a leitura inteira e sobram só as respostas do
   // modelo colaborador_unico.
-  const comAlvo = await supabaseAdmin
-    .from('formulario_respostas')
-    .select('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
-    .in('formulario_id', formIds)
+  const janela = janelaEnvioDaReferencia(filtro)
+  const buscar = (colunas: string) => buscarTodasPaginas<RespostaRow, ErroPostgrest>((de, ate) => {
+    let q = supabaseAdmin.from('formulario_respostas').select(colunas).in('formulario_id', formIds)
+    if (janela) q = q.gte('enviado_em', janela.desde).lt('enviado_em', janela.ate)
+    return q.order('enviado_em').order('id').range(de, ate)
+  })
+  const comAlvo = await buscar('id, formulario_id, enviado_em, alvo_colaborador_id, formulario_respostas_itens(pergunta_id, valor)')
   const semAlvo = isSchemaDesatualizado(comAlvo.error)
-    ? await supabaseAdmin.from('formulario_respostas').select('id, formulario_id, enviado_em, formulario_respostas_itens(pergunta_id, valor)').in('formulario_id', formIds)
+    ? await buscar('id, formulario_id, enviado_em, formulario_respostas_itens(pergunta_id, valor)')
     : null
 
   const respostas = ((semAlvo ? semAlvo.data : comAlvo.data) || []) as RespostaRow[]
@@ -79,7 +87,7 @@ function resolveAvaliado(r: RespostaRow, formPerguntas: PerguntaRow[]): string |
 // (avaliacoes_nps).
 export async function getNpsInternoMap(supabaseAdmin: any, mes: number, ano: number): Promise<Map<string, number>> {
   const result = new Map<string, number>()
-  const { perguntasPorForm, respostas } = await carregarRespostasNpsInterno(supabaseAdmin)
+  const { perguntasPorForm, respostas } = await carregarRespostasNpsInterno(supabaseAdmin, { mes, ano })
   if (respostas.length === 0) return result
 
   const valsByColab = new Map<string, number[]>()
