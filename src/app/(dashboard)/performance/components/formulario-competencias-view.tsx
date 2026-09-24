@@ -28,6 +28,17 @@ const METRIC_STYLES = [
 type Metric = { id: string; titulo: string }
 type Avaliacao = { ano: number; mes: number; scores: Record<string, number> }
 
+// Janela de meses considerada nos cards, totais, gráfico e tabela. `meses`
+// null = todo o histórico.
+const PERIODOS = [
+    { id: '1', label: 'Último mês', meses: 1 },
+    { id: '3', label: 'Últimos 3 meses', meses: 3 },
+    { id: '6', label: 'Últimos 6 meses', meses: 6 },
+    { id: '12', label: 'Últimos 12 meses', meses: 12 },
+    { id: 'todos', label: 'Todo o período', meses: null },
+] as const
+type PeriodoId = typeof PERIODOS[number]['id']
+
 function avgOf(vals: number[]): number | null {
     if (vals.length === 0) return null
     return vals.reduce((a, b) => a + b, 0) / vals.length
@@ -61,6 +72,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
     const [loading, setLoading] = useState(true)
     const [metrics, setMetrics] = useState<Metric[]>([])
     const [evaluations, setEvaluations] = useState<Avaliacao[]>([])
+    const [periodo, setPeriodo] = useState<PeriodoId>('3')
 
     // Chave estável para o efeito: a identidade do array formularioIds muda a
     // cada render do componente pai, o que disparia esse efeito sem
@@ -154,8 +166,10 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                 for (const ep of escalaPerguntas) {
                     if (ep.formulario_id !== r.formulario_id) continue
                     const it = items.find((i: any) => i.pergunta_id === ep.id)
-                    const v = Number(it?.valor)
-                    if (it && !isNaN(v)) scores[labelPorPergunta.get(ep.id)!] = v
+                    // Nota em branco não é nota 0 — fica fora da média.
+                    if (!it || it.valor === null || it.valor === undefined || it.valor === '') continue
+                    const v = Number(it.valor)
+                    if (!isNaN(v)) scores[labelPorPergunta.get(ep.id)!] = v
                 }
 
                 const d = new Date(r.enviado_em)
@@ -172,35 +186,50 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [formularioIdsKey, colaboradorId, usarMesReferencia])
 
-    const sorted = [...evaluations].sort((a, b) => (b.ano - a.ano) || (b.mes - a.mes))
-    const latest = sorted[0]
-    const latestMonthEvals = latest ? sorted.filter(e => e.ano === latest.ano && e.mes === latest.mes) : []
-    const ultimoMesLabel = latest ? `${MESES[latest.mes - 1]}/${latest.ano}` : '—'
+    // Janela do período: conta para trás a partir do mês atual — no NPS
+    // Interno, do mês de referência atual (o anterior ao de hoje), já que é
+    // esse o mês que as avaliações enviadas agora avaliam.
+    const agora = new Date()
+    const ancora = usarMesReferencia
+        ? mesReferenciaFromDate(agora)
+        : { mes: agora.getMonth() + 1, ano: agora.getFullYear() }
+    const indiceAncora = ancora.ano * 12 + (ancora.mes - 1)
+    const periodoAtual = PERIODOS.find(p => p.id === periodo)!
+    const inicioPeriodo = periodoAtual.meses === null ? null : indiceAncora - (periodoAtual.meses - 1)
+    const evaluationsPeriodo = inicioPeriodo === null
+        ? evaluations
+        : evaluations.filter(e => e.ano * 12 + (e.mes - 1) >= inicioPeriodo)
+    const mesLabel = (indice: number) => `${MESES_CURTOS[indice % 12]}/${Math.floor(indice / 12)}`
+    const descricaoPeriodo = inicioPeriodo === null
+        ? 'em todo o período'
+        : periodoAtual.meses === 1
+            ? `em ${MESES[ancora.mes - 1]}/${ancora.ano}`
+            : `de ${mesLabel(inicioPeriodo)} a ${mesLabel(indiceAncora)}`
 
-    // Só mostra (card e legenda do gráfico) competências que o colaborador
-    // já recebeu ao menos uma vez — uma pergunta de escala pode existir no
-    // formulário sem nunca ter sido respondida para essa pessoa específica
-    // (ex.: pergunta nova, ou seção que nunca se aplicou a ela).
-    const metricsComDados = metrics.filter(m => evaluations.some(e => e.scores[m.id] !== undefined && !isNaN(e.scores[m.id])))
+    const temNota = (e: Avaliacao, metricId: string) => e.scores[metricId] !== undefined && !isNaN(e.scores[metricId])
+
+    // Só aparecem (cards, gráfico e tabela) competências avaliadas ao menos
+    // uma vez DENTRO do período — uma pergunta pode existir no formulário sem
+    // ter sido respondida para essa pessoa naqueles meses.
+    const metricsComDados = metrics.filter(m => evaluationsPeriodo.some(e => temNota(e, m.id)))
 
     const avgMetric = (metricId: string): string => {
-        const vals = latestMonthEvals.map(e => e.scores[metricId]).filter(v => v !== undefined && !isNaN(v))
-        const a = avgOf(vals)
-        return a === null ? '—' : a.toFixed(1)
+        const a = avgOf(evaluationsPeriodo.filter(e => temNota(e, metricId)).map(e => e.scores[metricId]))
+        return a === null ? '—' : a.toFixed(2)
     }
+    const qtdAvaliacoesMetric = (metricId: string) => evaluationsPeriodo.filter(e => temNota(e, metricId)).length
 
     const mediaGeral = (): string => {
         const allVals: number[] = []
-        latestMonthEvals.forEach(e => metrics.forEach(m => {
-            const v = e.scores[m.id]
-            if (v !== undefined && !isNaN(v)) allVals.push(v)
+        evaluationsPeriodo.forEach(e => metrics.forEach(m => {
+            if (temNota(e, m.id)) allVals.push(e.scores[m.id])
         }))
         const a = avgOf(allVals)
-        return a === null ? '—' : a.toFixed(1)
+        return a === null ? '—' : a.toFixed(2)
     }
 
     const groups = new Map<string, Avaliacao[]>()
-    for (const e of evaluations) {
+    for (const e of evaluationsPeriodo) {
         const key = `${e.ano}-${String(e.mes).padStart(2, '0')}`
         if (!groups.has(key)) groups.set(key, [])
         groups.get(key)!.push(e)
@@ -210,13 +239,29 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
         .map(([key, evs]) => {
             const [ano, mes] = key.split('-').map(Number)
             const point: any = { name: `${MESES_CURTOS[mes - 1]}/${ano}` }
-            for (const m of metrics) {
-                const vals = evs.map(e => e.scores[m.id]).filter(v => v !== undefined && !isNaN(v))
+            for (const m of metricsComDados) {
+                const vals = evs.filter(e => temNota(e, m.id)).map(e => e.scores[m.id])
                 const a = avgOf(vals)
                 point[m.titulo] = a === null ? null : Number(a.toFixed(2))
             }
             return point
         })
+
+    const seletorPeriodo = (
+        <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Período:</span>
+            {PERIODOS.map(p => (
+                <button
+                    key={p.id}
+                    onClick={() => setPeriodo(p.id)}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${periodo === p.id ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-violet-100 dark:hover:bg-violet-500/10 hover:text-violet-700'}`}
+                >
+                    {p.label}
+                </button>
+            ))}
+            <span className="text-xs text-slate-400 ml-auto">{descricaoPeriodo.charAt(0).toUpperCase() + descricaoPeriodo.slice(1)}</span>
+        </div>
+    )
 
     if (loading) {
         return <div className="p-8 text-center text-slate-400 text-sm">Carregando avaliações...</div>
@@ -246,8 +291,25 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
         )
     }
 
+    if (evaluationsPeriodo.length === 0) {
+        return (
+            <div className="space-y-6">
+                {seletorPeriodo}
+                <Card className="border-none shadow-sm bg-white dark:bg-[#0F172A] rounded-2xl">
+                    <CardContent className="p-10 text-center text-slate-400">
+                        <Star className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                        <p className="font-semibold text-sm">Nenhuma avaliação recebida {descricaoPeriodo}.</p>
+                        <p className="text-xs mt-1 max-w-md mx-auto">Escolha um período maior para ver as avaliações anteriores.</p>
+                    </CardContent>
+                </Card>
+            </div>
+        )
+    }
+
     return (
         <div className="space-y-6">
+            {seletorPeriodo}
+
             {/* Cards por competência */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 {metrics.map((m, idx) => {
@@ -263,7 +325,7 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                                 <p className="text-xs font-bold uppercase text-slate-400 tracking-wider line-clamp-2">{m.titulo}</p>
                             </div>
                             <div className={`text-3xl font-display font-bold ${style.color}`}>{avgMetric(m.id)}</div>
-                            <p className="text-xs text-slate-500 mt-1.5 font-medium">{latestMonthEvals.length} aval. em {ultimoMesLabel}</p>
+                            <p className="text-xs text-slate-500 mt-1.5 font-medium">{qtdAvaliacoesMetric(m.id)} aval. {descricaoPeriodo}</p>
                         </div>
                     )
                 })}
@@ -271,9 +333,9 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
 
             {/* Stats gerais (sem quantidade de projetos) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <CardStat title="Média Geral" value={mediaGeral()} trend={`${latestMonthEvals.length} aval. em ${ultimoMesLabel}`} color="text-green-500" />
-                <CardStat title="Total Avaliações" value={String(evaluations.length)} trend="Recebidas neste formulário" color="text-blue-500" />
-                <CardStat title="Competências Avaliadas" value={String(metricsComDados.length)} trend="Perguntas de escala do formulário" color="text-violet-500" />
+                <CardStat title="Média Geral" value={mediaGeral()} trend={`${evaluationsPeriodo.length} aval. ${descricaoPeriodo}`} color="text-green-500" />
+                <CardStat title="Total Avaliações" value={String(evaluationsPeriodo.length)} trend={`Recebidas ${descricaoPeriodo}`} color="text-blue-500" />
+                <CardStat title="Competências Avaliadas" value={String(metricsComDados.length)} trend={`Com avaliação ${descricaoPeriodo}`} color="text-violet-500" />
             </div>
 
             {/* Evolução no tempo */}
@@ -325,13 +387,11 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                             <tbody>
                                 {Array.from(groups.entries())
                                     .sort((a, b) => b[0].localeCompare(a[0]))
-                                    .slice(0, 12)
                                     .map(([key, evs]) => {
                                         const [ano, mes] = key.split('-').map(Number)
                                         const monthVals: number[] = []
                                         evs.forEach(e => metrics.forEach(m => {
-                                            const v = e.scores[m.id]
-                                            if (v !== undefined && !isNaN(v)) monthVals.push(v)
+                                            if (temNota(e, m.id)) monthVals.push(e.scores[m.id])
                                         }))
                                         const monthAvg = avgOf(monthVals)
                                         const monthAvgColor = monthAvg === null ? 'text-slate-400' : monthAvg >= 4.5 ? 'text-emerald-500' : monthAvg >= 3.5 ? 'text-amber-500' : 'text-rose-500'
@@ -341,11 +401,10 @@ export function FormularioCompetenciasView({ formularioIds, colaboradorId, usarM
                                                     {MESES[mes - 1]}/{ano}
                                                     <span className="text-slate-400 font-normal ml-1.5">({evs.length} aval.)</span>
                                                 </td>
-                                                <td className={`py-3 px-3 font-extrabold ${monthAvgColor} border-b border-slate-50 dark:border-slate-800/50`}>{monthAvg === null ? '—' : monthAvg.toFixed(1)}</td>
+                                                <td className={`py-3 px-3 font-extrabold ${monthAvgColor} border-b border-slate-50 dark:border-slate-800/50`}>{monthAvg === null ? '—' : monthAvg.toFixed(2)}</td>
                                                 {metricsComDados.map(m => {
-                                                    const vals = evs.map(e => e.scores[m.id]).filter(v => v !== undefined && !isNaN(v))
-                                                    const a = avgOf(vals)
-                                                    const display = a === null ? '—' : a.toFixed(1)
+                                                    const a = avgOf(evs.filter(e => temNota(e, m.id)).map(e => e.scores[m.id]))
+                                                    const display = a === null ? '—' : a.toFixed(2)
                                                     const color = a === null ? 'text-slate-400' : a >= 4.5 ? 'text-emerald-500' : a >= 3.5 ? 'text-amber-500' : 'text-rose-500'
                                                     return <td key={m.id} className={`py-3 px-3 font-bold ${color} border-b border-slate-50 dark:border-slate-800/50`}>{display}</td>
                                                 })}
