@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { resolverPapelId, isDataValida, gerarHorariosDisponiveis, formatarDataBr } from '@/lib/pdi'
-import { registrarEvento } from '@/lib/pdi-server'
+import { registrarEvento, aceitarMomento, sugerirHorarioMomento } from '@/lib/pdi-server'
 
 const ACOES_COLABORADOR = ['cancelar', 'aceitar_sugestao', 'manter_original']
 const ACOES_LIDER = ['aceitar', 'sugerir_horario', 'concluir']
@@ -163,47 +163,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (action === 'aceitar') {
-        if (solicitacao.status === 'cancelado' || solicitacao.status === 'concluido') {
-            return NextResponse.json({ error: 'Esta solicitação já foi encerrada.' }, { status: 400 })
-        }
-        const { data: linha } = await supabase
-            .from('pdi_solicitacao_lideres')
-            .select('*')
-            .eq('solicitacao_id', id)
-            .eq('papel_id', meuPapelId!)
-            .single()
-        if (!linha || linha.lider_id) {
-            return NextResponse.json({ error: 'Este papel já foi aceito por outra pessoa.' }, { status: 409 })
-        }
-
-        await supabase.from('pdi_solicitacao_lideres')
-            .update({ lider_id: colaboradorId, aceito_em: new Date().toISOString() })
-            .eq('solicitacao_id', id)
-            .eq('papel_id', meuPapelId!)
-
-        // Uma solicitação com mais de um papel continua "aberta" para os
-        // papéis que ainda não têm ninguém — só a linha desse papel muda.
-        if (solicitacao.status === 'aguardando') {
-            await supabase.from('pdi_solicitacoes').update({
-                status: 'agendado', atualizado_em: new Date().toISOString(),
-            }).eq('id', id)
-        }
-
-        await registrarEvento(supabase, {
-            solicitacaoId: id,
-            tipo: 'aceite',
-            autorId: colaboradorId,
-            texto: `${meuNome} aceitou o momento (${formatarDataBr(solicitacao.data)} às ${solicitacao.hora}).`,
-            colaboradorId: solicitacao.colaborador_id,
-            cargos: solicitacao.cargos || [],
-        })
+        const r = await aceitarMomento(supabase, solicitacao, colaboradorId, meuPapelId!, meuNome)
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
         return NextResponse.json({ success: true })
     }
 
     if (action === 'sugerir_horario') {
-        if (solicitacao.status === 'cancelado' || solicitacao.status === 'concluido') {
-            return NextResponse.json({ error: 'Esta solicitação já foi encerrada.' }, { status: 400 })
-        }
         const { data, hora, motivo } = body
         // A sugestão do líder pode ser no mesmo dia (diferente da solicitação
         // original, que exige a partir de amanhã) — daí o `true` abaixo.
@@ -213,21 +178,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         if (!hora || !gerarHorariosDisponiveis(data).includes(hora)) {
             return NextResponse.json({ error: 'Horário inválido.' }, { status: 400 })
         }
-
-        await supabase.from('pdi_solicitacoes').update({
-            status: 'reagendado',
-            sugestao: { data, hora, motivo: motivo || null, lider_id: colaboradorId, papel_id: meuPapelId },
-            atualizado_em: new Date().toISOString(),
-        }).eq('id', id)
-
-        await registrarEvento(supabase, {
-            solicitacaoId: id,
-            tipo: 'sugestao',
-            autorId: colaboradorId,
-            texto: `${meuNome} sugeriu novo horário: ${formatarDataBr(data)} às ${hora}.`,
-            colaboradorId: solicitacao.colaborador_id,
-            cargos: solicitacao.cargos || [],
-        })
+        const r = await sugerirHorarioMomento(supabase, solicitacao, colaboradorId, meuPapelId!, meuNome, { data, hora, motivo })
+        if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status })
         return NextResponse.json({ success: true })
     }
 
