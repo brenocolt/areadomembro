@@ -372,8 +372,9 @@ export async function exigirLider(supabase: any, colaboradorId: string | undefin
 }
 
 // Valida e normaliza o corpo de criação/edição de um item do banco.
-export function lerItemDoBanco(body: Record<string, unknown>):
-    { ok: true, item: { titulo: string, conteudo: string | null, resposta: string | null, categoria: string | null, link: string | null } }
+// `alternativas`/`correta` só valem para questões (tipo = 'questao').
+export function lerItemDoBanco(body: Record<string, unknown>, tipo: string):
+    { ok: true, item: { titulo: string, conteudo: string | null, resposta: string | null, categoria: string | null, link: string | null, alternativas: string[] | null, correta: number | null } }
     | { ok: false, error: string } {
     const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
     const titulo = texto(body.titulo)
@@ -385,7 +386,22 @@ export function lerItemDoBanco(body: Record<string, unknown>):
     if ((categoria?.length ?? 0) > 60) return { ok: false, error: 'Categoria muito longa.' }
     const link = texto(body.link)
     if (link && !/^https?:\/\//i.test(link)) return { ok: false, error: 'O link precisa começar com http:// ou https://.' }
-    return { ok: true, item: { titulo, conteudo, resposta, categoria, link } }
+
+    let alternativas: string[] | null = null
+    let correta: number | null = null
+    if (tipo === 'questao' && Array.isArray(body.alternativas)) {
+        const lista = body.alternativas.map(a => (typeof a === 'string' ? a.trim() : '')).filter(Boolean)
+        if (lista.length > 0) {
+            if (lista.length < 2 || lista.length > 6) return { ok: false, error: 'Use de 2 a 6 alternativas.' }
+            if (lista.some(a => a.length > 300)) return { ok: false, error: 'Alternativa muito longa (máx. 300 caracteres).' }
+            const c = Number(body.correta)
+            if (!Number.isInteger(c) || c < 0 || c >= lista.length) return { ok: false, error: 'Marque qual alternativa é a correta.' }
+            if (!conteudo) return { ok: false, error: 'Questões com alternativas precisam de enunciado.' }
+            alternativas = lista
+            correta = c
+        }
+    }
+    return { ok: true, item: { titulo, conteudo, resposta, categoria, link, alternativas, correta } }
 }
 
 // ---------------------------------------------------------------------------

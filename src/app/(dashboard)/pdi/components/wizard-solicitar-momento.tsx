@@ -20,9 +20,13 @@ interface WizardProps {
     tipos: PdiTipoMomento[]
     onCancel: () => void
     onCriado: () => void
+    // Questões não precisam de horário: o membro treina na hora, com o banco.
+    onPraticarQuestoes: () => void
 }
 
-export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: WizardProps) {
+export function WizardSolicitarMomento({ papeis, tipos: todosOsTipos, onCancel, onCriado, onPraticarQuestoes }: WizardProps) {
+    // Cronograma, case, dúvida e outro continuam com horário marcado.
+    const tipos = todosOsTipos.filter(t => t.id !== 'questoes')
     const { colaborador } = useColaborador()
     const [passo, setPasso] = useState(1)
 
@@ -196,6 +200,14 @@ export function WizardSolicitarMomento({ papeis, tipos, onCancel, onCriado }: Wi
                     {passo === 2 && (
                         <div className="space-y-4">
                             <h2 className="text-lg font-bold text-slate-900 dark:text-white">Que tipo de momento você precisa?</h2>
+                            {todosOsTipos.some(t => t.id === 'questoes') && (
+                                <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5">
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                                        <strong>Quer treinar com questões?</strong> Não precisa de horário: você responde agora e vê o gabarito e seu índice de acerto.
+                                    </p>
+                                    <Button type="button" size="sm" onClick={onPraticarQuestoes} className="rounded-xl font-bold shrink-0">Praticar agora</Button>
+                                </div>
+                            )}
                             {tipos.map(t => {
                                 const checked = tiposSelecionados.includes(t.id)
                                 return (

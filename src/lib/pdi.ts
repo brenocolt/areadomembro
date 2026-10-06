@@ -180,6 +180,8 @@ export interface PdiBancoItem {
     resposta: string | null
     categoria: string | null
     link: string | null
+    alternativas: string[] | null
+    correta: number | null
     autor_id: string
     criado_em: string
     atualizado_em: string
@@ -195,8 +197,35 @@ export const PDI_BANCOS: Record<PdiBancoTipo, {
     labelCategoria: string
 }> = {
     case: { plural: 'Cases', singular: 'case', tipoMomentoId: 'case', labelConteudo: 'Descrição do case', labelResposta: 'Resolução / orientações', labelCategoria: 'Tipo de case' },
-    questao: { plural: 'Questões', singular: 'questão', tipoMomentoId: 'questoes', labelConteudo: 'Enunciado', labelResposta: 'Gabarito', labelCategoria: 'Área' },
+    questao: { plural: 'Questões', singular: 'questão', tipoMomentoId: 'questoes', labelConteudo: 'Enunciado', labelResposta: 'Comentário da resposta', labelCategoria: 'Área' },
     cronograma: { plural: 'Cronogramas', singular: 'cronograma', tipoMomentoId: 'cronograma', labelConteudo: 'Descrição', labelResposta: null, labelCategoria: 'Área' },
 }
 
 export const PDI_BANCO_TIPOS = Object.keys(PDI_BANCOS) as PdiBancoTipo[]
+
+// Treino de questões (membros): a questão chega SEM a resposta certa; a
+// correção acontece no servidor.
+export interface PdiQuestaoTreino {
+    id: string
+    categoria: string | null
+    enunciado: string
+    alternativas: string[]
+}
+
+export interface PdiResultadoQuestao {
+    id: string
+    acertou: boolean
+    escolha: number | null
+    correta: number
+    comentario: string | null
+}
+
+export interface PdiDesempenho {
+    total: number
+    acertos: number
+    porCategoria: { categoria: string, total: number, acertos: number }[]
+}
+
+export function indiceDeAcerto(acertos: number, total: number): number {
+    return total > 0 ? Math.round((acertos / total) * 100) : 0
+}
