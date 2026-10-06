@@ -342,3 +342,40 @@ export async function sincronizarSlack(supabase: any, params: { solicitacaoId: s
         await responderNaThread(solicitacao.slack_channel, solicitacao.slack_ts, params.texto)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Bancos do PDI: acesso só para líderes (gerente = Tático, diretor =
+// Estratégico), a mesma regra de quem vê "Para Eu Atender".
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function exigirLider(supabase: any, colaboradorId: string | undefined):
+    Promise<{ ok: true, colaboradorId: string } | { ok: false, status: number, error: string }> {
+    if (!colaboradorId) return { ok: false, status: 401, error: 'Não autenticado.' }
+    const { data: colaborador } = await supabase
+        .from('colaboradores')
+        .select('cargo_atual, nucleo_atual, status')
+        .eq('id', colaboradorId)
+        .single()
+    if (!colaborador || colaborador.status !== 'Ativo' || !resolverPapelId(colaborador.cargo_atual, colaborador.nucleo_atual)) {
+        return { ok: false, status: 403, error: 'Os bancos do PDI são exclusivos para gerentes e diretores.' }
+    }
+    return { ok: true, colaboradorId }
+}
+
+// Valida e normaliza o corpo de criação/edição de um item do banco.
+export function lerItemDoBanco(body: Record<string, unknown>):
+    { ok: true, item: { titulo: string, conteudo: string | null, resposta: string | null, categoria: string | null, link: string | null } }
+    | { ok: false, error: string } {
+    const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+    const titulo = texto(body.titulo)
+    if (!titulo || titulo.length > 150) return { ok: false, error: 'Informe um título (até 150 caracteres).' }
+    const conteudo = texto(body.conteudo)
+    const resposta = texto(body.resposta)
+    if ((conteudo?.length ?? 0) > 5000 || (resposta?.length ?? 0) > 5000) return { ok: false, error: 'Texto muito longo (máx. 5000 caracteres).' }
+    const categoria = texto(body.categoria)
+    if ((categoria?.length ?? 0) > 60) return { ok: false, error: 'Categoria muito longa.' }
+    const link = texto(body.link)
+    if (link && !/^https?:\/\//i.test(link)) return { ok: false, error: 'O link precisa começar com http:// ou https://.' }
+    return { ok: true, item: { titulo, conteudo, resposta, categoria, link } }
+}

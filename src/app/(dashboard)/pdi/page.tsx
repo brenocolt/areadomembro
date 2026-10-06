@@ -17,6 +17,7 @@ import {
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
+import { BancosPdi } from "./components/bancos-pdi"
 
 function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPapel[], tipos: PdiTipoMomento[], onClick: () => void }) {
     const papeisNomes = nomesDosPapeis(papeis, s.cargos || [])
@@ -44,7 +45,7 @@ function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPap
 }
 
 export default function PdiPage() {
-    const { colaborador, colaboradorId } = useColaborador()
+    const { colaborador, colaboradorId, role } = useColaborador()
     const [papeis, setPapeis] = useState<PdiPapel[]>([])
     const [tipos, setTipos] = useState<PdiTipoMomento[]>([])
     const [solicitacoes, setSolicitacoes] = useState<any[]>([])
@@ -247,6 +248,7 @@ export default function PdiPage() {
                         <TabsList>
                             <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>
                             <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>
+                            <TabsTrigger value="bancos">Bancos</TabsTrigger>
                         </TabsList>
                     )}
 
@@ -283,6 +285,12 @@ export default function PdiPage() {
                     {meuPapelId && (
                         <TabsContent value="para-atender" className="mt-4">
                             <PainelLider papeis={papeis} tipos={tipos} />
+                        </TabsContent>
+                    )}
+
+                    {meuPapelId && (
+                        <TabsContent value="bancos" className="mt-4">
+                            <BancosPdi tipos={tipos} colaboradorId={colaboradorId} isAdmin={(role ?? '').toUpperCase() === 'ADMIN'} />
                         </TabsContent>
                     )}
                 </Tabs>
