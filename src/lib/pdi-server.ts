@@ -11,6 +11,7 @@
 //    /api/slack/interactions) e mantém a mensagem atualizada.
 //  - Incoming Webhook (SLACK_WEBHOOK_URL): só avisa, sem botões.
 import { resolverPapelId, formatarDataBr, formatarTiposComOpcoes } from '@/lib/pdi'
+import { agendaConfigurada, criarEvento, atualizarEvento, removerEvento, type EventoAgenda } from '@/lib/google-calendar'
 import {
     slackBotConfigurado, postarMensagem, atualizarMensagem, responderNaThread, type SlackBlock,
 } from '@/lib/slack'
@@ -70,6 +71,13 @@ export async function registrarEvento(supabase: any, params: RegistrarEventoPara
         else await postarNoWebhook(params)
     } catch (err) {
         console.error('Erro ao postar evento do PDI no Slack:', err)
+    }
+
+    // Idem para o Google Agenda: nunca impede a operação.
+    try {
+        await sincronizarAgenda(supabase, params.solicitacaoId)
+    } catch (err) {
+        console.error('Erro ao sincronizar o PDI com o Google Agenda:', err)
     }
 }
 
@@ -378,4 +386,96 @@ export function lerItemDoBanco(body: Record<string, unknown>):
     const link = texto(body.link)
     if (link && !/^https?:\/\//i.test(link)) return { ok: false, error: 'O link precisa começar com http:// ou https://.' }
     return { ok: true, item: { titulo, conteudo, resposta, categoria, link } }
+}
+
+// ---------------------------------------------------------------------------
+// Google Agenda: cada pessoa envolvida (quem pediu + quem aceitou) tem um
+// evento na própria agenda. Funciona por "reconciliação": lê o estado atual
+// da solicitação no banco e deixa as agendas iguais a ele (cria o que falta,
+// atualiza horário/título, remove quem saiu ou se cancelou) — por isso serve
+// para qualquer evento (novo pedido, aceite, novo horário, cancelamento).
+// ---------------------------------------------------------------------------
+
+function somarUmaHora(dataStr: string, hora: string): string {
+    const [h, m] = hora.split(':').map(Number)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${dataStr}T${pad(h + 1)}:${pad(m)}:00`
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function sincronizarAgenda(supabase: any, solicitacaoId: string): Promise<void> {
+    if (!agendaConfigurada()) return
+
+    const { data: s } = await supabase
+        .from('pdi_solicitacoes')
+        .select('*, colaborador:colaborador_id(id, nome, email_corporativo), pdi_solicitacao_lideres(papel_id, lider_id, lider:lider_id(id, nome, email_corporativo))')
+        .eq('id', solicitacaoId)
+        .single()
+    if (!s) return
+    const { data: tipos } = await supabase.from('pdi_tipos_momento').select('*')
+    const { data: existentes } = await supabase.from('pdi_agenda_eventos').select('*').eq('solicitacao_id', solicitacaoId)
+
+    type Pessoa = { id: string, nome: string, email: string | null }
+    // Quem deve ter o evento: solicitante + líderes que já aceitaram. Cancelada = ninguém.
+    const pessoas = new Map<string, Pessoa>()
+    if (s.status !== 'cancelado') {
+        if (s.colaborador) pessoas.set(s.colaborador.id, { id: s.colaborador.id, nome: s.colaborador.nome, email: s.colaborador.email_corporativo })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const l of (s.pdi_solicitacao_lideres || []) as any[]) {
+            if (l.lider) pessoas.set(l.lider.id, { id: l.lider.id, nome: l.lider.nome, email: l.lider.email_corporativo })
+        }
+    }
+
+    // Remove eventos de quem não deve mais ter (cancelamento ou saída).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const ex of (existentes || []) as any[]) {
+        if (pessoas.has(ex.colaborador_id)) continue
+        try {
+            await removerEvento(ex.email, ex.google_event_id)
+            await supabase.from('pdi_agenda_eventos').delete().eq('solicitacao_id', solicitacaoId).eq('colaborador_id', ex.colaborador_id)
+        } catch (err) {
+            console.error('Erro ao remover evento do Google Agenda:', err)
+        }
+    }
+    if (pessoas.size === 0) return
+
+    const tiposTexto = formatarTiposComOpcoes(tipos || [], s.tipos || [], s.detalhes || {}, s.outro_texto)
+    const hora = String(s.hora).slice(0, 5)
+    const prefixo: Record<string, string> = { aguardando: '[Aguardando aceite] ', reagendado: '[Novo horário sugerido] ', concluido: '[Concluído] ' }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const aceitos = ((s.pdi_solicitacao_lideres || []) as any[]).filter(l => l.lider?.nome).map(l => l.lider.nome as string)
+    const linhas = [
+        `Solicitante: ${s.colaborador?.nome || '—'}`,
+        `Tipo: ${tiposTexto || '—'}`,
+        `Líder: ${aceitos.length > 0 ? aceitos.join(', ') : 'aguardando alguém aceitar'}`,
+    ]
+    if (s.descricao) linhas.push(`Contexto: ${s.descricao}`)
+    if (s.status === 'reagendado' && s.sugestao) {
+        linhas.push(`Novo horário sugerido: ${formatarDataBr(s.sugestao.data)} às ${s.sugestao.hora}${s.sugestao.motivo ? ` — ${s.sugestao.motivo}` : ''}`)
+    }
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+    if (appUrl) linhas.push(`Abrir na Área do Membro: ${appUrl}/pdi?solicitacao=${s.id}`)
+
+    const evento: EventoAgenda = {
+        titulo: `${prefixo[s.status] || ''}Momento PDI: ${tiposTexto}`,
+        descricao: linhas.join('\n'),
+        inicio: `${s.data}T${hora}:00`,
+        fim: somarUmaHora(s.data, hora),
+        solicitacaoId: s.id,
+    }
+
+    for (const pessoa of pessoas.values()) {
+        if (!pessoa.email) { console.warn(`PDI/Agenda: ${pessoa.nome} sem e-mail corporativo, evento não criado.`); continue }
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ex = ((existentes || []) as any[]).find(e => e.colaborador_id === pessoa.id)
+            if (ex && await atualizarEvento(ex.email, ex.google_event_id, evento)) continue
+            const id = await criarEvento(pessoa.email, evento)
+            await supabase.from('pdi_agenda_eventos').upsert({
+                solicitacao_id: s.id, colaborador_id: pessoa.id, email: pessoa.email, google_event_id: id,
+            })
+        } catch (err) {
+            console.error(`Erro no Google Agenda de ${pessoa.nome}:`, err)
+        }
+    }
 }

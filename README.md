@@ -56,3 +56,25 @@ Configuração:
 O e-mail do perfil do Slack precisa ser igual ao `email_corporativo` do
 colaborador. Sem `SLACK_BOT_TOKEN`, cai no modo antigo (`SLACK_WEBHOOK_URL`,
 só aviso, sem botões).
+
+## Google Agenda — momentos de desenvolvimento (PDI)
+
+Quando o Google Agenda está configurado, cada momento cria um evento direto na
+agenda de quem pediu; quando um líder aceita, o evento também entra na agenda
+dele. Pedidos de novo horário aceitos movem os eventos; cancelamentos os
+removem. Sem a configuração abaixo, nada muda (a integração é ignorada).
+
+Configuração (precisa ser admin do Google Workspace):
+
+1. No Google Cloud Console, criar um projeto e ativar a **Google Calendar API**.
+2. Criar uma **conta de serviço** e gerar uma chave **JSON**. Anotar o
+   *Client ID* (número) da conta de serviço.
+3. No Admin Console do Workspace → Segurança → Controles de API →
+   **Delegação em todo o domínio** → Adicionar: informar o Client ID e o escopo
+   `https://www.googleapis.com/auth/calendar.events`.
+4. Variável de ambiente `GOOGLE_SERVICE_ACCOUNT_JSON` com o conteúdo inteiro do
+   JSON (ou `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY`).
+5. Rodar a migração `supabase/migrations/20261006_pdi_agenda_google.sql`.
+
+O e-mail usado é o `email_corporativo` do colaborador, que precisa ser uma
+conta do mesmo domínio do Workspace.
