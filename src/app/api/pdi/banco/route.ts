@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { exigirLider, lerItemDoBanco } from '@/lib/pdi-server'
+import { exigirAcessoBancos, lerItemDoBanco } from '@/lib/pdi-server'
 import { PDI_BANCO_TIPOS, type PdiBancoTipo } from '@/lib/pdi'
 
 export async function GET(req: NextRequest) {
     const session = await auth()
     const supabase = createServerSupabaseClient()
-    const acesso = await exigirLider(supabase, (session?.user as any)?.colaborador_id)
+    const acesso = await exigirAcessoBancos(supabase, (session?.user as any)?.colaborador_id)
     if (!acesso.ok) return NextResponse.json({ error: acesso.error }, { status: acesso.status })
 
     const tipo = req.nextUrl.searchParams.get('tipo')
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     const session = await auth()
     const supabase = createServerSupabaseClient()
-    const acesso = await exigirLider(supabase, (session?.user as any)?.colaborador_id)
+    const acesso = await exigirAcessoBancos(supabase, (session?.user as any)?.colaborador_id)
     if (!acesso.ok) return NextResponse.json({ error: acesso.error }, { status: acesso.status })
 
     const body = await req.json()

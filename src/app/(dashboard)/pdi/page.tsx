@@ -13,7 +13,7 @@ import {
     PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, formatarLista, nomesDosPapeis,
     linkAdicionarAgenda, PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS, resolverPapelId,
-    construirPapeisPorNucleo, maisRecentePrimeiro,
+    construirPapeisPorNucleo, maisRecentePrimeiro, BANCOS_ABERTOS_PARA_TODOS,
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
@@ -255,11 +255,11 @@ export default function PdiPage() {
                 <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
             ) : (
                 <Tabs defaultValue="meus-pedidos">
-                    {meuPapelId && (
+                    {(meuPapelId || BANCOS_ABERTOS_PARA_TODOS) && (
                         <TabsList>
                             <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>
-                            <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>
-                            <TabsTrigger value="bancos">Bancos</TabsTrigger>
+                            {meuPapelId && <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>}
+                            {(meuPapelId || BANCOS_ABERTOS_PARA_TODOS) && <TabsTrigger value="bancos">Bancos</TabsTrigger>}
                         </TabsList>
                     )}
 
@@ -299,7 +299,7 @@ export default function PdiPage() {
                         </TabsContent>
                     )}
 
-                    {meuPapelId && (
+                    {(meuPapelId || BANCOS_ABERTOS_PARA_TODOS) && (
                         <TabsContent value="bancos" className="mt-4">
                             <BancosPdi tipos={tipos} colaboradorId={colaboradorId} isAdmin={(role ?? '').toUpperCase() === 'ADMIN'} />
                         </TabsContent>

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { exigirLider, lerItemDoBanco } from '@/lib/pdi-server'
+import { exigirAcessoBancos, lerItemDoBanco } from '@/lib/pdi-server'
 
 // Editar e excluir: só quem criou o item (ou um administrador).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function carregarComPermissao(id: string): Promise<{ ok: true, supabase: any, tipo: string } | { ok: false, res: NextResponse }> {
     const session = await auth()
     const supabase = createServerSupabaseClient()
-    const acesso = await exigirLider(supabase, (session?.user as any)?.colaborador_id)
+    const acesso = await exigirAcessoBancos(supabase, (session?.user as any)?.colaborador_id)
     if (!acesso.ok) return { ok: false, res: NextResponse.json({ error: acesso.error }, { status: acesso.status }) }
 
     const { data: item } = await supabase.from('pdi_banco_itens').select('autor_id, tipo').eq('id', id).single()

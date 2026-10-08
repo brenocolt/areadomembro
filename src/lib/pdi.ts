@@ -234,3 +234,8 @@ export function indiceDeAcerto(acertos: number, total: number): number {
 export function maisRecentePrimeiro<T extends { data: string, hora: string }>(lista: T[]): T[] {
     return lista.slice().sort((a, b) => `${b.data}T${b.hora}`.localeCompare(`${a.data}T${a.hora}`))
 }
+
+// TEMPORÁRIO (fase de testes): com `true`, a aba Bancos e as rotas
+// /api/pdi/banco ficam abertas a todo membro ativo. Para voltar a valer só
+// para gerentes (Tático) e diretor (Estratégico), basta trocar para `false`.
+export const BANCOS_ABERTOS_PARA_TODOS = true
