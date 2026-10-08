@@ -180,8 +180,6 @@ export interface PdiBancoItem {
     resposta: string | null
     categoria: string | null
     link: string | null
-    alternativas: string[] | null
-    correta: number | null
     autor_id: string
     criado_em: string
     atualizado_em: string
@@ -197,28 +195,25 @@ export const PDI_BANCOS: Record<PdiBancoTipo, {
     labelCategoria: string
 }> = {
     case: { plural: 'Cases', singular: 'case', tipoMomentoId: 'case', labelConteudo: 'Descrição do case', labelResposta: 'Resolução / orientações', labelCategoria: 'Tipo de case' },
-    questao: { plural: 'Questões', singular: 'questão', tipoMomentoId: 'questoes', labelConteudo: 'Enunciado', labelResposta: 'Comentário da resposta', labelCategoria: 'Área' },
+    questao: { plural: 'Questões', singular: 'questão', tipoMomentoId: 'questoes', labelConteudo: 'Enunciado', labelResposta: 'Gabarito (o membro só vê depois de responder)', labelCategoria: 'Área' },
     cronograma: { plural: 'Cronogramas', singular: 'cronograma', tipoMomentoId: 'cronograma', labelConteudo: 'Descrição', labelResposta: null, labelCategoria: 'Área' },
 }
 
 export const PDI_BANCO_TIPOS = Object.keys(PDI_BANCOS) as PdiBancoTipo[]
 
-// Treino de questões (membros): a questão chega SEM a resposta certa; a
-// correção acontece no servidor.
+// Treino de questões (membros) — questões subjetivas: o membro escreve a
+// resposta, vê o gabarito e avalia o próprio acerto. O gabarito só é buscado
+// depois (POST action 'gabarito'), nunca vem junto com a questão.
 export interface PdiQuestaoTreino {
     id: string
     categoria: string | null
     enunciado: string
-    alternativas: string[]
 }
 
-export interface PdiResultadoQuestao {
-    id: string
-    acertou: boolean
-    escolha: number | null
-    correta: number
-    comentario: string | null
-}
+export type PdiAutoavaliacao = 'certo' | 'parcial' | 'errado'
+
+// "Em parte" vale meio ponto no índice de acerto.
+export const PDI_PESO_AUTOAVALIACAO: Record<PdiAutoavaliacao, number> = { certo: 1, parcial: 0.5, errado: 0 }
 
 export interface PdiDesempenho {
     total: number

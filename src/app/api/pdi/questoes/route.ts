@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import type { PdiDesempenho, PdiQuestaoTreino, PdiResultadoQuestao } from '@/lib/pdi'
+import { PDI_PESO_AUTOAVALIACAO, type PdiAutoavaliacao, type PdiDesempenho, type PdiQuestaoTreino } from '@/lib/pdi'
 
-// Treino de questões — aberto a qualquer membro logado. O banco em si é só
-// para líderes, mas aqui as questões saem SEM a resposta certa e sem o
-// comentário; eles só voltam na correção (POST).
+// Treino de questões subjetivas — aberto a qualquer membro logado. O banco em
+// si é restrito, mas aqui as questões saem SEM o gabarito; ele só é buscado
+// (POST action 'gabarito') depois que o membro escreve a resposta. Entram no
+// treino as questões do banco que têm enunciado e gabarito.
 
 const MAX_QUESTOES = 30
+const MAX_RESPOSTA = 5000
 const SEM_CATEGORIA = 'Sem categoria'
+const NIVEIS = Object.keys(PDI_PESO_AUTOAVALIACAO)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function lerDesempenho(supabase: any, colaboradorId: string): Promise<PdiDesempenho> {
@@ -19,12 +22,12 @@ async function lerDesempenho(supabase: any, colaboradorId: string): Promise<PdiD
     const porCategoria = new Map<string, { total: number, acertos: number }>()
     let total = 0, acertos = 0
     for (const t of data || []) {
-        for (const it of (t.itens || []) as { categoria: string | null, acertou: boolean }[]) {
+        for (const it of (t.itens || []) as { categoria: string | null, nivel: PdiAutoavaliacao }[]) {
+            const peso = PDI_PESO_AUTOAVALIACAO[it.nivel] ?? 0
             const cat = it.categoria || SEM_CATEGORIA
             const agg = porCategoria.get(cat) || { total: 0, acertos: 0 }
-            agg.total++
-            total++
-            if (it.acertou) { agg.acertos++; acertos++ }
+            agg.total++; agg.acertos += peso
+            total++; acertos += peso
             porCategoria.set(cat, agg)
         }
     }
@@ -44,11 +47,12 @@ export async function GET(req: NextRequest) {
 
     const { data: banco, error } = await supabase
         .from('pdi_banco_itens')
-        .select('id, categoria, conteudo, alternativas')
+        .select('id, categoria, conteudo')
         .eq('tipo', 'questao')
-        .not('alternativas', 'is', null)
+        .not('conteudo', 'is', null)
+        .not('resposta', 'is', null)
     if (error) return NextResponse.json({ error: 'Erro ao buscar questões.', detalhe: error.message }, { status: 500 })
-    const disponiveis = (banco || []) as { id: string, categoria: string | null, conteudo: string | null, alternativas: string[] }[]
+    const disponiveis = (banco || []) as { id: string, categoria: string | null, conteudo: string }[]
 
     if (req.nextUrl.searchParams.get('resumo')) {
         const contagem = new Map<string, number>()
@@ -70,54 +74,64 @@ export async function GET(req: NextRequest) {
         const j = Math.floor(Math.random() * (i + 1));
         [elegiveis[i], elegiveis[j]] = [elegiveis[j], elegiveis[i]]
     }
-    const questoes: PdiQuestaoTreino[] = elegiveis.slice(0, qtd).map(q => ({
-        id: q.id, categoria: q.categoria, enunciado: q.conteudo || '', alternativas: q.alternativas,
-    }))
+    const questoes: PdiQuestaoTreino[] = elegiveis.slice(0, qtd).map(q => ({ id: q.id, categoria: q.categoria, enunciado: q.conteudo }))
     return NextResponse.json({ questoes })
 }
 
-// POST { respostas: [{ id, escolha }] } → corrige, grava a tentativa e devolve
-// o gabarito com o índice de acerto.
+// POST { action: 'gabarito', ids }                 → gabaritos das questões
+// POST { action: 'finalizar', avaliacoes: [...] }  → grava a tentativa e devolve o desempenho
 export async function POST(req: NextRequest) {
     const session = await auth()
     const colaboradorId = (session?.user as { colaborador_id?: string } | undefined)?.colaborador_id
     if (!colaboradorId) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
-
-    const body = await req.json()
-    const respostas: { id: string, escolha: number | null }[] = Array.isArray(body.respostas) ? body.respostas : []
-    const ids = respostas.map(r => r?.id)
-    if (respostas.length === 0 || respostas.length > MAX_QUESTOES || new Set(ids).size !== ids.length || ids.some(id => typeof id !== 'string')) {
-        return NextResponse.json({ error: 'Respostas inválidas.' }, { status: 400 })
-    }
-
     const supabase = createServerSupabaseClient()
-    const { data: questoes } = await supabase
-        .from('pdi_banco_itens')
-        .select('id, categoria, alternativas, correta, resposta')
-        .eq('tipo', 'questao')
-        .in('id', ids)
-    const porId = new Map<string, { id: string, categoria: string | null, alternativas: string[] | null, correta: number | null, resposta: string | null }>(
-        (questoes || []).map((q: { id: string }) => [q.id, q as never])
-    )
-    if (ids.some(id => !porId.get(id)?.alternativas || porId.get(id)?.correta == null)) {
-        return NextResponse.json({ error: 'Alguma questão não existe mais. Gere um novo treino.' }, { status: 400 })
+    const body = await req.json()
+
+    if (body.action === 'gabarito') {
+        const ids: string[] = Array.isArray(body.ids) ? body.ids : []
+        if (ids.length === 0 || ids.length > MAX_QUESTOES || ids.some(id => typeof id !== 'string')) {
+            return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 })
+        }
+        const { data, error } = await supabase
+            .from('pdi_banco_itens')
+            .select('id, resposta')
+            .eq('tipo', 'questao')
+            .in('id', ids)
+        if (error) return NextResponse.json({ error: 'Erro ao buscar o gabarito.', detalhe: error.message }, { status: 500 })
+        return NextResponse.json({ gabaritos: (data || []).map((q: { id: string, resposta: string | null }) => ({ id: q.id, gabarito: q.resposta })) })
     }
 
-    const resultados: PdiResultadoQuestao[] = []
-    const itens: { questao_id: string, categoria: string | null, escolha: number | null, correta: number, acertou: boolean }[] = []
-    for (const r of respostas) {
-        const q = porId.get(r.id)!
-        const escolha = Number.isInteger(r.escolha) && r.escolha! >= 0 && r.escolha! < q.alternativas!.length ? r.escolha! : null
-        const acertou = escolha === q.correta
-        resultados.push({ id: q.id, acertou, escolha, correta: q.correta!, comentario: q.resposta })
-        itens.push({ questao_id: q.id, categoria: q.categoria, escolha, correta: q.correta!, acertou })
+    if (body.action === 'finalizar') {
+        const avaliacoes: { id: string, resposta: string | null, nivel: PdiAutoavaliacao }[] = Array.isArray(body.avaliacoes) ? body.avaliacoes : []
+        const ids = avaliacoes.map(a => a?.id)
+        if (avaliacoes.length === 0 || avaliacoes.length > MAX_QUESTOES || new Set(ids).size !== ids.length
+            || avaliacoes.some(a => typeof a.id !== 'string' || !NIVEIS.includes(a.nivel))) {
+            return NextResponse.json({ error: 'Avaliação inválida.' }, { status: 400 })
+        }
+        const { data: questoes } = await supabase.from('pdi_banco_itens').select('id, categoria').eq('tipo', 'questao').in('id', ids)
+        const categoriaPorId = new Map<string, string | null>((questoes || []).map((q: { id: string, categoria: string | null }) => [q.id, q.categoria]))
+        if (ids.some(id => !categoriaPorId.has(id))) return NextResponse.json({ error: 'Alguma questão não existe mais.' }, { status: 400 })
+
+        const itens = avaliacoes.map(a => ({
+            questao_id: a.id,
+            categoria: categoriaPorId.get(a.id) ?? null,
+            resposta: typeof a.resposta === 'string' ? a.resposta.slice(0, MAX_RESPOSTA) : null,
+            nivel: a.nivel,
+        }))
+        const pontos = itens.reduce((n, i) => n + PDI_PESO_AUTOAVALIACAO[i.nivel], 0)
+
+        // Gravar o histórico não pode esconder o resultado do membro: se falhar,
+        // volta `salvo: false` com o motivo e a tela avisa.
+        const { error } = await supabase.from('pdi_questoes_tentativas').insert({
+            colaborador_id: colaboradorId, total: itens.length, acertos: Math.round(pontos), itens,
+        })
+        if (error) console.error('Erro ao salvar a tentativa do treino de questões:', error.message)
+        return NextResponse.json({
+            total: itens.length, acertos: pontos,
+            desempenho: await lerDesempenho(supabase, colaboradorId),
+            salvo: !error, detalheSalvar: error?.message ?? null,
+        })
     }
-    const acertos = resultados.filter(r => r.acertou).length
 
-    const { error } = await supabase.from('pdi_questoes_tentativas').insert({
-        colaborador_id: colaboradorId, total: resultados.length, acertos, itens,
-    })
-    if (error) return NextResponse.json({ error: 'Erro ao salvar o resultado.', detalhe: error.message }, { status: 500 })
-
-    return NextResponse.json({ total: resultados.length, acertos, resultados, desempenho: await lerDesempenho(supabase, colaboradorId) })
+    return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 })
 }
