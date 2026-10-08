@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Target, Plus, Clock, CheckCircle2, Loader2 } from "lucide-react"
+import { Target, Plus, Clock, CheckCircle2, Loader2, BookCheck } from "lucide-react"
 import { toast } from "sonner"
 import {
     PdiPapel, PdiTipoMomento,
@@ -17,6 +17,8 @@ import {
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
+import { BancosPdi } from "./components/bancos-pdi"
+import { TreinoQuestoes } from "./components/treino-questoes"
 
 function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPapel[], tipos: PdiTipoMomento[], onClick: () => void }) {
     const papeisNomes = nomesDosPapeis(papeis, s.cargos || [])
@@ -44,12 +46,12 @@ function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPap
 }
 
 export default function PdiPage() {
-    const { colaborador, colaboradorId } = useColaborador()
+    const { colaborador, colaboradorId, role } = useColaborador()
     const [papeis, setPapeis] = useState<PdiPapel[]>([])
     const [tipos, setTipos] = useState<PdiTipoMomento[]>([])
     const [solicitacoes, setSolicitacoes] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [view, setView] = useState<'lista' | 'wizard' | 'detalhe'>('lista')
+    const [view, setView] = useState<'lista' | 'wizard' | 'detalhe' | 'treino'>('lista')
     const [detalheId, setDetalheId] = useState<string | null>(null)
     const [acting, setActing] = useState(false)
     // Se o colaborador é Tático (líder do núcleo dele) ou Estratégico
@@ -121,8 +123,13 @@ export default function PdiPage() {
                 tipos={tipos}
                 onCancel={() => setView('lista')}
                 onCriado={async () => { await fetchTudo(); setView('lista') }}
+                onPraticarQuestoes={() => setView('treino')}
             />
         )
+    }
+
+    if (view === 'treino') {
+        return <TreinoQuestoes onVoltar={() => setView('lista')} />
     }
 
     const detalhe = solicitacoes.find(s => s.id === detalheId) || null
@@ -234,9 +241,14 @@ export default function PdiPage() {
                         <p className="text-sm text-slate-500 dark:text-slate-400">Solicite um momento com quem puder te ajudar a evoluir.</p>
                     </div>
                 </div>
-                <Button onClick={() => setView('wizard')} className="rounded-xl h-11 px-5 font-bold">
-                    <Plus className="h-4 w-4 mr-2" /> Solicitar momento
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setView('treino')} className="rounded-xl h-11 px-5 font-bold">
+                        <BookCheck className="h-4 w-4 mr-2" /> Praticar questões
+                    </Button>
+                    <Button onClick={() => setView('wizard')} className="rounded-xl h-11 px-5 font-bold">
+                        <Plus className="h-4 w-4 mr-2" /> Solicitar momento
+                    </Button>
+                </div>
             </div>
 
             {loading ? (
@@ -247,6 +259,7 @@ export default function PdiPage() {
                         <TabsList>
                             <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>
                             <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>
+                            <TabsTrigger value="bancos">Bancos</TabsTrigger>
                         </TabsList>
                     )}
 
@@ -283,6 +296,12 @@ export default function PdiPage() {
                     {meuPapelId && (
                         <TabsContent value="para-atender" className="mt-4">
                             <PainelLider papeis={papeis} tipos={tipos} />
+                        </TabsContent>
+                    )}
+
+                    {meuPapelId && (
+                        <TabsContent value="bancos" className="mt-4">
+                            <BancosPdi tipos={tipos} colaboradorId={colaboradorId} isAdmin={(role ?? '').toUpperCase() === 'ADMIN'} />
                         </TabsContent>
                     )}
                 </Tabs>

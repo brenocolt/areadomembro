@@ -165,3 +165,67 @@ export const PDI_STATUS_BADGE_CLASS: Record<string, string> = {
 export function formatarDataBr(dataStr: string): string {
     return new Date(dataStr + 'T12:00:00').toLocaleDateString('pt-BR')
 }
+
+// Bancos do PDI (cases, questões, cronogramas) — só para líderes. `tipoMomentoId`
+// liga cada banco ao tipo de momento correspondente, de onde vêm as opções de
+// categoria (pdi_tipos_momento.sub_opcoes), assim o banco acompanha o que o
+// admin configurar em "Gestão de PDI".
+export type PdiBancoTipo = 'case' | 'questao' | 'cronograma'
+
+export interface PdiBancoItem {
+    id: string
+    tipo: PdiBancoTipo
+    titulo: string
+    conteudo: string | null
+    resposta: string | null
+    categoria: string | null
+    link: string | null
+    alternativas: string[] | null
+    correta: number | null
+    autor_id: string
+    criado_em: string
+    atualizado_em: string
+    autor?: { nome: string } | null
+}
+
+export const PDI_BANCOS: Record<PdiBancoTipo, {
+    plural: string
+    singular: string
+    tipoMomentoId: string
+    labelConteudo: string
+    labelResposta: string | null
+    labelCategoria: string
+}> = {
+    case: { plural: 'Cases', singular: 'case', tipoMomentoId: 'case', labelConteudo: 'Descrição do case', labelResposta: 'Resolução / orientações', labelCategoria: 'Tipo de case' },
+    questao: { plural: 'Questões', singular: 'questão', tipoMomentoId: 'questoes', labelConteudo: 'Enunciado', labelResposta: 'Comentário da resposta', labelCategoria: 'Área' },
+    cronograma: { plural: 'Cronogramas', singular: 'cronograma', tipoMomentoId: 'cronograma', labelConteudo: 'Descrição', labelResposta: null, labelCategoria: 'Área' },
+}
+
+export const PDI_BANCO_TIPOS = Object.keys(PDI_BANCOS) as PdiBancoTipo[]
+
+// Treino de questões (membros): a questão chega SEM a resposta certa; a
+// correção acontece no servidor.
+export interface PdiQuestaoTreino {
+    id: string
+    categoria: string | null
+    enunciado: string
+    alternativas: string[]
+}
+
+export interface PdiResultadoQuestao {
+    id: string
+    acertou: boolean
+    escolha: number | null
+    correta: number
+    comentario: string | null
+}
+
+export interface PdiDesempenho {
+    total: number
+    acertos: number
+    porCategoria: { categoria: string, total: number, acertos: number }[]
+}
+
+export function indiceDeAcerto(acertos: number, total: number): number {
+    return total > 0 ? Math.round((acertos / total) * 100) : 0
+}
