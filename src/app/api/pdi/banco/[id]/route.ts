@@ -5,19 +5,19 @@ import { exigirAcessoBancos, lerItemDoBanco } from '@/lib/pdi-server'
 
 // Editar e excluir: só quem criou o item (ou um administrador).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function carregarComPermissao(id: string): Promise<{ ok: true, supabase: any, tipo: string } | { ok: false, res: NextResponse }> {
+async function carregarComPermissao(id: string): Promise<{ ok: true, supabase: any } | { ok: false, res: NextResponse }> {
     const session = await auth()
     const supabase = createServerSupabaseClient()
     const acesso = await exigirAcessoBancos(supabase, (session?.user as any)?.colaborador_id)
     if (!acesso.ok) return { ok: false, res: NextResponse.json({ error: acesso.error }, { status: acesso.status }) }
 
-    const { data: item } = await supabase.from('pdi_banco_itens').select('autor_id, tipo').eq('id', id).single()
+    const { data: item } = await supabase.from('pdi_banco_itens').select('autor_id').eq('id', id).single()
     if (!item) return { ok: false, res: NextResponse.json({ error: 'Item não encontrado.' }, { status: 404 }) }
     const isAdmin = (session?.user as any)?.role === 'ADMIN'
     if (item.autor_id !== acesso.colaboradorId && !isAdmin) {
         return { ok: false, res: NextResponse.json({ error: 'Só quem criou o item pode alterá-lo.' }, { status: 403 }) }
     }
-    return { ok: true, supabase, tipo: item.tipo }
+    return { ok: true, supabase }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const r = await carregarComPermissao(id)
     if (!r.ok) return r.res
 
-    const lido = lerItemDoBanco(await req.json(), r.tipo)
+    const lido = lerItemDoBanco(await req.json())
     if (!lido.ok) return NextResponse.json({ error: lido.error }, { status: 400 })
 
     const { data, error } = await r.supabase

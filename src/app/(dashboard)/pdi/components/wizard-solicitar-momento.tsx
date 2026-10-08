@@ -203,7 +203,7 @@ export function WizardSolicitarMomento({ papeis, tipos: todosOsTipos, onCancel, 
                             {todosOsTipos.some(t => t.id === 'questoes') && (
                                 <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-primary/30 bg-primary/5">
                                     <p className="text-xs text-slate-600 dark:text-slate-300">
-                                        <strong>Quer treinar com questões?</strong> Não precisa de horário: você responde agora e vê o gabarito e seu índice de acerto.
+                                        <strong>Quer treinar com questões?</strong> Não precisa de horário: você escreve as respostas agora, vê o gabarito e seu índice de acerto.
                                     </p>
                                     <Button type="button" size="sm" onClick={onPraticarQuestoes} className="rounded-xl font-bold shrink-0">Praticar agora</Button>
                                 </div>

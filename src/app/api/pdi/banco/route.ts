@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     if (!PDI_BANCO_TIPOS.includes(body.tipo)) return NextResponse.json({ error: 'Tipo inválido.' }, { status: 400 })
-    const lido = lerItemDoBanco(body, body.tipo)
+    const lido = lerItemDoBanco(body)
     if (!lido.ok) return NextResponse.json({ error: lido.error }, { status: 400 })
 
     const { data, error } = await supabase

@@ -30,23 +30,11 @@ function DialogItem({ tipo, categorias, item, onClose, onSalvo }: {
     const [resposta, setResposta] = useState(item?.resposta ?? '')
     const [categoria, setCategoria] = useState(item?.categoria ?? SEM_CATEGORIA)
     const [link, setLink] = useState(item?.link ?? '')
-    // Só para questões: alternativas de múltipla escolha + qual é a certa.
-    const [alternativas, setAlternativas] = useState<string[]>(item?.alternativas?.length ? item.alternativas : ['', ''])
-    const [correta, setCorreta] = useState<number | null>(item?.correta ?? null)
     const [salvando, setSalvando] = useState(false)
     const [erro, setErro] = useState<string | null>(null)
 
     async function salvar() {
         if (!titulo.trim()) { setErro('Informe um título.'); return }
-        // Descarta alternativas em branco e recalcula o índice da correta.
-        const preenchidas = alternativas.map((texto, i) => ({ texto: texto.trim(), i })).filter(a => a.texto)
-        let corretaFinal: number | null = null
-        if (tipo === 'questao' && preenchidas.length > 0) {
-            if (preenchidas.length < 2) { setErro('Use pelo menos 2 alternativas (ou deixe todas em branco).'); return }
-            if (correta === null || !preenchidas.some(a => a.i === correta)) { setErro('Marque qual alternativa é a correta.'); return }
-            if (!conteudo.trim()) { setErro('Questões com alternativas precisam de enunciado.'); return }
-            corretaFinal = preenchidas.findIndex(a => a.i === correta)
-        }
         setSalvando(true)
         setErro(null)
         try {
@@ -56,8 +44,6 @@ function DialogItem({ tipo, categorias, item, onClose, onSalvo }: {
                 body: JSON.stringify({
                     tipo, titulo, conteudo, link,
                     resposta: cfg.labelResposta ? resposta : null,
-                    alternativas: tipo === 'questao' ? preenchidas.map(a => a.texto) : null,
-                    correta: corretaFinal,
                     categoria: categoria === SEM_CATEGORIA ? null : categoria,
                 }),
             })
@@ -97,33 +83,6 @@ function DialogItem({ tipo, categorias, item, onClose, onSalvo }: {
                         <Label>{cfg.labelConteudo}</Label>
                         <Textarea value={conteudo} onChange={(e) => setConteudo(e.target.value)} rows={5} maxLength={5000} />
                     </div>
-                    {tipo === 'questao' && (
-                        <div className="space-y-2">
-                            <Label>Alternativas (opcional — sem elas a questão não entra no treino dos membros)</Label>
-                            {alternativas.map((alt, i) => (
-                                <div key={i} className="flex items-center gap-2">
-                                    <input
-                                        type="radio" name="correta" checked={correta === i} onChange={() => setCorreta(i)}
-                                        aria-label={`Marcar alternativa ${String.fromCharCode(65 + i)} como correta`} className="accent-emerald-500"
-                                    />
-                                    <span className="text-xs font-bold text-slate-400 w-4">{String.fromCharCode(65 + i)}</span>
-                                    <Input value={alt} maxLength={300} onChange={(e) => setAlternativas(a => a.map((x, j) => j === i ? e.target.value : x))} />
-                                    {alternativas.length > 2 && (
-                                        <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0" aria-label="Remover alternativa"
-                                            onClick={() => { setAlternativas(a => a.filter((_, j) => j !== i)); setCorreta(c => c === null ? null : c === i ? null : c > i ? c - 1 : c) }}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                </div>
-                            ))}
-                            <div className="flex items-center justify-between">
-                                {alternativas.length < 6
-                                    ? <Button type="button" variant="ghost" size="sm" className="font-bold" onClick={() => setAlternativas(a => [...a, ''])}><Plus className="h-4 w-4 mr-1" />Alternativa</Button>
-                                    : <span />}
-                                <span className="text-xs text-slate-400">Marque a bolinha da alternativa correta</span>
-                            </div>
-                        </div>
-                    )}
                     {cfg.labelResposta && (
                         <div className="space-y-1.5">
                             <Label>{cfg.labelResposta} (opcional)</Label>
@@ -242,7 +201,7 @@ function ListaBanco({ tipo, tipos, colaboradorId, isAdmin }: { tipo: PdiBancoTip
                                         </p>
                                     </button>
                                     <div className="flex items-center gap-1 shrink-0">
-                                        {item.tipo === 'questao' && !item.alternativas && <Badge variant="outline" className="text-amber-500 border-amber-500/40">sem alternativas</Badge>}
+                                        {item.tipo === 'questao' && !item.resposta && <Badge variant="outline" className="text-amber-500 border-amber-500/40">sem gabarito</Badge>}
                                         {item.categoria && <Badge variant="outline">{item.categoria}</Badge>}
                                         {podeEditar && (
                                             <>
@@ -259,15 +218,6 @@ function ListaBanco({ tipo, tipos, colaboradorId, isAdmin }: { tipo: PdiBancoTip
                                                 <span className="text-slate-400">{cfg.labelConteudo}</span>
                                                 <p className="whitespace-pre-wrap text-slate-700 dark:text-slate-300 mt-1">{item.conteudo}</p>
                                             </div>
-                                        )}
-                                        {item.alternativas && item.alternativas.length > 0 && (
-                                            <ul className="space-y-1">
-                                                {item.alternativas.map((alt, i) => (
-                                                    <li key={i} className={i === item.correta ? 'text-emerald-500 font-semibold' : 'text-slate-600 dark:text-slate-300'}>
-                                                        {String.fromCharCode(65 + i)}) {alt}{i === item.correta ? ' ✓' : ''}
-                                                    </li>
-                                                ))}
-                                            </ul>
                                         )}
                                         {item.resposta && cfg.labelResposta && (
                                             <div>
