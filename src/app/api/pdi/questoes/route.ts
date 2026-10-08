@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
         .select('id, categoria, conteudo, alternativas')
         .eq('tipo', 'questao')
         .not('alternativas', 'is', null)
-    if (error) return NextResponse.json({ error: 'Erro ao buscar questões.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Erro ao buscar questões.', detalhe: error.message }, { status: 500 })
     const disponiveis = (banco || []) as { id: string, categoria: string | null, conteudo: string | null, alternativas: string[] }[]
 
     if (req.nextUrl.searchParams.get('resumo')) {
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase.from('pdi_questoes_tentativas').insert({
         colaborador_id: colaboradorId, total: resultados.length, acertos, itens,
     })
-    if (error) return NextResponse.json({ error: 'Erro ao salvar o resultado.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Erro ao salvar o resultado.', detalhe: error.message }, { status: 500 })
 
     return NextResponse.json({ total: resultados.length, acertos, resultados, desempenho: await lerDesempenho(supabase, colaboradorId) })
 }

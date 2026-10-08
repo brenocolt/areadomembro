@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
         query = query.eq('tipo', tipo)
     }
     const { data, error } = await query
-    if (error) return NextResponse.json({ error: 'Erro ao buscar itens.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Erro ao buscar itens.', detalhe: error.message }, { status: 500 })
     return NextResponse.json({ itens: data })
 }
 
@@ -40,6 +40,6 @@ export async function POST(req: NextRequest) {
         .insert({ tipo: body.tipo, ...lido.item, autor_id: acesso.colaboradorId })
         .select('*, autor:autor_id(nome)')
         .single()
-    if (error || !data) return NextResponse.json({ error: 'Erro ao salvar.' }, { status: 500 })
+    if (error || !data) return NextResponse.json({ error: 'Erro ao salvar.', detalhe: error?.message }, { status: 500 })
     return NextResponse.json({ item: data })
 }
