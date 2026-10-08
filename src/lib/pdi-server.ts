@@ -10,7 +10,7 @@
 //    canal #tático com botões Aceitar / Sugerir outro horário (tratados em
 //    /api/slack/interactions) e mantém a mensagem atualizada.
 //  - Incoming Webhook (SLACK_WEBHOOK_URL): só avisa, sem botões.
-import { resolverPapelId, formatarDataBr, formatarTiposComOpcoes } from '@/lib/pdi'
+import { resolverPapelId, formatarDataBr, formatarTiposComOpcoes, BANCOS_ABERTOS_PARA_TODOS } from '@/lib/pdi'
 import { agendaConfigurada, criarEvento, atualizarEvento, removerEvento, type EventoAgenda } from '@/lib/google-calendar'
 import {
     slackBotConfigurado, postarMensagem, atualizarMensagem, responderNaThread, type SlackBlock,
@@ -367,6 +367,20 @@ export async function exigirLider(supabase: any, colaboradorId: string | undefin
         .single()
     if (!colaborador || colaborador.status !== 'Ativo' || !resolverPapelId(colaborador.cargo_atual, colaborador.nucleo_atual)) {
         return { ok: false, status: 403, error: 'Os bancos do PDI são exclusivos para gerentes e diretores.' }
+    }
+    return { ok: true, colaboradorId }
+}
+
+// Acesso aos bancos: líderes (ver BANCOS_ABERTOS_PARA_TODOS em @/lib/pdi — na
+// fase de testes vale para qualquer membro ativo).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function exigirAcessoBancos(supabase: any, colaboradorId: string | undefined):
+    Promise<{ ok: true, colaboradorId: string } | { ok: false, status: number, error: string }> {
+    if (!BANCOS_ABERTOS_PARA_TODOS) return exigirLider(supabase, colaboradorId)
+    if (!colaboradorId) return { ok: false, status: 401, error: 'Não autenticado.' }
+    const { data: colaborador } = await supabase.from('colaboradores').select('status').eq('id', colaboradorId).single()
+    if (!colaborador || colaborador.status !== 'Ativo') {
+        return { ok: false, status: 403, error: 'Acesso restrito a membros ativos.' }
     }
     return { ok: true, colaboradorId }
 }
