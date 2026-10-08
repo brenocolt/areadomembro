@@ -230,7 +230,7 @@ export function maisRecentePrimeiro<T extends { data: string, hora: string }>(li
     return lista.slice().sort((a, b) => `${b.data}T${b.hora}`.localeCompare(`${a.data}T${a.hora}`))
 }
 
-// TEMPORÁRIO (fase de testes): com `true`, a aba Bancos e as rotas
-// /api/pdi/banco ficam abertas a todo membro ativo. Para voltar a valer só
-// para gerentes (Tático) e diretor (Estratégico), basta trocar para `false`.
-export const BANCOS_ABERTOS_PARA_TODOS = true
+// Com `false` (valor normal), a aba Bancos e as rotas /api/pdi/banco valem só
+// para gerentes (Tático) e diretor (Estratégico). Trocar para `true` abre a
+// todo membro ativo — usado apenas durante testes.
+export const BANCOS_ABERTOS_PARA_TODOS = false
