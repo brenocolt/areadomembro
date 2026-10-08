@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import {
     PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, nomesDosPapeis,
-    linkAnalisarAgenda, linkAdicionarAgenda, gerarHorariosDisponiveis, isDataValida, dataParaChave,
+    linkAnalisarAgenda, linkAdicionarAgenda, gerarHorariosDisponiveis, isDataValida, dataParaChave, maisRecentePrimeiro,
 } from "@/lib/pdi"
 
 interface PainelLiderProps {
@@ -247,7 +247,7 @@ export function PainelLider({ papeis, tipos }: PainelLiderProps) {
     })
     const aguardandoResposta = solicitacoes.filter(s => s.status === 'reagendado' && s.sugestao?.papel_id === papelId)
     const aceitas = solicitacoes.filter(s => minhaLinha(s)?.lider_id && s.status === 'agendado')
-    const concluidas = solicitacoes.filter(s => minhaLinha(s)?.lider_id && s.status === 'concluido')
+    const concluidas = maisRecentePrimeiro(solicitacoes.filter(s => minhaLinha(s)?.lider_id && s.status === 'concluido'))
 
     return (
         <div className="space-y-8">

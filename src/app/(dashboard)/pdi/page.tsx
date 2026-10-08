@@ -13,7 +13,7 @@ import {
     PdiPapel, PdiTipoMomento,
     formatarDataBr, formatarTiposComOpcoes, formatarLista, nomesDosPapeis,
     linkAdicionarAgenda, PDI_STATUS_LABEL, PDI_STATUS_BADGE_CLASS, resolverPapelId,
-    construirPapeisPorNucleo,
+    construirPapeisPorNucleo, maisRecentePrimeiro,
 } from "@/lib/pdi"
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
@@ -227,7 +227,7 @@ export default function PdiPage() {
     }
 
     const proximos = solicitacoes.filter(s => ['aguardando', 'agendado', 'reagendado'].includes(s.status))
-    const historico = solicitacoes.filter(s => ['concluido', 'cancelado'].includes(s.status))
+    const historico = maisRecentePrimeiro(solicitacoes.filter(s => ['concluido', 'cancelado'].includes(s.status)))
 
     return (
         <div className="flex flex-col gap-8 pb-8">

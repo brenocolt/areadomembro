@@ -229,3 +229,8 @@ export interface PdiDesempenho {
 export function indiceDeAcerto(acertos: number, total: number): number {
     return total > 0 ? Math.round((acertos / total) * 100) : 0
 }
+
+// Ordena históricos com o momento mais recente (data + hora) em cima.
+export function maisRecentePrimeiro<T extends { data: string, hora: string }>(lista: T[]): T[] {
+    return lista.slice().sort((a, b) => `${b.data}T${b.hora}`.localeCompare(`${a.data}T${a.hora}`))
+}
