@@ -58,7 +58,7 @@ export function TreinoQuestoes({ onVoltar }: { onVoltar: () => void }) {
         fetch('/api/pdi/questoes?resumo=1')
             .then(async res => {
                 if (!ativo) return
-                if (!res.ok) { toast.error('Erro ao carregar as questões.'); return }
+                if (!res.ok) { const j = await res.json().catch(() => ({})); toast.error(`${j.error || 'Erro ao carregar as questões.'}${j.detalhe ? ` (${j.detalhe})` : ''}`, { duration: 15000 }); return }
                 const json: Resumo = await res.json()
                 setResumo(json)
                 setAreas(json.categorias.map(c => c.categoria))

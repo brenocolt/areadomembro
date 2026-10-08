@@ -62,7 +62,7 @@ function DialogItem({ tipo, categorias, item, onClose, onSalvo }: {
                 }),
             })
             const json = await res.json()
-            if (!res.ok) { setErro(json.error || 'Erro ao salvar.'); return }
+            if (!res.ok) { setErro(`${json.error || 'Erro ao salvar.'}${json.detalhe ? ` Detalhe técnico: ${json.detalhe}` : ''}`); return }
             toast.success(item ? 'Atualizado.' : 'Adicionado ao banco.')
             onSalvo()
         } finally {
@@ -168,7 +168,10 @@ function ListaBanco({ tipo, tipos, colaboradorId, isAdmin }: { tipo: PdiBancoTip
             .then(async res => {
                 if (!ativo) return
                 if (res.ok) setItens((await res.json()).itens || [])
-                else toast.error('Erro ao carregar o banco.')
+                else {
+                    const json = await res.json().catch(() => ({}))
+                    toast.error(`${json.error || 'Erro ao carregar o banco.'}${json.detalhe ? ` (${json.detalhe})` : ''}`, { duration: 15000 })
+                }
                 setLoading(false)
             })
             .catch(() => { if (ativo) { toast.error('Erro ao carregar o banco.'); setLoading(false) } })
@@ -178,7 +181,7 @@ function ListaBanco({ tipo, tipos, colaboradorId, isAdmin }: { tipo: PdiBancoTip
     async function excluir(item: PdiBancoItem) {
         if (!window.confirm(`Excluir "${item.titulo}" do banco?`)) return
         const res = await fetch(`/api/pdi/banco/${item.id}`, { method: 'DELETE' })
-        if (!res.ok) { toast.error((await res.json()).error || 'Erro ao excluir.'); return }
+        if (!res.ok) { const json = await res.json().catch(() => ({})); toast.error(`${json.error || 'Erro ao excluir.'}${json.detalhe ? ` (${json.detalhe})` : ''}`, { duration: 15000 }); return }
         toast.success('Excluído.')
         recarregar()
     }

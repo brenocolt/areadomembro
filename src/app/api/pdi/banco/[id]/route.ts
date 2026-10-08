@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .eq('id', id)
         .select('*, autor:autor_id(nome)')
         .single()
-    if (error || !data) return NextResponse.json({ error: 'Erro ao salvar.' }, { status: 500 })
+    if (error || !data) return NextResponse.json({ error: 'Erro ao salvar.', detalhe: error?.message }, { status: 500 })
     return NextResponse.json({ item: data })
 }
 
@@ -44,6 +44,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!r.ok) return r.res
 
     const { error } = await r.supabase.from('pdi_banco_itens').delete().eq('id', id)
-    if (error) return NextResponse.json({ error: 'Erro ao excluir.' }, { status: 500 })
+    if (error) return NextResponse.json({ error: 'Erro ao excluir.', detalhe: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
 }
