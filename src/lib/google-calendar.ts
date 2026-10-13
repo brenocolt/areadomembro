@@ -103,3 +103,22 @@ export async function removerEvento(emailUsuario: string, eventId: string): Prom
         throw new Error(`Google Calendar remover (${emailUsuario}): ${res.status}`)
     }
 }
+
+// Evento único na agenda de quem organiza, com os participantes como
+// convidados (o Google envia o convite por e-mail). Usado nos repasses do PDI.
+export async function criarEventoComConvidados(emailOrganizador: string, e: EventoAgenda, convidados: string[]): Promise<string> {
+    const res = await chamar(emailOrganizador, `${API}?sendUpdates=all`, 'POST', {
+        ...corpoDoEvento(e),
+        attendees: convidados.map(email => ({ email })),
+    })
+    const json = await res.json()
+    if (!res.ok) throw new Error(`Google Calendar criar evento em grupo (${emailOrganizador}): ${res.status} ${json.error?.message}`)
+    return json.id
+}
+
+export async function removerEventoComAviso(emailUsuario: string, eventId: string): Promise<void> {
+    const res = await chamar(emailUsuario, `${API}/${encodeURIComponent(eventId)}?sendUpdates=all`, 'DELETE')
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+        throw new Error(`Google Calendar remover (${emailUsuario}): ${res.status}`)
+    }
+}

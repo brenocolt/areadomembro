@@ -5,6 +5,11 @@ import crypto from 'crypto'
 
 const SLACK_API = 'https://slack.com/api'
 
+// Canal onde os repasses do PDI são anunciados (ex.: #repassespdi).
+export function canalDosRepasses(): string | null {
+    return process.env.SLACK_BOT_TOKEN && process.env.SLACK_REPASSES_CHANNEL_ID ? process.env.SLACK_REPASSES_CHANNEL_ID : null
+}
+
 export function slackBotConfigurado(): boolean {
     return !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_CHANNEL_ID)
 }

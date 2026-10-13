@@ -18,6 +18,7 @@ import {
 import { WizardSolicitarMomento } from "./components/wizard-solicitar-momento"
 import { PainelLider } from "./components/painel-lider"
 import { BancosPdi } from "./components/bancos-pdi"
+import { RepassesPdi } from "./components/repasses-pdi"
 import { TreinoQuestoes } from "./components/treino-questoes"
 
 function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPapel[], tipos: PdiTipoMomento[], onClick: () => void }) {
@@ -259,6 +260,7 @@ export default function PdiPage() {
                         <TabsList>
                             <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>
                             {meuPapelId && <TabsTrigger value="para-atender">Para Eu Atender</TabsTrigger>}
+                            {meuPapelId && <TabsTrigger value="repasses">Repasses</TabsTrigger>}
                             {(meuPapelId || BANCOS_ABERTOS_PARA_TODOS) && <TabsTrigger value="bancos">Bancos</TabsTrigger>}
                         </TabsList>
                     )}
@@ -292,6 +294,12 @@ export default function PdiPage() {
                             </div>
                         )}
                     </TabsContent>
+
+                    {meuPapelId && (
+                        <TabsContent value="repasses" className="mt-4">
+                            <RepassesPdi tipos={tipos} />
+                        </TabsContent>
+                    )}
 
                     {meuPapelId && (
                         <TabsContent value="para-atender" className="mt-4">
