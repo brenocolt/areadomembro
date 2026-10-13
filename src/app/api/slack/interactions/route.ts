@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { isDataValida, gerarHorariosDisponiveis } from '@/lib/pdi'
 import { aceitarMomento, sugerirHorarioMomento, resolverLider } from '@/lib/pdi-server'
+import { entrarNoRepasse, sairDoRepasse } from '@/lib/pdi-repasses'
 import { assinaturaSlackValida, emailDoUsuarioSlack, abrirModal } from '@/lib/slack'
 
 export const dynamic = 'force-dynamic'
@@ -111,6 +112,22 @@ export async function POST(req: NextRequest) {
     if (payload.type === 'block_actions') {
         const acao = payload.actions?.[0]
         const canal: string = payload.channel?.id || payload.container?.channel_id
+        // Repasses do PDI: qualquer membro ativo pode entrar/sair até o prazo.
+        if (acao && (acao.action_id === 'repasse_entrar' || acao.action_id === 'repasse_sair')) {
+            const membroId = await colaboradorDoSlack(supabase, slackUserId)
+            if (!membroId) {
+                await avisoPrivado(canal, slackUserId, ':warning: Não encontrei seu cadastro na Área do Membro — o e-mail do seu Slack precisa ser o mesmo e-mail corporativo do sistema.')
+                return new NextResponse(null, { status: 200 })
+            }
+            const r = acao.action_id === 'repasse_entrar'
+                ? await entrarNoRepasse(supabase, acao.value, membroId)
+                : await sairDoRepasse(supabase, acao.value, membroId)
+            await avisoPrivado(canal, slackUserId, r.ok
+                ? (acao.action_id === 'repasse_entrar' ? ':white_check_mark: Você entrou no repasse. Quando o responsável confirmar, o convite chega na sua agenda.' : ':wave: Você saiu do repasse.')
+                : `:warning: ${r.error}`)
+            return new NextResponse(null, { status: 200 })
+        }
+
         if (!acao || (acao.action_id !== 'pdi_aceitar' && acao.action_id !== 'pdi_sugerir')) {
             return new NextResponse(null, { status: 200 })
         }

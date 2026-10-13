@@ -78,3 +78,22 @@ Configuração (precisa ser admin do Google Workspace):
 
 O e-mail usado é o `email_corporativo` do colaborador, que precisa ser uma
 conta do mesmo domínio do Workspace.
+
+## Repasses do PDI (tático oferece um momento)
+
+A "logística inversa" do pedido de momento: um tático (gerente) ou o diretor cria um
+repasse em **PDI → Repasses** (ex.: formulação de cronograma), com data, hora, duração,
+prazo de adesão e vagas (opcional). O repasse é anunciado no canal do Slack dos
+repasses com os botões **Quero participar** e **Sair**. Depois do prazo, o responsável
+clica em **Confirmar e adicionar ao Google Agenda**: o evento é criado com todos os
+que entraram como convidados.
+
+Configuração:
+
+1. Criar o canal no Slack (ex.: `#repassespdi`) e convidar o bot (`/invite @<bot>`).
+2. Variável de ambiente `SLACK_REPASSES_CHANNEL_ID` com o ID do canal (além das variáveis
+   do Slack já descritas acima).
+3. Rodar a migração `supabase/migrations/20261013_pdi_repasses.sql`.
+4. Google Agenda automático: mesma configuração da seção "Google Agenda" (conta de serviço
+   com delegação). Sem ela, o repasse é confirmado do mesmo jeito e a tela mostra o botão
+   "Adicionar ao Google Agenda", que abre o Google Agenda já com os convidados preenchidos.

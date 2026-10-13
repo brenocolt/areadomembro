@@ -102,18 +102,21 @@ export function linkAnalisarAgenda(dataStr?: string): string {
 }
 
 // Link para adicionar o evento na Google Agenda, 1h de duração (§9).
-export function linkAdicionarAgenda(opts: { titulo: string; dataStr: string; horaStr: string; detalhes: string }): string {
+export function linkAdicionarAgenda(opts: { titulo: string; dataStr: string; horaStr: string; detalhes: string; duracaoMin?: number; convidados?: string[] }): string {
     const [ano, mes, dia] = opts.dataStr.split('-').map(Number)
     const [hh, mm] = opts.horaStr.split(':').map(Number)
     const pad = (n: number) => String(n).padStart(2, '0')
     const inicio = `${ano}${pad(mes)}${pad(dia)}T${pad(hh)}${pad(mm)}00`
-    const fim = `${ano}${pad(mes)}${pad(dia)}T${pad(hh + 1)}${pad(mm)}00`
+    // Fim = início + duração (1h por padrão), sem virar o dia (os horários do PDI são diurnos).
+    const minutosFim = hh * 60 + mm + (opts.duracaoMin ?? 60)
+    const fim = `${ano}${pad(mes)}${pad(dia)}T${pad(Math.floor(minutosFim / 60) % 24)}${pad(minutosFim % 60)}00`
     const params = new URLSearchParams({
         action: 'TEMPLATE',
         text: opts.titulo,
         dates: `${inicio}/${fim}`,
         details: opts.detalhes,
     })
+    if (opts.convidados && opts.convidados.length > 0) params.set('add', opts.convidados.join(','))
     return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
@@ -234,3 +237,36 @@ export function maisRecentePrimeiro<T extends { data: string, hora: string }>(li
 // para gerentes (Tático) e diretor (Estratégico). Trocar para `true` abre a
 // todo membro ativo — usado apenas durante testes.
 export const BANCOS_ABERTOS_PARA_TODOS = false
+
+// Repasses do PDI (tático oferece um momento; membros entram até o prazo).
+export interface PdiRepasse {
+    id: string
+    criador_id: string
+    titulo: string
+    descricao: string | null
+    categoria: string | null
+    data: string
+    hora: string
+    duracao_min: number
+    prazo_adesao: string
+    vagas: number | null
+    status: 'aberto' | 'confirmado' | 'cancelado'
+    slack_channel: string | null
+    slack_ts: string | null
+    google_event_id: string | null
+    google_email: string | null
+    criado_em: string
+    criador?: { nome: string } | null
+    participantes?: { colaborador_id: string, entrou_em: string, colaborador: { nome: string, email_corporativo: string | null } | null }[]
+}
+
+// "14/10/2026 18:00" no horário de São Paulo.
+export function formatarDataHoraSp(iso: string): string {
+    return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+// Converte data (YYYY-MM-DD) + hora (HH:MM) digitadas no horário de Brasília em instante UTC (ISO).
+// O Brasil não tem horário de verão desde 2019, então o deslocamento é fixo (-03:00).
+export function instanteSp(dataStr: string, horaStr: string): string {
+    return new Date(`${dataStr}T${horaStr}:00-03:00`).toISOString()
+}
