@@ -8,6 +8,7 @@ import { Plus, AlertTriangle, Settings2 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { useColaborador } from "@/hooks/use-supabase"
 import { ManagePointsTypesDialog } from "./manage-points-types-dialog"
 
 interface PunishmentType {
@@ -25,6 +26,7 @@ const GRUPO_COLORS: Record<string, string> = {
 }
 
 export function AddPointsDialog() {
+    const { colaboradorId: proprioColaboradorId } = useColaborador()
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
@@ -70,11 +72,15 @@ export function AddPointsDialog() {
 
     useEffect(() => { setSelectedColaboradorId("") }, [selectedNucleo])
 
-    const filteredColaboradores = colaboradores.filter(c => c.nucleo_atual === selectedNucleo)
+    // Ninguém pode se auto-pontuar.
+    const filteredColaboradores = colaboradores
+        .filter(c => c.nucleo_atual === selectedNucleo)
+        .filter(c => c.id !== proprioColaboradorId)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!selectedColaboradorId || !selectedMotivoId || !selectedMotivo) return
+        if (selectedColaboradorId === proprioColaboradorId) return
 
         setLoading(true)
         try {
@@ -148,13 +154,13 @@ export function AddPointsDialog() {
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit} className="space-y-5 mt-4">
+                <form onSubmit={handleSubmit} className="min-w-0 space-y-5 mt-4">
                     <div className="space-y-4">
                         {/* Nucleo */}
                         <div className="space-y-2">
                             <Label className="text-slate-900 dark:text-slate-200">1. Núcleo</Label>
                             <Select value={selectedNucleo} onValueChange={setSelectedNucleo} required>
-                                <SelectTrigger className="bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
+                                <SelectTrigger className="w-full bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
                                     <SelectValue placeholder="Selecione o núcleo..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -169,7 +175,7 @@ export function AddPointsDialog() {
                         <div className="space-y-2">
                             <Label className="text-slate-900 dark:text-slate-200">2. Colaborador</Label>
                             <Select value={selectedColaboradorId} onValueChange={setSelectedColaboradorId} disabled={!selectedNucleo} required>
-                                <SelectTrigger className="bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
+                                <SelectTrigger className="w-full bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
                                     <SelectValue placeholder="Selecione o colaborador..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -194,7 +200,7 @@ export function AddPointsDialog() {
                                 />
                             </div>
                             <Select value={selectedMotivoId} onValueChange={setSelectedMotivoId} required>
-                                <SelectTrigger className="bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700">
+                                <SelectTrigger className="w-full min-w-0 bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 *:data-[slot=select-value]:truncate *:data-[slot=select-value]:block">
                                     <SelectValue placeholder="Selecione o motivo..." />
                                 </SelectTrigger>
                                 <SelectContent className="max-h-72">
