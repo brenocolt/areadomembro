@@ -4,6 +4,7 @@ import { PointsHeader } from "./components/points-header"
 import { PointsStats } from "./components/points-stats"
 import { TopOffenders } from "./components/top-offenders"
 import { RemovalRequests } from "./components/removal-requests"
+import { AdditionRequests } from "./components/addition-requests"
 import { RecentHistory } from "./components/recent-history"
 import { RemovalHistory } from "./components/removal-history"
 import { PointsDashboard } from "./components/points-dashboard"
@@ -70,6 +71,12 @@ export default function PointsManagementPage() {
                         </div>
                         <div className="lg:col-span-8 flex flex-col h-full">
                             <RemovalRequests />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                        <div className="lg:col-span-12 flex flex-col h-full">
+                            <AdditionRequests />
                         </div>
                     </div>
 
