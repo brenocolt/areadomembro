@@ -26,7 +26,11 @@ const GRUPO_COLORS: Record<string, string> = {
 }
 
 export function AddPointsDialog() {
-    const { colaboradorId: proprioColaboradorId } = useColaborador()
+    const { colaboradorId: proprioColaboradorId, colaborador: proprioColaborador } = useColaborador()
+    // Operacional não pontua direto: o lançamento fica pendente até alguém
+    // de Gestão de Pessoas aprovar (ver addition-requests.tsx). Tático e
+    // Estratégico continuam valendo na hora, como sempre.
+    const requerAprovacao = proprioColaborador?.cargo_atual === 'Operacional'
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
@@ -79,38 +83,57 @@ export function AddPointsDialog() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!selectedColaboradorId || !selectedMotivoId || !selectedMotivo) return
+        if (!selectedColaboradorId || !selectedMotivoId || !selectedMotivo || !descricao.trim()) return
         if (selectedColaboradorId === proprioColaboradorId) return
+        if (!proprioColaboradorId) return
 
         setLoading(true)
         try {
             const colab = colaboradores.find(c => c.id === selectedColaboradorId)
 
-            const { error: insertError } = await supabase
-                .from('ocorrencias')
-                .insert({
-                    colaborador_id: selectedColaboradorId,
-                    data: new Date().toISOString(),
-                    cargo_na_epoca: colab?.cargo_atual || 'Colaborador',
-                    motivo: selectedMotivo.titulo,
-                    descricao: descricao.trim() || `${selectedMotivo.grupo} — ${selectedMotivo.pontos} ponto${selectedMotivo.pontos > 1 ? 's' : ''}`,
-                    pontuacao: selectedMotivo.pontos,
-                })
+            if (requerAprovacao) {
+                // Operacional: fica pendente, não mexe em pontos_negativos ainda.
+                const { error: insertError } = await supabase
+                    .from('solicitacoes_pontuacao')
+                    .insert({
+                        colaborador_id: selectedColaboradorId,
+                        solicitado_por_id: proprioColaboradorId,
+                        cargo_solicitante: proprioColaborador?.cargo_atual || null,
+                        motivo: selectedMotivo.titulo,
+                        descricao: descricao.trim(),
+                        pontuacao: selectedMotivo.pontos,
+                        status: 'PENDENTE',
+                    })
 
-            if (insertError) throw insertError
+                if (insertError) throw insertError
+            } else {
+                // Tático/Estratégico: vale na hora, como sempre.
+                const { error: insertError } = await supabase
+                    .from('ocorrencias')
+                    .insert({
+                        colaborador_id: selectedColaboradorId,
+                        data: new Date().toISOString(),
+                        cargo_na_epoca: colab?.cargo_atual || 'Colaborador',
+                        motivo: selectedMotivo.titulo,
+                        descricao: descricao.trim(),
+                        pontuacao: selectedMotivo.pontos,
+                    })
 
-            const { data: currentData } = await supabase
-                .from('colaboradores')
-                .select('pontos_negativos')
-                .eq('id', selectedColaboradorId)
-                .single()
+                if (insertError) throw insertError
 
-            const currentPoints = currentData?.pontos_negativos || 0
+                const { data: currentData } = await supabase
+                    .from('colaboradores')
+                    .select('pontos_negativos')
+                    .eq('id', selectedColaboradorId)
+                    .single()
 
-            await supabase
-                .from('colaboradores')
-                .update({ pontos_negativos: currentPoints + selectedMotivo.pontos })
-                .eq('id', selectedColaboradorId)
+                const currentPoints = currentData?.pontos_negativos || 0
+
+                await supabase
+                    .from('colaboradores')
+                    .update({ pontos_negativos: currentPoints + selectedMotivo.pontos })
+                    .eq('id', selectedColaboradorId)
+            }
 
             setOpen(false)
             setSelectedNucleo("")
@@ -225,18 +248,25 @@ export function AddPointsDialog() {
                             </Select>
                         </div>
 
-                        {/* Descrição (opcional, visível ao colaborador) */}
+                        {/* Descrição (obrigatória, visível ao colaborador) */}
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <Label className="text-slate-900 dark:text-slate-200">4. Descrição <span className="text-slate-400 font-normal text-xs">(opcional — visível ao colaborador)</span></Label>
+                                <Label className="text-slate-900 dark:text-slate-200">4. Descrição <span className="text-slate-400 font-normal text-xs">(obrigatória — visível ao colaborador)</span></Label>
                             </div>
                             <Textarea
                                 placeholder="Detalhe o ocorrido para que o colaborador entenda o motivo..."
                                 className="bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 resize-none h-20 text-sm"
                                 value={descricao}
                                 onChange={(e) => setDescricao(e.target.value)}
+                                required
                             />
                         </div>
+
+                        {requerAprovacao && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
+                                Como cargo Operacional, esse lançamento fica pendente até alguém de Gestão de Pessoas aprovar — não entra direto no saldo do colaborador.
+                            </p>
+                        )}
 
                         {/* Points preview */}
                         {selectedMotivo && (
@@ -272,10 +302,10 @@ export function AddPointsDialog() {
                         </Button>
                         <Button
                             type="submit"
-                            disabled={loading || !selectedColaboradorId || !selectedMotivoId}
+                            disabled={loading || !selectedColaboradorId || !selectedMotivoId || !descricao.trim()}
                             className="bg-primary hover:bg-primary/90 text-primary-foreground"
                         >
-                            {loading ? "Adicionando..." : "Confirmar Pontuação"}
+                            {loading ? "Enviando..." : requerAprovacao ? "Enviar para Aprovação" : "Confirmar Pontuação"}
                         </Button>
                     </DialogFooter>
                 </form>
