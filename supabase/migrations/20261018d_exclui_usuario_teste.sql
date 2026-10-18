@@ -21,10 +21,11 @@ DO $$
 DECLARE
     v_colaborador_id uuid;
 BEGIN
+    -- TRIM evita falso-negativo por espaço em branco salvo junto do valor.
     SELECT id INTO v_colaborador_id
     FROM colaboradores
-    WHERE email_corporativo = 'joaogabrielcavalcanticg@gmail.com'
-      AND matricula = '20260001234';
+    WHERE TRIM(email_corporativo) = 'joaogabrielcavalcanticg@gmail.com'
+      AND TRIM(matricula) = '20260001234';
 
     IF v_colaborador_id IS NULL THEN
         RAISE EXCEPTION 'Nenhum colaborador encontrado com esse email E essa matrícula ao mesmo tempo. Confira o PASSO 1 antes de excluir.';
