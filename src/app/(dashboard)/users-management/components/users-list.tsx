@@ -11,11 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { supabase } from "@/lib/supabase"
 import { desligarMembro, reativarMembro } from "@/lib/admin-actions"
 import { CARGO_FANTASMA } from "@/lib/cargos"
+import { useColaborador } from "@/hooks/use-supabase"
+import { getUsersManagementTier } from "@/lib/access-control"
 import { EditUserAccessDialog } from "./edit-user-access-dialog"
 
 type PendingAction = { id: string, name: string, type: 'desligar' | 'reativar' }
 
 export function UsersList() {
+    const { colaborador: proprioColaborador, role: proprioRole } = useColaborador()
+    const editorTier = proprioRole === 'ADMIN' ? 3 : getUsersManagementTier(proprioColaborador?.cargo_atual, proprioColaborador?.nucleo_atual)
     const [colaboradores, setColaboradores] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState("")
@@ -239,6 +243,7 @@ export function UsersList() {
                     onOpenChange={(open) => !open && setUserToEdit(null)}
                     colaborador={userToEdit}
                     userRole={userToEdit.users?.[0]?.role}
+                    editorTier={editorTier}
                     onSave={(updatedData, newRole) => {
                         setColaboradores(prev => prev.map(c => {
                             if (c.id !== userToEdit.id) return c

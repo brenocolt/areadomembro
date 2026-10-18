@@ -3,15 +3,13 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useColaborador } from "@/hooks/use-supabase"
+import { paginaPermitida } from "@/lib/access-control"
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
     // Role vem do mesmo hook que controla o loading — sem race condition
     const { colaborador, loading, role } = useColaborador()
     const pathname = usePathname()
     const router = useRouter()
-
-    const isAdmin = (role ?? '').toUpperCase() === 'ADMIN'
-    const allowedPages: string[] | null = colaborador?.paginas_permitidas ?? null
 
     // Rotas que são acessíveis implicitamente quando a rota-pai está liberada
     const ROUTE_IMPLICATIONS: Record<string, string> = {
@@ -23,20 +21,13 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     }
     const impliedByParent = (() => {
         const parent = ROUTE_IMPLICATIONS[pathname]
-        return parent ? (allowedPages?.includes(parent) ?? false) : false
+        return parent ? paginaPermitida(parent, colaborador, role) : false
     })()
 
     const isAllowed =
-        isAdmin ||             // admin bypass total
-        pathname === '/profile' || // a própria página de perfil é sempre acessível,
-                                    // não depende de paginas_permitidas — é a página
-                                    // "minha conta", acessada pelo rodapé do menu
-        pathname === '/presenca' || // confirmação de presença em reunião: o QR code
-                                    // abre esta página e todo participante precisa
-                                    // conseguir confirmar, com ou sem restrições
-        !allowedPages ||       // sem restrições configuradas → libera
+        paginaPermitida(pathname, colaborador, role) ||
         impliedByParent ||     // rota implícita por outra rota permitida
-        allowedPages.some(p => pathname === p || pathname.startsWith(p + '/'))
+        (colaborador?.paginas_permitidas ?? []).some((p: string) => pathname.startsWith(p + '/'))
 
     useEffect(() => {
         if (loading) return

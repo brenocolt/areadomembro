@@ -14,6 +14,10 @@ import { useSession } from "next-auth/react"
 import { CARGOS } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 
+// Só essa conta pode ter o papel ADMIN — qualquer outra promoção precisa
+// passar por aqui manualmente (ver src/lib/access-control.ts).
+const EMAIL_UNICO_ADMIN = 'produtivajunior@gmail.com'
+
 // "Perfil" e "Presença em Reuniões" não entram aqui de propósito: /profile e
 // /presenca são sempre acessíveis a todo mundo (ver RouteGuard), não
 // dependem de páginas permitidas.
@@ -46,6 +50,10 @@ interface EditUserAccessDialogProps {
     onOpenChange: (open: boolean) => void
     colaborador: any
     userRole?: string
+    // Nível de quem está editando em Gestão de Usuários (ver
+    // getUsersManagementTier): 1 = dados básicos + desligar, 2 = + cargo,
+    // 3 = + role/páginas permitidas e os campos sensíveis abaixo.
+    editorTier?: 0 | 1 | 2 | 3
     onSave?: (updatedData: Record<string, any>, newRole: string) => void
 }
 
@@ -62,8 +70,12 @@ const EDITABLE_FIELDS = [
     { key: 'saldo_milhas', label: 'Saldo de Milhas', type: 'number' },
 ]
 
-export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole, onSave }: EditUserAccessDialogProps) {
+export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole, editorTier = 0, onSave }: EditUserAccessDialogProps) {
     const { data: session } = useSession()
+    const podeMudarCargo = editorTier >= 2
+    const podeGerenciarAcesso = editorTier >= 3
+    const podeEditarCamposSensiveis = editorTier >= 3
+    const alvoPodeSerAdmin = (colaborador?.email_corporativo || '').trim().toLowerCase() === EMAIL_UNICO_ADMIN
     const [selectedPages, setSelectedPages] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [role, setRole] = useState(userRole || 'COLABORADOR')
@@ -83,12 +95,10 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
             })
             setFormData(data)
 
-            // Pages
-            if (colaborador.paginas_permitidas && colaborador.paginas_permitidas.length > 0) {
-                setSelectedPages([...colaborador.paginas_permitidas])
-            } else {
-                setSelectedPages(ALL_PAGES.map(p => p.path))
-            }
+            // Páginas permitidas agora é só a exceção manual, além do que o
+            // cargo/núcleo já dá por padrão (ver src/lib/access-control.ts)
+            // — não inicializa mais marcando tudo quando está vazio.
+            setSelectedPages(colaborador.paginas_permitidas ? [...colaborador.paginas_permitidas] : [])
             setRole(userRole || 'COLABORADOR')
         }
     }, [open, colaborador, userRole])
@@ -150,8 +160,8 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
             if (oldPages !== newPages) {
                 auditLogs.push({
                     campo: 'paginas_permitidas',
-                    valor_antigo: colaborador.paginas_permitidas?.length ? `${colaborador.paginas_permitidas.length} páginas` : 'Todas',
-                    valor_novo: `${selectedPages.length} páginas`,
+                    valor_antigo: colaborador.paginas_permitidas?.length ? `${colaborador.paginas_permitidas.length} exceções` : 'Nenhuma exceção',
+                    valor_novo: selectedPages.length ? `${selectedPages.length} exceções` : 'Nenhuma exceção',
                     editado_por: editorName,
                 })
             }
@@ -238,14 +248,25 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                         ? [currentValue, ...field.options]
                                         : field.options)
                                     : null
+                                const sensivel = field.key === 'pontos_negativos' || field.key === 'saldo_pipj' || field.key === 'saldo_milhas'
+                                const mudaCargoOuNucleo = field.key === 'cargo_atual' || field.key === 'nucleo_atual'
+                                const disabled = mudaCargoOuNucleo ? !podeMudarCargo : (sensivel && !podeEditarCamposSensiveis)
                                 return (
                                 <div key={field.key} className="space-y-1.5">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">{field.label}</Label>
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                        {field.label}
+                                        {disabled && (
+                                            <span className="normal-case font-normal text-slate-400">
+                                                {mudaCargoOuNucleo ? ' — sem permissão pra mudar' : ' — só Estratégico/ADM'}
+                                            </span>
+                                        )}
+                                    </Label>
                                     {options ? (
                                         <select
                                             value={formData[field.key] ?? ''}
                                             onChange={e => updateField(field.key, e.target.value)}
-                                            className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none h-9"
+                                            disabled={disabled}
+                                            className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none h-9 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             {options.map(opt => (
                                                 <option key={opt} value={opt}>{opt}</option>
@@ -256,7 +277,8 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                             type={field.type}
                                             value={formData[field.key] ?? ''}
                                             onChange={e => updateField(field.key, e.target.value)}
-                                            className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 h-9 text-sm rounded-xl"
+                                            disabled={disabled}
+                                            className="bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 h-9 text-sm rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                         />
                                     )}
                                 </div>
@@ -267,6 +289,12 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
 
                     {/* ACCESS TAB */}
                     <TabsContent value="access" className="space-y-4 mt-4">
+                        {!podeGerenciarAcesso ? (
+                            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 text-center">
+                                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Conceder acesso e mudar permissão é liberado só pra Estratégico e Admin.</p>
+                            </div>
+                        ) : (
+                        <>
                         <div>
                             <Label className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 block">Permissão</Label>
                             <select
@@ -275,20 +303,27 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                 className="w-full px-3 py-2 text-sm rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/50 outline-none"
                             >
                                 <option value="COLABORADOR">Colaborador</option>
-                                <option value="GESTOR">Gestor</option>
-                                <option value="ADMIN">Admin (acesso total)</option>
+                                {(role === 'ADMIN' || alvoPodeSerAdmin) && (
+                                    <option value="ADMIN">Admin (acesso total)</option>
+                                )}
                             </select>
+                            {!alvoPodeSerAdmin && (
+                                <p className="text-[10px] text-slate-400 mt-1">Só {EMAIL_UNICO_ADMIN} pode ser Admin.</p>
+                            )}
                         </div>
 
                         {role !== 'ADMIN' && (
                             <>
                                 <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Páginas Permitidas</Label>
+                                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Exceções Manuais de Acesso</Label>
                                     <div className="flex gap-2">
                                         <button onClick={selectAll} className="text-[10px] font-bold text-primary hover:underline">Marcar Todas</button>
                                         <button onClick={deselectAll} className="text-[10px] font-bold text-rose-500 hover:underline">Desmarcar Todas</button>
                                     </div>
                                 </div>
+                                <p className="text-[10px] text-slate-400 -mt-2">
+                                    O cargo e o núcleo já liberam um conjunto padrão de páginas automaticamente. Marque aqui só o que precisa ser liberado além disso.
+                                </p>
 
                                 <div className="space-y-3">
                                     <div>
@@ -330,6 +365,8 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                             <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-center">
                                 <p className="text-sm font-medium text-primary">O perfil Admin tem acesso a todas as páginas automaticamente.</p>
                             </div>
+                        )}
+                        </>
                         )}
                     </TabsContent>
 

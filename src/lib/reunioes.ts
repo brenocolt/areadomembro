@@ -12,6 +12,7 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
+import { paginaPermitida } from '@/lib/access-control'
 import { isSchemaDesatualizado, type ErroPostgrest } from '@/lib/db-compat'
 
 export const PAGINA_GESTAO_REUNIOES = '/reunioes-management'
@@ -128,11 +129,10 @@ export async function podeGerenciarReunioes(colaboradorId: string | undefined, r
     const supabase = createServerSupabaseClient()
     const { data } = await supabase
         .from('colaboradores')
-        .select('paginas_permitidas')
+        .select('cargo_atual, nucleo_atual, paginas_permitidas')
         .eq('id', colaboradorId)
         .single()
-    const paginas: string[] | null = data?.paginas_permitidas ?? null
-    return !paginas || paginas.includes(PAGINA_GESTAO_REUNIOES)
+    return paginaPermitida(PAGINA_GESTAO_REUNIOES, data, role)
 }
 
 // Gera as faltas das reuniões já encerradas que ainda não foram processadas.

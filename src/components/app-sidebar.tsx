@@ -40,7 +40,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { useSession, signOut } from "next-auth/react"
-import { isCargoGerencial } from "@/lib/cargos"
+import { paginaPermitida } from "@/lib/access-control"
 
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
@@ -110,26 +110,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         initials: colaborador?.nome ? colaborador.nome.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() : "..."
     }
 
-    // Filter pages based on paginas_permitidas
-    // ADMIN role bypasses — sees everything
-    // If paginas_permitidas is null/undefined, show all pages (backwards compatible)
-    const allowedPages: string[] | null = colaborador?.paginas_permitidas || null
-    const isAdmin = userRole === 'ADMIN'
-    const isGerente = isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
-
-    const filteredMemberItems = (isAdmin || !allowedPages
-        ? memberItems
-        // /presenca é sempre acessível (ver RouteGuard)
-        : memberItems.filter(item => item.url === '/presenca' || allowedPages.includes(item.url))
-    ).filter(item => {
-        // Hide NPS Gerente for non-gerente, non-admin users
-        if (item.url === '/nps-gerente' && !isAdmin && !isGerente) return false
-        return true
-    })
-
-    const filteredManagementItems = isAdmin || !allowedPages
-        ? managementItems
-        : managementItems.filter(item => allowedPages.includes(item.url))
+    // Mesma matriz de acesso usada pelo RouteGuard e pelas APIs — um item só
+    // aparece no menu se a página de fato está liberada pra esse colaborador.
+    const filteredMemberItems = memberItems.filter(item => paginaPermitida(item.url, colaborador, userRole))
+    const filteredManagementItems = managementItems.filter(item => paginaPermitida(item.url, colaborador, userRole))
 
     return (
         <Sidebar collapsible="icon" {...props}>
