@@ -27,10 +27,10 @@ const GRUPO_COLORS: Record<string, string> = {
 
 export function AddPointsDialog() {
     const { colaboradorId: proprioColaboradorId, colaborador: proprioColaborador } = useColaborador()
-    // Operacional não pontua direto: o lançamento fica pendente até alguém
-    // de Gestão de Pessoas aprovar (ver addition-requests.tsx). Tático e
-    // Estratégico continuam valendo na hora, como sempre.
-    const requerAprovacao = proprioColaborador?.cargo_atual === 'Operacional'
+    // Só Estratégico (e a conta Admin) pontua direto. Operacional e
+    // Tático ficam pendentes até alguém de Gestão de Pessoas aprovar (ver
+    // addition-requests.tsx).
+    const requerAprovacao = proprioColaborador?.cargo_atual !== 'Estratégico' && proprioColaborador?.cargo_atual !== CARGO_FANTASMA
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
@@ -264,7 +264,7 @@ export function AddPointsDialog() {
 
                         {requerAprovacao && (
                             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
-                                Como cargo Operacional, esse lançamento fica pendente até alguém de Gestão de Pessoas aprovar — não entra direto no saldo do colaborador.
+                                Esse lançamento fica pendente até alguém de Gestão de Pessoas aprovar — não entra direto no saldo do colaborador. Só Estratégico pontua direto.
                             </p>
                         )}
 

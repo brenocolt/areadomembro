@@ -9,39 +9,56 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Bell } from "lucide-react"
 
-interface PdiNotificacao {
+interface Notificacao {
     id: string
     texto: string
     lida: boolean
-    solicitacao_id: string | null
     criado_em: string
+    href: string
 }
 
-// Sino de notificações internas do PDI (§10). Não há um sistema genérico de
-// notificações no resto da Área do Membro ainda — este componente só lê
-// pdi_notificacoes por enquanto.
+// Sino de notificações internas da Área do Membro. Ainda não existe uma
+// tabela genérica de notificações — cada feature grava na sua própria
+// (pdi_notificacoes, pontuacao_notificacoes, ...) e este componente busca
+// em todas e mescla por data.
 export function PdiNotificationBell() {
     const { colaboradorId } = useColaborador()
-    const [notificacoes, setNotificacoes] = useState<PdiNotificacao[]>([])
+    const [notificacoes, setNotificacoes] = useState<Notificacao[]>([])
     const [open, setOpen] = useState(false)
 
     useEffect(() => {
         if (!colaboradorId) return
 
         async function fetchNotificacoes() {
-            const { data } = await supabase
-                .from('pdi_notificacoes')
-                .select('*')
-                .eq('membro_id', colaboradorId)
-                .order('criado_em', { ascending: false })
-                .limit(30)
-            setNotificacoes(data || [])
+            const [pdiRes, pontuacaoRes] = await Promise.all([
+                supabase.from('pdi_notificacoes').select('*').eq('membro_id', colaboradorId).order('criado_em', { ascending: false }).limit(30),
+                supabase.from('pontuacao_notificacoes').select('*').eq('colaborador_id', colaboradorId).order('criado_em', { ascending: false }).limit(30),
+            ])
+
+            const pdi: Notificacao[] = (pdiRes.data || []).map((n: any) => ({
+                id: n.id,
+                texto: n.texto,
+                lida: n.lida,
+                criado_em: n.criado_em,
+                href: n.solicitacao_id ? `/pdi?solicitacao=${n.solicitacao_id}` : '/pdi',
+            }))
+            const pontuacao: Notificacao[] = (pontuacaoRes.data || []).map((n: any) => ({
+                id: n.id,
+                texto: n.texto,
+                lida: n.lida,
+                criado_em: n.criado_em,
+                href: '/pontuar-membros',
+            }))
+
+            const todas = [...pdi, ...pontuacao].sort((a, b) => new Date(b.criado_em).getTime() - new Date(a.criado_em).getTime())
+            setNotificacoes(todas)
         }
         fetchNotificacoes()
 
         const channel = supabase
-            .channel(`pdi_notificacoes_${colaboradorId}`)
+            .channel(`notificacoes_${colaboradorId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'pdi_notificacoes', filter: `membro_id=eq.${colaboradorId}` }, fetchNotificacoes)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pontuacao_notificacoes', filter: `colaborador_id=eq.${colaboradorId}` }, fetchNotificacoes)
             .subscribe()
 
         return () => { supabase.removeChannel(channel) }
@@ -52,7 +69,10 @@ export function PdiNotificationBell() {
     async function marcarTodasComoLidas() {
         if (naoLidas.length === 0) return
         setNotificacoes(ns => ns.map(n => ({ ...n, lida: true })))
-        await supabase.from('pdi_notificacoes').update({ lida: true }).eq('membro_id', colaboradorId).eq('lida', false)
+        await Promise.all([
+            supabase.from('pdi_notificacoes').update({ lida: true }).eq('membro_id', colaboradorId).eq('lida', false),
+            supabase.from('pontuacao_notificacoes').update({ lida: true }).eq('colaborador_id', colaboradorId).eq('lida', false),
+        ])
     }
 
     if (!colaboradorId) return null
@@ -85,7 +105,7 @@ export function PdiNotificationBell() {
                         notificacoes.map(n => (
                             <Link
                                 key={n.id}
-                                href={n.solicitacao_id ? `/pdi?solicitacao=${n.solicitacao_id}` : '/pdi'}
+                                href={n.href}
                                 onClick={() => setOpen(false)}
                                 className={`block px-3 py-2.5 text-sm border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors ${!n.lida ? 'font-semibold' : 'text-slate-500'}`}
                             >
