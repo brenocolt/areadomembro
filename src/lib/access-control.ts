@@ -126,8 +126,8 @@ export function podeEditarCamposSensiveisUsuarios(cargo?: string | null): boolea
 export function paginaPermitida(pathname: string, colaborador: AccessColaborador | null | undefined, role?: string | null): boolean {
     if (isAdmin(role)) return true
 
-    if (pathname === '/nps-gerente') {
-        return isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)
+    if (pathname === '/nps-gerente' && isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)) {
+        return true
     }
 
     const padrao = getPaginasPadrao(colaborador?.cargo_atual, colaborador?.nucleo_atual)
