@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import { CARGO_FANTASMA } from '@/lib/cargos'
+import { paginaPermitida } from '@/lib/access-control'
 
 export async function POST(request: Request) {
     try {
@@ -23,12 +24,11 @@ export async function POST(request: Request) {
             const supabaseCheck = createServerSupabaseClient()
             const { data: colab } = await supabaseCheck
                 .from('colaboradores')
-                .select('paginas_permitidas')
+                .select('cargo_atual, nucleo_atual, paginas_permitidas')
                 .eq('id', colaboradorId)
                 .single()
 
-            const hasPipjAccess = Array.isArray(colab?.paginas_permitidas) &&
-                colab.paginas_permitidas.includes('/pipj-management')
+            const hasPipjAccess = paginaPermitida('/pipj-management', colab, userRole)
 
             if (!hasPipjAccess) {
                 return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })

@@ -72,12 +72,6 @@ export async function approveAccountRequest(id: string) {
         }
     }
 
-    // Default member pages that every new account should have access to
-    const defaultMemberPages = [
-        '/', '/profile', '/performance', '/nps-gerente',
-        '/wallet', '/pdi', '/formularios', '/milhas', '/punishments'
-    ];
-
     // 3. Create Colaborador
     const { data: newColaborador, error: colabError } = await supabase
         .from('colaboradores')
@@ -101,7 +95,11 @@ export async function approveAccountRequest(id: string) {
             nivel_consultor: nivelConsultor,
             projetos: projetos,
             saldo_pipj: saldoPipj,
-            paginas_permitidas: defaultMemberPages,
+            // Sem exceção manual — o acesso padrão já vem do cargo/núcleo
+            // (ver src/lib/access-control.ts). paginas_permitidas só soma
+            // páginas além disso, concedidas depois por quem tem tier 3 em
+            // Gestão de Usuários.
+            paginas_permitidas: null,
         })
         .select('id')
         .single();
