@@ -7,12 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2, Shield, UserCog, History } from "lucide-react"
+import { Loader2, Shield, UserCog, History, Lock } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { UserAuditLog } from "./user-audit-log"
 import { useSession } from "next-auth/react"
 import { CARGOS } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
+import { getPaginasPadrao } from "@/lib/access-control"
 
 // Só essa conta pode ter o papel ADMIN — qualquer outra promoção precisa
 // passar por aqui manualmente (ver src/lib/access-control.ts).
@@ -76,6 +77,10 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
     const podeGerenciarAcesso = editorTier >= 3
     const podeEditarCamposSensiveis = editorTier >= 3
     const alvoPodeSerAdmin = (colaborador?.email_corporativo || '').trim().toLowerCase() === EMAIL_UNICO_ADMIN
+    // Páginas que o cargo/núcleo já liberam sozinhos — mostradas marcadas e
+    // travadas aqui, já que desmarcar uma exceção manual não tira esse
+    // acesso (ver src/lib/access-control.ts).
+    const paginasPadrao = getPaginasPadrao(colaborador?.cargo_atual, colaborador?.nucleo_atual)
     const [selectedPages, setSelectedPages] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [role, setRole] = useState(userRole || 'COLABORADOR')
@@ -322,39 +327,51 @@ export function EditUserAccessDialog({ open, onOpenChange, colaborador, userRole
                                     </div>
                                 </div>
                                 <p className="text-[10px] text-slate-400 -mt-2">
-                                    O cargo e o núcleo já liberam um conjunto padrão de páginas automaticamente. Marque aqui só o que precisa ser liberado além disso.
+                                    Páginas com <span className="font-semibold text-slate-500">cadeado</span> já vêm do cargo/núcleo — não dá pra tirar por aqui. Marque só o que precisa ser liberado além disso.
                                 </p>
 
                                 <div className="space-y-3">
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Membro</p>
                                         <div className="grid grid-cols-2 gap-2">
-                                            {memberPages.map(page => (
-                                                <label key={page.path} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                                            {memberPages.map(page => {
+                                                const isPadrao = paginasPadrao.has(page.path)
+                                                return (
+                                                <label key={page.path} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isPadrao ? 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 cursor-default' : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'}`}>
                                                     <Checkbox
-                                                        checked={selectedPages.includes(page.path)}
-                                                        onCheckedChange={() => togglePage(page.path)}
+                                                        checked={isPadrao || selectedPages.includes(page.path)}
+                                                        onCheckedChange={() => !isPadrao && togglePage(page.path)}
+                                                        disabled={isPadrao}
                                                         className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                                     />
-                                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{page.label}</span>
+                                                    <span className={`text-xs font-medium flex items-center gap-1 ${isPadrao ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                        {page.label}{isPadrao && <Lock className="h-3 w-3 shrink-0" />}
+                                                    </span>
                                                 </label>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </div>
 
                                     <div>
                                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Gestão de Pessoas</p>
                                         <div className="grid grid-cols-2 gap-2">
-                                            {managementPages.map(page => (
-                                                <label key={page.path} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                                            {managementPages.map(page => {
+                                                const isPadrao = paginasPadrao.has(page.path)
+                                                return (
+                                                <label key={page.path} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isPadrao ? 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 cursor-default' : 'bg-slate-50 dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer'}`}>
                                                     <Checkbox
-                                                        checked={selectedPages.includes(page.path)}
-                                                        onCheckedChange={() => togglePage(page.path)}
+                                                        checked={isPadrao || selectedPages.includes(page.path)}
+                                                        onCheckedChange={() => !isPadrao && togglePage(page.path)}
+                                                        disabled={isPadrao}
                                                         className="data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                                     />
-                                                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{page.label}</span>
+                                                    <span className={`text-xs font-medium flex items-center gap-1 ${isPadrao ? 'text-slate-500 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                        {page.label}{isPadrao && <Lock className="h-3 w-3 shrink-0" />}
+                                                    </span>
                                                 </label>
-                                            ))}
+                                                )
+                                            })}
                                         </div>
                                     </div>
                                 </div>
