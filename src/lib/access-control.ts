@@ -34,12 +34,21 @@ export function isEstrategicoOuAdmin(cargo?: string | null): boolean {
     return cargo === 'Estratégico' || cargo === CARGO_FANTASMA
 }
 
+// colaboradores.nucleo_atual é texto livre (ver src/lib/nucleos.ts) — dado
+// antigo pode ter "Vice-Presidência" com hífen, enquanto a lista fechada
+// do dropdown usa "Vice Presidência" sem hífen. Compara normalizando
+// hífen/espaço em vez de string exata, pra não depender de qual grafia
+// ficou gravada em cada registro.
+function normalizarNucleo(nucleo?: string | null): string {
+    return (nucleo ?? '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export function isNucleoGestaoDePessoas(nucleo?: string | null): boolean {
-    return (nucleo ?? '').trim() === NUCLEO_GESTAO_DE_PESSOAS
+    return normalizarNucleo(nucleo) === NUCLEO_GESTAO_DE_PESSOAS
 }
 
 export function isNucleoVicePresidencia(nucleo?: string | null): boolean {
-    return (nucleo ?? '').trim() === NUCLEO_VICE_PRESIDENCIA
+    return normalizarNucleo(nucleo) === NUCLEO_VICE_PRESIDENCIA
 }
 
 function isNucleoOverlay(nucleo?: string | null): boolean {
