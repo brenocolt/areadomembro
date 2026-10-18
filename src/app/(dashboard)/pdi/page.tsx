@@ -32,7 +32,7 @@ function SolicitacaoCard({ s, papeis, tipos, onClick }: { s: any, papeis: PdiPap
     return (
         <div
             onClick={onClick}
-            className="bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm cursor-pointer hover:border-primary/40 transition-all"
+            className="min-w-0 bg-white dark:bg-[#0F172A] rounded-2xl p-5 border border-slate-100 dark:border-slate-800/50 shadow-sm cursor-pointer hover:border-primary/40 transition-all"
         >
             <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -231,7 +231,7 @@ export default function PdiPage() {
     const historico = maisRecentePrimeiro(solicitacoes.filter(s => ['concluido', 'cancelado'].includes(s.status)))
 
     return (
-        <div className="flex flex-col gap-8 pb-8">
+        <div className="flex flex-col gap-8 pb-8 min-w-0">
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
                     <div className="bg-primary/10 p-2.5 rounded-2xl border border-primary/20">
@@ -255,7 +255,7 @@ export default function PdiPage() {
             {loading ? (
                 <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
             ) : (
-                <Tabs defaultValue="meus-pedidos">
+                <Tabs defaultValue="meus-pedidos" className="min-w-0">
                     {(meuPapelId || BANCOS_ABERTOS_PARA_TODOS) && (
                         <TabsList>
                             <TabsTrigger value="meus-pedidos">Meus Pedidos</TabsTrigger>

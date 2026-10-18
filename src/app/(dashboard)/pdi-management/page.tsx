@@ -20,9 +20,11 @@ import {
 } from "@/lib/pdi"
 import { TipoMomentoDialog } from "./components/tipo-momento-dialog"
 import { DetalheSolicitacaoDialog } from "./components/detalhe-solicitacao-dialog"
+import { paginaPermitida } from "@/lib/access-control"
 
 export default function PdiManagementPage() {
-    const { role, loading: loadingColaborador } = useColaborador()
+    const { colaborador, role, loading: loadingColaborador } = useColaborador()
+    const temAcesso = paginaPermitida('/pdi-management', colaborador, role)
     const [loading, setLoading] = useState(true)
     const [papeis, setPapeis] = useState<PdiPapel[]>([])
     const [tipos, setTipos] = useState<PdiTipoMomento[]>([])
@@ -44,7 +46,7 @@ export default function PdiManagementPage() {
     const [refreshTick, setRefreshTick] = useState(0)
 
     useEffect(() => {
-        if (role !== 'ADMIN') return
+        if (!temAcesso) return
 
         async function fetchTudo() {
             const [
@@ -75,7 +77,7 @@ export default function PdiManagementPage() {
             setLoading(false)
         }
         fetchTudo()
-    }, [role, refreshTick])
+    }, [temAcesso, refreshTick])
 
     function refetch() {
         setRefreshTick(t => t + 1)
@@ -85,7 +87,7 @@ export default function PdiManagementPage() {
         return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>
     }
 
-    if (role !== 'ADMIN') {
+    if (!temAcesso) {
         return (
             <div className="max-w-md mx-auto text-center py-16">
                 <p className="text-slate-500">Esta página é restrita a administradores.</p>

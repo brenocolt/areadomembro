@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <LogoutButton />
                         </div>
                     </header>
-                    <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+                    <div className="flex-1 min-w-0 p-4 md:p-6 lg:p-8 overflow-auto">
                         <RouteGuard>
                             {children}
                         </RouteGuard>
