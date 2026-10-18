@@ -82,6 +82,12 @@ export function AdditionRequests() {
 
             if (error) throw error
 
+            await supabase.from('pontuacao_notificacoes').insert({
+                colaborador_id: req.solicitado_por_id,
+                solicitacao_id: req.id,
+                texto: `Sua pontuação de ${req.pontuacao} pt${req.pontuacao > 1 ? 's' : ''} pra ${req.colaboradores?.nome || 'colaborador'} foi recusada.`,
+            })
+
             setRequests(prev => prev.filter(r => r.id !== req.id))
         } catch (err) {
             console.error(err)
