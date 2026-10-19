@@ -100,6 +100,13 @@ const chamar = async (metodo, caminho, cookie, corpo) => {
     return { status: r.status, location: r.headers.get('location'), texto: await r.text() }
 }
 
+// O redirect() do Next, chamado depois de o layout começar a transmitir, vai dentro do
+// fluxo da resposta (status 200 + NEXT_REDIRECT), não como HTTP 307. O que importa:
+// a resposta do não autorizado manda o navegador para "/" e NÃO carrega o componente da aba.
+const redirecionaParaInicio = (r) =>
+    ([302, 307].includes(r.status) && new URL(r.location, 'http://x').pathname === '/') || /NEXT_REDIRECT;replace;\/;307/.test(r.texto)
+const carregaAAba = (r) => r.texto.includes('reconhecimentos-page')
+
 const ID = U(99)
 const ENDPOINTS = [
     ['GET', '/api/reconhecimentos'], ['POST', '/api/reconhecimentos', { tipo_id: ID, data: '2026-01-01', pessoa_nome: 'x' }],
@@ -148,12 +155,12 @@ try {
         ['VP desligado', U(5)],
     ]
     for (const [nome, id] of barrados) {
-        await caso(`NÃO autorizado (${nome}): página redireciona p/ "/", ${ENDPOINTS.length} endpoints -> 403, nenhum acesso a dados`, async () => {
+        await caso(`NÃO autorizado (${nome}): página redireciona p/ "/" sem a aba, ${ENDPOINTS.length} endpoints -> 403, nenhum acesso a dados`, async () => {
             const cookie = await cookieDe(id)
             acessosAosDados = []
             const pagina = await chamar('GET', '/reconhecimentos', cookie)
-            assert.ok([302, 307].includes(pagina.status) && new URL(pagina.location, 'http://x').pathname === '/', `página: ${pagina.status} ${pagina.location}`)
-            assert.ok(!pagina.texto.includes('Registrar reconhecimento'), 'conteúdo da aba vazou no corpo da resposta')
+            assert.ok(redirecionaParaInicio(pagina), `página não redirecionou: ${pagina.status} ${pagina.location}`)
+            assert.ok(!carregaAAba(pagina), 'o componente da aba foi enviado ao não autorizado')
             for (const [m, p, c] of ENDPOINTS) assert.equal((await chamar(m, p, cookie, c)).status, 403, `${m} ${p}`)
             assert.equal(acessosAosDados.length, 0, 'tabelas da aba foram consultadas por usuário não autorizado')
         })
@@ -162,7 +169,7 @@ try {
         const cookie = await cookieDe(U(6), { role: 'ADMIN', colaborador_id: U(11) })
         assert.equal((await chamar('GET', '/api/reconhecimentos', cookie)).status, 403)
         const pagina = await chamar('GET', '/reconhecimentos', cookie)
-        assert.ok([302, 307].includes(pagina.status) && new URL(pagina.location, 'http://x').pathname === '/')
+        assert.ok(redirecionaParaInicio(pagina) && !carregaAAba(pagina))
     })
     await caso('usuário inexistente no banco (sessão órfã) -> 401', async () => {
         const cookie = await cookieDe(U(1), { sub: U(50), id: U(50) })
@@ -170,11 +177,11 @@ try {
     })
 
     for (const [nome, id] of [['VP (Operacional)', U(1)], ['ADMIN', U(2)]]) {
-        await caso(`AUTORIZADO (${nome}): página 200 com a aba; API responde e os dados saem pela service role`, async () => {
+        await caso(`AUTORIZADO (${nome}): página entrega a aba; API responde e os dados saem pela service role`, async () => {
             const cookie = await cookieDe(id)
             const pagina = await chamar('GET', '/reconhecimentos', cookie)
             assert.equal(pagina.status, 200, `página: ${pagina.status} ${pagina.location ?? ''}`)
-            assert.ok(pagina.texto.includes('Reconhecimentos e Bonificações'))
+            assert.ok(carregaAAba(pagina) && !redirecionaParaInicio(pagina), 'a aba deveria ser entregue')
             acessosAosDados = []
             const dados = await chamar('GET', '/api/reconhecimentos', cookie)
             assert.equal(dados.status, 200, dados.texto)
