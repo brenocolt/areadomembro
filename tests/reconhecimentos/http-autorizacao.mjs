@@ -72,9 +72,12 @@ async function subirNext(extraEnv) {
         ...extraEnv,
     }
     if (!extraEnv.SUPABASE_SERVICE_ROLE_KEY) delete env.SUPABASE_SERVICE_ROLE_KEY
-    const proc = spawn('npx', ['next', 'dev', '-p', String(PORT_NEXT)], { cwd: raiz, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    // Chama o binário do Next direto (sem npx): matar o wrapper deixaria o servidor vivo na porta.
+    const proc = spawn(process.execPath, [path.join(raiz, 'node_modules/next/dist/bin/next'), 'dev', '-p', String(PORT_NEXT)], { cwd: raiz, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true })
     let log = ''
     proc.stdout.on('data', d => { log += d }); proc.stderr.on('data', d => { log += d })
+    const ocupada = await fetch(`http://127.0.0.1:${PORT_NEXT}/login`, { redirect: 'manual' }).then(() => true, () => false)
+    if (ocupada) { matar(proc); throw new Error(`a porta ${PORT_NEXT} já está em uso por outro servidor`) }
     for (let i = 0; i < 120; i++) {
         try {
             const r = await fetch(`http://127.0.0.1:${PORT_NEXT}/login`, { redirect: 'manual' })
@@ -82,10 +85,16 @@ async function subirNext(extraEnv) {
         } catch { /* ainda subindo */ }
         await new Promise(r => setTimeout(r, 1000))
     }
-    proc.kill()
+    matar(proc)
     throw new Error('next dev não subiu:\n' + log)
 }
-const parar = (proc) => new Promise(res => { proc.once('exit', res); proc.kill('SIGTERM'); setTimeout(() => proc.kill('SIGKILL'), 5000) })
+// O Next cria processos filhos: encerra o grupo inteiro para liberar a porta.
+const matar = (proc, sinal = 'SIGTERM') => { try { process.kill(-proc.pid, sinal) } catch { /* já encerrou */ } }
+const parar = (proc) => new Promise(res => {
+    proc.once('exit', () => setTimeout(res, 500))
+    matar(proc)
+    setTimeout(() => matar(proc, 'SIGKILL'), 5000)
+})
 
 const cookieDe = async (userId, extra = {}) => {
     const jwt = await encode({ token: { sub: userId, id: userId, role: usuarios[userId]?.role, colaborador_id: usuarios[userId]?.colaborador_id, ...extra }, secret: SECRET, salt: COOKIE })
@@ -185,7 +194,7 @@ try {
             acessosAosDados = []
             const dados = await chamar('GET', '/api/reconhecimentos', cookie)
             assert.equal(dados.status, 200, dados.texto)
-            assert.deepEqual(Object.keys(JSON.parse(dados.texto)).sort(), ['bonificacoes', 'config', 'regras', 'reconhecimentos', 'tipos'])
+            assert.deepEqual(Object.keys(JSON.parse(dados.texto)).sort(), ['bonificacoes', 'config', 'reconhecimentos', 'regras', 'tipos'])
             assert.ok(acessosAosDados.length >= 5)
             assert.ok(acessosAosDados.every(a => a.chave === SERVICE), 'dados da aba devem ser lidos só com a service role')
             // validação de entrada acontece depois da autorização
