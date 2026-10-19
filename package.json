@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:reconhecimentos": "node --experimental-strip-types --import ./tests/reconhecimentos/loader.mjs --test tests/reconhecimentos/*.test.mjs",
+    "test:reconhecimentos:http": "node --experimental-strip-types --import ./tests/reconhecimentos/loader.mjs tests/reconhecimentos/http-autorizacao.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

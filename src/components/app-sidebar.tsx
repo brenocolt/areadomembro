@@ -20,6 +20,7 @@ import {
     Briefcase,
     Target,
     QrCode,
+    Award,
 } from "lucide-react"
 
 import {
@@ -68,6 +69,7 @@ const managementItems = [
     { title: "Gestão de Ausências", url: "/absences-management", icon: CalendarDays },
     { title: "Gestão de Alocações", url: "/allocations-management", icon: Briefcase },
     { title: "Gestão de Reuniões", url: "/reunioes-management", icon: QrCode },
+    { title: "Reconhecimentos e Bonificações", url: "/reconhecimentos", icon: Award },
 ]
 
 function NavGroup({ label, items, pathname }: { label: string; items: typeof memberItems; pathname: string }) {
