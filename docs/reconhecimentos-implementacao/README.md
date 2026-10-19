@@ -42,12 +42,12 @@ Correções técnicas permitidas (sem mudar o comportamento no Brasil): datas de
 * **Núcleos de Impacto**: lista própria de 7 (Gestão de Pessoas, Presidência, Vice-Presidência, Marketing, CIT, CIEP, CS), independente de `src/lib/nucleos.ts`.
 * **Usuário** (`criado_por`, `entregue_por`, eventos): e-mail do usuário autenticado, lido da sessão no servidor (antes vinha do `localStorage`).
 * **Sem TanStack Query**: o projeto não usa; a lista é recarregada após cada gravação.
-* **Menu**: o item entra no grupo de gestão já existente (rótulo atual do grupo no menu: "Gestão de Pessoas").
+* **Menu**: grupo próprio **"Vice Presidência"** (`vpItems` em `app-sidebar.tsx`), separado de "Gestão de Pessoas"; aparece só para quem tem acesso. As telas que a matriz já lista para a VP (`/pipj-management`, `/absences-management`, `/allocations-management`) **não foram movidas** de "Gestão de Pessoas" (não pedido; outras áreas também as usam).
 
 ## Como rodar os testes
 
 ```bash
-npm run test:reconhecimentos                    # 40 testes (Node >= 22.15, sem dependências novas)
+npm run test:reconhecimentos                    # 43 testes (Node >= 22.15, sem dependências novas)
 # inclui validação da migration em PostgreSQL real (PGlite, em memória):
 mkdir /tmp/pg && (cd /tmp/pg && npm init -y && npm i @electric-sql/pglite)
 PGLITE_MODULE=/tmp/pg/node_modules/@electric-sql/pglite/dist/index.js npm run test:reconhecimentos
@@ -58,6 +58,10 @@ PLAYWRIGHT_MODULE=/opt/node-tools/node_modules/playwright \
 
 Nenhum teste toca em banco real: usam um Supabase simulado em memória, PGlite e um emulador local de PostgREST.
 
-## Importação futura de dados históricos (P-7)
+## Importação futura de dados históricos (P-7) — preparada, não executada
+
+Ver `IMPORTACAO-HISTORICA.md`. Resumo: colunas de procedência (`origem`, `origem_id`, `importado_em`) + índice único parcial já estão na migration; importar é só `INSERT … ON CONFLICT DO NOTHING` (nunca altera registros novos); as `marco_chave` históricas devem ser **recalculadas** com as funções exportadas do motor.
+
+### (nota original)
 
 Não há importador (nada a inventar). A arquitetura já suporta: inserir linhas em `reconhecimentos` (com `criado_por`, `created_at` originais) e rodar `POST /api/reconhecimentos/sincronizar`; `marco_chave UNIQUE` + `ON CONFLICT DO NOTHING` impedem duplicidade, e para bonificações históricas já entregues, inseri-las em `bonificacoes` com a `marco_chave` que o motor geraria (`<regra_id>:rec:<id>` ou `<regra_id>:<sujeito>:<marco>`) evita que o motor as recrie.

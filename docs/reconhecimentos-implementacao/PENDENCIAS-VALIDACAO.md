@@ -1,5 +1,7 @@
 # Pendências e validações antes de publicar
 
+> Guia da Etapa 3 (backup, homologação, chave do servidor no Coolify, roteiro de validação com VP): `ETAPA-3-GUIA.md`.
+
 ## Decisões já tomadas (P-1 a P-8)
 
 | ID | Decisão aplicada |
@@ -9,7 +11,7 @@
 | P-4 | Prazo padrão **vazio** (sem prazo). |
 | P-5 | Schema consolidado + CHECKs de status/escopo/critério/premiação/evento e `UNIQUE(marco_chave)`. Colunas idênticas às do pacote (73). Todos os valores que a UI original gravava continuam aceitos (testado). |
 | P-6 | Tabela `projetos` (`status = 'Ativo'`). |
-| P-7 | Sem dados históricos; ver "Importação futura" no README. |
+| P-7 | Sem dados históricos. Migration já tem colunas de procedência + unicidade; ver `IMPORTACAO-HISTORICA.md`. |
 | P-8 | Uma bonificação por reconhecimento de núcleo; texto "R$ 30 por membro do núcleo" é só rótulo. |
 
 ## O que ainda precisa de você (bloqueia publicar, não bloqueia revisar)
@@ -27,7 +29,7 @@ SELECT id, prazo_padrao_dias FROM bonificacoes_config;
 ```
    Enquanto isso, a regra pode ser criada na própria aba (Configurações → Criar nova regra).
 4. **Lista de projetos** — confirmar se "todos os projetos ativos" serve ou se deve haver filtro (ex.: só 2026/mentorias).
-5. **Rótulo do grupo do menu** — o grupo onde o item entrou chama-se hoje "Gestão de Pessoas" (é o grupo de itens de gestão existente). Se quiser um grupo "Gestão" separado, é uma mudança de menu para a etapa 2.
+5. ~~Rótulo do grupo do menu~~ — **resolvido**: grupo próprio "Vice Presidência". (As 3 telas que a matriz já atribui à VP continuam em "Gestão de Pessoas"; mover só se você pedir.)
 
 ## Riscos conhecidos (herdados do original, mantidos de propósito)
 

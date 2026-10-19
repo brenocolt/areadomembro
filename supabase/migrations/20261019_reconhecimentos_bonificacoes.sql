@@ -15,9 +15,30 @@
 --   * projeto_id continua SEM chave estrangeira (como no original): guarda o
 --     id de public.projetos, e projeto_nome é snapshot.
 --
--- Pré-requisito: função public.update_updated_at_column() (já existe,
--- criada em 001_create_all_tables.sql).
+--   * Colunas de PROCEDÊNCIA (origem, origem_id, importado_em) em reconhecimentos,
+--     bonificacoes e bonificacao_eventos: permitem importar depois o histórico do
+--     sistema anterior de forma idempotente e sem tocar nos registros novos
+--     (ver docs/reconhecimentos-implementacao/IMPORTACAO-HISTORICA.md).
+--
+-- Impacto: apenas CREATE em objetos NOVOS. Nenhuma tabela, coluna, policy,
+-- trigger ou dado preexistente é alterado. Pré-requisito: função
+-- public.update_updated_at_column() (criada em 001_create_all_tables.sql); se por
+-- algum motivo não existir, é criada com o corpo padrão (se existir, não é tocada).
 -- Idempotente: pode ser reexecutada sem duplicar estrutura nem dados.
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public' AND p.proname = 'update_updated_at_column'
+  ) THEN
+    EXECUTE $f$
+      CREATE FUNCTION public.update_updated_at_column() RETURNS trigger AS $b$
+      BEGIN NEW.updated_at = now(); RETURN NEW; END;
+      $b$ LANGUAGE plpgsql
+    $f$;
+  END IF;
+END $$;
 
 -- 1) Tipos de reconhecimento ---------------------------------------------
 CREATE TABLE IF NOT EXISTS public.reconhecimento_tipos (
@@ -66,8 +87,12 @@ CREATE TABLE IF NOT EXISTS public.reconhecimentos (
   nucleo_impacto     text,
   observacao         text,
   criado_por         text,
+  origem             text NOT NULL DEFAULT 'sistema',
+  origem_id          text,
+  importado_em       timestamptz,
   created_at         timestamptz NOT NULL DEFAULT now(),
   updated_at         timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT reconhecimentos_procedencia_check CHECK ((origem = 'sistema') = (origem_id IS NULL)),
   CONSTRAINT reconhecimentos_nucleo_impacto_check
     CHECK (nucleo_impacto IS NULL OR nucleo_impacto IN
       ('Gestão de Pessoas', 'Presidência', 'Vice-Presidência', 'Marketing', 'CIT', 'CIEP', 'CS'))
@@ -101,8 +126,12 @@ CREATE TABLE IF NOT EXISTS public.bonificacoes (
   cancelada_por               text,
   justificativa_cancelamento  text,
   nucleo_impacto              text,
+  origem             text NOT NULL DEFAULT 'sistema',
+  origem_id          text,
+  importado_em       timestamptz,
   created_at                  timestamptz NOT NULL DEFAULT now(),
   updated_at                  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT bonificacoes_procedencia_check CHECK ((origem = 'sistema') = (origem_id IS NULL)),
   CONSTRAINT bonificacoes_nucleo_impacto_check
     CHECK (nucleo_impacto IS NULL OR nucleo_impacto IN
       ('Gestão de Pessoas', 'Presidência', 'Vice-Presidência', 'Marketing', 'CIT', 'CIEP', 'CS'))
@@ -115,7 +144,11 @@ CREATE TABLE IF NOT EXISTS public.bonificacao_eventos (
   evento          text NOT NULL CHECK (evento IN ('criada', 'entregue', 'cancelada', 'expirada')),
   detalhe         text,
   usuario         text,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  origem             text NOT NULL DEFAULT 'sistema',
+  origem_id          text,
+  importado_em       timestamptz,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT bonificacao_eventos_procedencia_check CHECK ((origem = 'sistema') = (origem_id IS NULL))
 );
 
 -- 6) Configuração geral (uma linha) ----------------------------------------
@@ -124,6 +157,11 @@ CREATE TABLE IF NOT EXISTS public.bonificacoes_config (
   prazo_padrao_dias  integer,   -- NULL = sem prazo
   updated_at         timestamptz NOT NULL DEFAULT now()
 );
+
+-- Unicidade da procedência: o mesmo registro do sistema anterior nunca entra duas vezes.
+CREATE UNIQUE INDEX IF NOT EXISTS reconhecimentos_origem_unq ON public.reconhecimentos (origem, origem_id) WHERE origem_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS bonificacoes_origem_unq ON public.bonificacoes (origem, origem_id) WHERE origem_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS bonificacao_eventos_origem_unq ON public.bonificacao_eventos (origem, origem_id) WHERE origem_id IS NOT NULL;
 
 -- Triggers de updated_at (mesmas 4 tabelas do original) --------------------
 DROP TRIGGER IF EXISTS update_reconhecimento_tipos_updated_at ON public.reconhecimento_tipos;

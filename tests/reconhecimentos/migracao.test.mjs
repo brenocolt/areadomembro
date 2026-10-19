@@ -8,6 +8,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { randomUUID } from 'node:crypto'
+import { calcularBonificacoes, chaveMarcoPorReconhecimento } from '../../src/lib/reconhecimentos/engine.ts'
 
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const sql = (p) => fs.readFileSync(path.join(raiz, p), 'utf8')
@@ -30,9 +32,9 @@ CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger AS 
 -- Simula o default do Supabase: tabelas novas em public ficam acessíveis a anon/authenticated.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 `
-async function novoBanco() {
+async function novoBanco({ semFuncao = false } = {}) {
     const db = new PGlite()
-    await db.exec(BASE)
+    await db.exec(semFuncao ? BASE.replace(/CREATE OR REPLACE FUNCTION public\.update_updated_at_column[^\n]*\n/, '') : BASE)
     return db
 }
 const contar = async (db, t) => Number((await db.query(`select count(*)::int n from public.${t}`)).rows[0].n)
@@ -66,13 +68,16 @@ pg('aplica, é idempotente e semeia só o comprovado', async () => {
     assert.equal(regras.filter(r => ['Piloto de Elite', 'Líder de Voo'].includes(r.tipo)).length, 0)
 })
 
-pg('estrutura de colunas == schema.sql do pacote (mesmas 73 colunas, tipos e defaults)', async () => {
+pg('estrutura de colunas == schema.sql do pacote (73 colunas) + 9 colunas de procedência', async () => {
     const a = await novoBanco(); await a.exec(MIGRATION)
     const b = await novoBanco(); await b.exec(SCHEMA_ORIGINAL)
     const q = `select table_name, column_name, data_type, is_nullable, coalesce(column_default,'') d from information_schema.columns where table_schema='public' and table_name = any($1) order by 1,2`
     const ca = (await a.query(q, [TABELAS])).rows, cb = (await b.query(q, [TABELAS])).rows
-    assert.equal(ca.length, 73)
-    assert.deepEqual(ca, cb)
+    assert.equal(cb.length, 73)
+    const PROCEDENCIA = ['origem', 'origem_id', 'importado_em']
+    const extras = ca.filter(c => PROCEDENCIA.includes(c.column_name))
+    assert.deepEqual(extras.map(c => c.table_name).sort(), ['bonificacao_eventos', 'bonificacao_eventos', 'bonificacao_eventos', 'bonificacoes', 'bonificacoes', 'bonificacoes', 'reconhecimentos', 'reconhecimentos', 'reconhecimentos'])
+    assert.deepEqual(ca.filter(c => !PROCEDENCIA.includes(c.column_name)), cb, 'tudo o mais é idêntico ao schema do pacote')
     const triggers = `select event_object_table t, trigger_name from information_schema.triggers where event_object_schema='public' order by 1,2`
     assert.deepEqual((await a.query(triggers)).rows, (await b.query(triggers)).rows)
 })
@@ -170,4 +175,82 @@ pg('migração não altera objetos preexistentes', async () => {
     const depois = JSON.stringify((await db.query(`select table_name, column_name from information_schema.columns where table_schema='public' and table_name in ('projetos','colaboradores') order by 1,2`)).rows)
     assert.equal(antes, depois)
     assert.equal((await db.query(`select count(*)::int n from pg_policies where schemaname='public' and tablename in ('projetos','colaboradores')`)).rows[0].n, 0)
+})
+
+pg('função update_updated_at_column ausente é criada; presente não é tocada', async () => {
+    const sem = await novoBanco({ semFuncao: true })
+    assert.equal((await sem.query(`select count(*)::int n from pg_proc where proname='update_updated_at_column'`)).rows[0].n, 0)
+    await sem.exec(MIGRATION)
+    assert.equal((await sem.query(`select count(*)::int n from pg_proc where proname='update_updated_at_column'`)).rows[0].n, 1)
+
+    const com = await novoBanco()
+    await com.exec(`CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger AS $$ BEGIN NEW.updated_at = '2001-01-01'; RETURN NEW; END; $$ LANGUAGE plpgsql;`)
+    await com.exec(MIGRATION)
+    assert.match((await com.query(`select prosrc from pg_proc where proname='update_updated_at_column'`)).rows[0].prosrc, /2001-01-01/, 'a função existente não foi sobrescrita')
+})
+
+pg('procedência: CHECK e unicidade', async () => {
+    const db = await novoBanco(); await db.exec(MIGRATION)
+    const tipo = (await db.query(`select id from reconhecimento_tipos where nome='SDR do Mês'`)).rows[0].id
+    const ins = (o, i) => db.query(`insert into reconhecimentos(tipo_id,data,origem,origem_id) values ($1,'2026-01-01',$2,$3)`, [tipo, o, i])
+    await ins('sistema', null)
+    await ins('sistema', null) // registros nativos podem repetir (origem_id nulo)
+    await ins('sistema-antigo', 'a-1')
+    assert.match(await falha(() => ins('sistema-antigo', 'a-1')) ?? 'ACEITOU', /unique/i)
+    await ins('outra-origem', 'a-1') // mesma id em outra origem não conflita
+    assert.match(await falha(() => ins('sistema', 'x')) ?? 'ACEITOU', /check/i, 'nativo não pode ter origem_id')
+    assert.match(await falha(() => ins('sistema-antigo', null)) ?? 'ACEITOU', /check/i, 'importado precisa de origem_id')
+})
+
+pg('importação histórica: idempotente, não sobrescreve o novo e as chaves batem com as do motor', async () => {
+    const db = await novoBanco(); await db.exec(MIGRATION)
+    const q = async (sql, p) => (await db.query(sql, p)).rows
+    const tipoSdr = (await q(`select id from reconhecimento_tipos where nome='SDR do Mês'`))[0].id
+    const regraNova = (await q(`select * from regras_bonificacao where nome='SDR do Mês'`))[0]
+
+    // 1) Registros NOVOS, criados pelo sistema atual (reconhecimento + bonificação gerada pelo motor)
+    const recNova = (await q(`insert into reconhecimentos(tipo_id,data,pessoa_nome,criado_por) values ($1,'2026-05-01','Ana','vp@pj.com') returning *`, [tipoSdr]))[0]
+    const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10))
+    const lerEstado = async () => ({
+        regras: (await q(`select id,nome,tipo_id,criterio,quantidade_necessaria,ciclo,requer_rg_adiantada,requer_projeto_adiantado,tipo_premiacao,valor::float valor,descricao_premiacao,prazo_dias from regras_bonificacao`)).map(r => ({ ...r, reconhecimento_tipos: { nome: 'SDR do Mês' } })),
+        recs: (await q(`select * from reconhecimentos order by data, created_at, id`)).map(r => ({ ...r, data: iso(r.data) })),
+        bons: await q(`select id, marco_chave, status, prazo_limite from bonificacoes`),
+    })
+    const sincronizar = async () => {
+        const e = await lerEstado()
+        const r = calcularBonificacoes(e.regras.filter(x => x.nome === 'SDR do Mês'), e.recs, null, e.bons, '2026-10-19')
+        for (const b of r.novas) await db.query(`insert into bonificacoes(regra_id,reconhecimento_id,marco_chave,marco,pessoa_nome,tipo_nome,regra_nome,motivo,valor,liberada_em) values ($1,$2,$3,1,$4,'SDR do Mês','SDR do Mês','SDR do Mês',50,$5)`, [b.regra_id, b.reconhecimento_id, b.marco_chave, b.pessoa_nome, b.liberada_em])
+        return r.novas.length
+    }
+    assert.equal(await sincronizar(), 1)
+    const fotoNovos = JSON.stringify(await q(`select * from reconhecimentos where origem = 'sistema'`))
+    const bonNova = (await q(`select * from bonificacoes`))[0]
+
+    // 2) Histórico do sistema ANTERIOR (ids e chaves antigos) — importação com remapeamento
+    const antigo = { regraId: randomUUID(), recId: randomUUID(), bonId: randomUUID(), eventoId: randomUUID() }
+    const importar = async (remapear = true) => {
+        await db.query(`insert into reconhecimentos(id,tipo_id,data,pessoa_nome,criado_por,origem,origem_id,importado_em,created_at) values ($1::uuid,$2,'2026-01-10','Bia','antigo@pj.com','sistema-antigo',$1::text,now(),'2026-01-10T12:00:00Z') on conflict do nothing`, [antigo.recId, tipoSdr])
+        // a chave é recalculada com a MESMA função do motor, usando o id da regra NOVA
+        const chave = chaveMarcoPorReconhecimento(remapear ? regraNova.id : antigo.regraId, antigo.recId)
+        await db.query(`insert into bonificacoes(id,regra_id,reconhecimento_id,marco_chave,marco,pessoa_nome,tipo_nome,regra_nome,motivo,valor,descricao_premiacao,status,liberada_em,entregue_em,entregue_por,entregue_para,origem,origem_id,importado_em)
+            values ($1::uuid,$2,$3,$4,1,'Bia','SDR do Mês','SDR do Mês','SDR do Mês',50,'R$ 50,00','entregue','2026-01-10','2026-01-20T10:00:00Z','antigo@pj.com','Bia','sistema-antigo',$1::text,now()) on conflict do nothing`, [antigo.bonId, regraNova.id, antigo.recId, chave])
+        await db.query(`insert into bonificacao_eventos(bonificacao_id,evento,detalhe,usuario,origem,origem_id,importado_em,created_at)
+            values ($1,'entregue','Entregue para: Bia','antigo@pj.com','sistema-antigo',$2,now(),'2026-01-20T10:00:00Z') on conflict do nothing`, [antigo.bonId, antigo.eventoId])
+    }
+    await importar(); await importar(); await importar() // reexecutar não duplica
+    const cont = async (t, o) => Number((await q(`select count(*)::int n from ${t} where origem = '${o}'`))[0].n)
+    assert.deepEqual([await cont('reconhecimentos', 'sistema-antigo'), await cont('bonificacoes', 'sistema-antigo'), await cont('bonificacao_eventos', 'sistema-antigo')], [1, 1, 1])
+
+    // 3) Os registros novos permanecem intactos
+    assert.equal(JSON.stringify(await q(`select * from reconhecimentos where origem = 'sistema'`)), fotoNovos, 'reconhecimento novo intacto')
+    assert.deepEqual((await q(`select id, marco_chave, status, valor::float valor from bonificacoes where origem = 'sistema'`)), [{ id: bonNova.id, marco_chave: bonNova.marco_chave, status: 'disponivel', valor: 50 }])
+    assert.equal((await q(`select pessoa_nome from reconhecimentos where id = $1`, [recNova.id]))[0].pessoa_nome, 'Ana')
+
+    // 4) O motor reconhece a bonificação histórica e NÃO a recria
+    assert.equal(await sincronizar(), 0, 'com a chave remapeada, nada é duplicado')
+
+    // 5) Contraexemplo: sem remapear a chave, o motor recriaria a bonificação histórica (duplicidade)
+    await db.exec(`delete from bonificacao_eventos where origem = 'sistema-antigo'; delete from bonificacoes where origem = 'sistema-antigo'; delete from reconhecimentos where origem = 'sistema-antigo'`)
+    await importar(false)
+    assert.equal(await sincronizar(), 1, 'documenta o risco: chave antiga => duplicidade')
 })

@@ -41,7 +41,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useColaborador } from "@/hooks/use-supabase"
 import { useSession, signOut } from "next-auth/react"
-import { paginaPermitida } from "@/lib/access-control"
+import { paginaPermitida, NUCLEO_VICE_PRESIDENCIA } from "@/lib/access-control"
 
 const memberItems = [
     { title: "Início", url: "/", icon: LayoutDashboard },
@@ -69,6 +69,12 @@ const managementItems = [
     { title: "Gestão de Ausências", url: "/absences-management", icon: CalendarDays },
     { title: "Gestão de Alocações", url: "/allocations-management", icon: Briefcase },
     { title: "Gestão de Reuniões", url: "/reunioes-management", icon: QrCode },
+]
+
+// Funcionalidades EXCLUSIVAS da Vice Presidência (e do ADMIN): rotas listadas em
+// ROTAS_EXCLUSIVAS_VP (access-control.ts). Ficam em grupo próprio, separado de
+// "Gestão de Pessoas"; novas telas exclusivas da VP entram aqui.
+const vpItems = [
     { title: "Reconhecimentos e Bonificações", url: "/reconhecimentos", icon: Award },
 ]
 
@@ -116,6 +122,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     // aparece no menu se a página de fato está liberada pra esse colaborador.
     const filteredMemberItems = memberItems.filter(item => paginaPermitida(item.url, colaborador, userRole))
     const filteredManagementItems = managementItems.filter(item => paginaPermitida(item.url, colaborador, userRole))
+    const filteredVpItems = vpItems.filter(item => paginaPermitida(item.url, colaborador, userRole))
 
     return (
         <Sidebar collapsible="icon" {...props}>
@@ -140,6 +147,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarContent>
                 <NavGroup label="Membro" items={filteredMemberItems} pathname={pathname} />
                 <NavGroup label="Gestão de Pessoas" items={filteredManagementItems} pathname={pathname} />
+                <NavGroup label={NUCLEO_VICE_PRESIDENCIA} items={filteredVpItems} pathname={pathname} />
             </SidebarContent>
 
             <SidebarFooter>

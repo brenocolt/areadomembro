@@ -65,7 +65,9 @@ export interface ResultadoMotor {
     expirar: Array<{ id: string; prazo_limite: string }>
 }
 
-function sujeitoDe(rec: ReconhecimentoMotor) {
+// Chaves de idempotência das bonificações. Exportadas para que uma futura
+// importação de dados históricos gere EXATAMENTE as mesmas chaves do motor.
+export function sujeitoDe(rec: ReconhecimentoMotor) {
     const key = rec.projeto_id || rec.projeto_nome || rec.pessoa_nome || 'sem-identificacao'
     return {
         key: String(key),
@@ -74,6 +76,9 @@ function sujeitoDe(rec: ReconhecimentoMotor) {
         pessoa_nome: rec.pessoa_nome || null,
     }
 }
+
+export const chaveMarcoPorReconhecimento = (regraId: string, reconhecimentoId: string) => `${regraId}:rec:${reconhecimentoId}`
+export const chaveMarcoAcumulado = (regraId: string, rec: ReconhecimentoMotor, marco: number) => `${regraId}:${sujeitoDe(rec).key}:${marco}`
 
 const ehAdiantado = (r: ReconhecimentoMotor) => !!(r.adiantado || r.rg_adiantada || r.projeto_adiantado)
 
@@ -130,7 +135,7 @@ export function calcularBonificacoes(
 
         if (regra.criterio === 'por_reconhecimento') {
             for (const rec of elegiveis) {
-                criar(regra, rec, 1, `${regra.id}:rec:${rec.id}`, regra.nome, rec.data)
+                criar(regra, rec, 1, chaveMarcoPorReconhecimento(regra.id, rec.id), regra.nome, rec.data)
             }
             continue
         }
@@ -141,14 +146,14 @@ export function calcularBonificacoes(
             const k = sujeitoDe(rec).key
             grupos.set(k, [...(grupos.get(k) || []), rec])
         }
-        for (const [k, lista] of grupos) {
+        for (const lista of grupos.values()) {
             lista.sort((a, b) => a.data.localeCompare(b.data))
             const q = Math.max(1, Number(regra.quantidade_necessaria || 1))
             const ciclo = Number(regra.ciclo || 0)
             for (let m = q; m <= lista.length; m += ciclo > 0 ? ciclo : Number.MAX_SAFE_INTEGER) {
                 const gatilho = lista[m - 1]
                 const rotulo = exigeAdiantado ? 'reconhecimentos adiantados' : 'reconhecimentos'
-                criar(regra, gatilho, m, `${regra.id}:${k}:${m}`, `${m} ${rotulo}`, gatilho.data)
+                criar(regra, gatilho, m, chaveMarcoAcumulado(regra.id, gatilho, m), `${m} ${rotulo}`, gatilho.data)
                 if (ciclo <= 0) break
             }
         }
