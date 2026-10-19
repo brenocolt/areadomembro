@@ -23,7 +23,7 @@ const VARIABLE_PER_PROJECT: Record<string, number> = {
   // adicional por projeto menor que os demais cargos de gerência.
   [K.TATICO_PROJETOS]: 5,
   [K.TATICO_GERAL]: 15,
-  // Tático (Marketing) — equivalente ao antigo Closer — não tem bônus por projeto.
+  [K.TATICO_MARKETING]: 15,
 }
 
 // "Mês sem lucro": reduz o valor base do cargo em 30% e o adicional por
@@ -41,6 +41,7 @@ const VARIABLE_PER_PROJECT_MES_SEM_LUCRO: Record<string, number> = {
   [K.OPERACIONAL]: 10,
   [K.TATICO_PROJETOS]: 5,
   [K.TATICO_GERAL]: 10,
+  [K.TATICO_MARKETING]: 10,
 }
 
 const LEVEL_BONUS: Record<string, number> = {

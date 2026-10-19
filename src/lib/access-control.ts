@@ -99,6 +99,13 @@ export function getPaginasPadrao(cargo?: string | null, nucleo?: string | null):
     if (isNucleoVicePresidencia(nucleo)) {
         PAGINAS_NUCLEO_VICE_PRESIDENCIA.forEach(p => paginas.add(p))
     }
+    // Estratégico (e a conta fantasma de admin) tem acesso a tudo, de
+    // qualquer núcleo — não fica restrito às páginas de gestão do próprio
+    // núcleo como os demais cargos.
+    if (isEstrategicoOuAdmin(cargo)) {
+        PAGINAS_NUCLEO_GESTAO_DE_PESSOAS.forEach(p => paginas.add(p))
+        PAGINAS_NUCLEO_VICE_PRESIDENCIA.forEach(p => paginas.add(p))
+    }
     if (getUsersManagementTier(cargo, nucleo) > 0) {
         paginas.add('/users-management')
     }
