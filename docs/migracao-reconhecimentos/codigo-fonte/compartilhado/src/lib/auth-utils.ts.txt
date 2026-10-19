@@ -1,0 +1,22 @@
+export const ADMIN_EMAIL = 'produtivajunior@gmail.com';
+
+export async function hashPassword(password: string): Promise<string> {
+  const buf = new TextEncoder().encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export function isAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (localStorage.getItem('app_is_admin') === '1') return true;
+  const email = localStorage.getItem('app_user_email')?.toLowerCase();
+  return email === ADMIN_EMAIL;
+}
+
+export function logout() {
+  localStorage.removeItem('app_auth');
+  localStorage.removeItem('app_user_email');
+  localStorage.removeItem('app_is_admin');
+}

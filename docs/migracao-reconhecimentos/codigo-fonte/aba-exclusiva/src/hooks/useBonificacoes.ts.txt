@@ -1,0 +1,83 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+export function useTiposReconhecimento() {
+  return useQuery({
+    queryKey: ['reconhecimento_tipos'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('reconhecimento_tipos').select('*').order('ordem');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useRegrasBonificacao() {
+  return useQuery({
+    queryKey: ['regras_bonificacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('regras_bonificacao')
+        .select('*, reconhecimento_tipos(nome, escopo)')
+        .order('ordem');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useReconhecimentos() {
+  return useQuery({
+    queryKey: ['reconhecimentos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reconhecimentos')
+        .select('*, reconhecimento_tipos(nome, escopo)')
+        .order('data', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useBonificacoes() {
+  return useQuery({
+    queryKey: ['bonificacoes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('bonificacoes')
+        .select('*')
+        .order('liberada_em', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useBonificacaoEventos(bonificacaoId?: string) {
+  return useQuery({
+    queryKey: ['bonificacao_eventos', bonificacaoId],
+    enabled: !!bonificacaoId,
+    queryFn: async () => {
+      if (!bonificacaoId) return [];
+      const { data, error } = await supabase
+        .from('bonificacao_eventos')
+        .select('*')
+        .eq('bonificacao_id', bonificacaoId)
+        .order('created_at');
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+export function useBonificacoesConfig() {
+  return useQuery({
+    queryKey: ['bonificacoes_config'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('bonificacoes_config').select('*').limit(1).maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+  });
+}

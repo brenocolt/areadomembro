@@ -1,0 +1,29 @@
+ALTER TABLE public.reconhecimentos
+  ADD COLUMN IF NOT EXISTS adiantado boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS nucleo_impacto text;
+
+UPDATE public.reconhecimentos
+SET adiantado = (rg_adiantada OR projeto_adiantado)
+WHERE adiantado IS DISTINCT FROM (rg_adiantada OR projeto_adiantado);
+
+ALTER TABLE public.reconhecimentos
+  DROP CONSTRAINT IF EXISTS reconhecimentos_nucleo_impacto_check;
+ALTER TABLE public.reconhecimentos
+  ADD CONSTRAINT reconhecimentos_nucleo_impacto_check
+  CHECK (nucleo_impacto IS NULL OR nucleo_impacto IN ('Gestão de Pessoas', 'Presidência', 'Vice-Presidência', 'Marketing', 'CIT', 'CIEP', 'CS'));
+
+ALTER TABLE public.bonificacoes
+  ADD COLUMN IF NOT EXISTS nucleo_impacto text;
+
+ALTER TABLE public.bonificacoes
+  DROP CONSTRAINT IF EXISTS bonificacoes_nucleo_impacto_check;
+ALTER TABLE public.bonificacoes
+  ADD CONSTRAINT bonificacoes_nucleo_impacto_check
+  CHECK (nucleo_impacto IS NULL OR nucleo_impacto IN ('Gestão de Pessoas', 'Presidência', 'Vice-Presidência', 'Marketing', 'CIT', 'CIEP', 'CS'));
+
+UPDATE public.bonificacoes b
+SET nucleo_impacto = r.nucleo_impacto
+FROM public.reconhecimentos r
+WHERE b.reconhecimento_id = r.id
+  AND b.nucleo_impacto IS NULL
+  AND r.nucleo_impacto IS NOT NULL;

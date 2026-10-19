@@ -1,0 +1,6 @@
+ordem,justificativa,exige_detalhe
+1,Prazo ultrapassado,false
+2,Lançamento incorreto,false
+3,Critério não atendido,false
+4,Duplicidade,false
+5,Outro,true

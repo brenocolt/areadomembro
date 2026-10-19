@@ -1,0 +1,321 @@
+// EXTRATO do arquivo gerado src/integrations/supabase/types.ts (commit beeebbe).
+// Contém integralmente os blocos das 6 tabelas da aba, dentro de Database["public"]["Tables"].
+// O arquivo completo (1117 linhas) cobre o sistema inteiro e é regenerado pelo Supabase; não faz parte da aba.
+
+      bonificacao_eventos: {
+        Row: {
+          bonificacao_id: string
+          created_at: string
+          detalhe: string | null
+          evento: string
+          id: string
+          usuario: string | null
+        }
+        Insert: {
+          bonificacao_id: string
+          created_at?: string
+          detalhe?: string | null
+          evento: string
+          id?: string
+          usuario?: string | null
+        }
+        Update: {
+          bonificacao_id?: string
+          created_at?: string
+          detalhe?: string | null
+          evento?: string
+          id?: string
+          usuario?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonificacao_eventos_bonificacao_id_fkey"
+            columns: ["bonificacao_id"]
+            isOneToOne: false
+            referencedRelation: "bonificacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      bonificacoes: {
+        Row: {
+          cancelada_em: string | null
+          cancelada_por: string | null
+          created_at: string
+          descricao_premiacao: string
+          entregue_em: string | null
+          entregue_para: string | null
+          entregue_por: string | null
+          id: string
+          justificativa_cancelamento: string | null
+          liberada_em: string
+          marco: number
+          marco_chave: string
+          motivo: string
+          nucleo_impacto: string | null
+          observacao_entrega: string | null
+          pessoa_nome: string | null
+          prazo_limite: string | null
+          projeto_id: string | null
+          projeto_nome: string | null
+          reconhecimento_id: string | null
+          regra_id: string | null
+          regra_nome: string
+          status: string
+          tipo_nome: string
+          tipo_premiacao: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          created_at?: string
+          descricao_premiacao?: string
+          entregue_em?: string | null
+          entregue_para?: string | null
+          entregue_por?: string | null
+          id?: string
+          justificativa_cancelamento?: string | null
+          liberada_em?: string
+          marco?: number
+          marco_chave: string
+          motivo?: string
+          nucleo_impacto?: string | null
+          observacao_entrega?: string | null
+          pessoa_nome?: string | null
+          prazo_limite?: string | null
+          projeto_id?: string | null
+          projeto_nome?: string | null
+          reconhecimento_id?: string | null
+          regra_id?: string | null
+          regra_nome?: string
+          status?: string
+          tipo_nome?: string
+          tipo_premiacao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          cancelada_em?: string | null
+          cancelada_por?: string | null
+          created_at?: string
+          descricao_premiacao?: string
+          entregue_em?: string | null
+          entregue_para?: string | null
+          entregue_por?: string | null
+          id?: string
+          justificativa_cancelamento?: string | null
+          liberada_em?: string
+          marco?: number
+          marco_chave?: string
+          motivo?: string
+          nucleo_impacto?: string | null
+          observacao_entrega?: string | null
+          pessoa_nome?: string | null
+          prazo_limite?: string | null
+          projeto_id?: string | null
+          projeto_nome?: string | null
+          reconhecimento_id?: string | null
+          regra_id?: string | null
+          regra_nome?: string
+          status?: string
+          tipo_nome?: string
+          tipo_premiacao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bonificacoes_reconhecimento_id_fkey"
+            columns: ["reconhecimento_id"]
+            isOneToOne: false
+            referencedRelation: "reconhecimentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bonificacoes_regra_id_fkey"
+            columns: ["regra_id"]
+            isOneToOne: false
+            referencedRelation: "regras_bonificacao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      bonificacoes_config: {
+        Row: {
+          id: string
+          prazo_padrao_dias: number | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          prazo_padrao_dias?: number | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          prazo_padrao_dias?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+
+      reconhecimento_tipos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          escopo: string
+          id: string
+          nome: string
+          ordem: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          escopo?: string
+          id?: string
+          nome: string
+          ordem?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          escopo?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+
+      reconhecimentos: {
+        Row: {
+          adiantado: boolean
+          created_at: string
+          criado_por: string | null
+          data: string
+          id: string
+          nucleo_impacto: string | null
+          observacao: string | null
+          pessoa_nome: string | null
+          projeto_adiantado: boolean
+          projeto_id: string | null
+          projeto_nome: string | null
+          rg_adiantada: boolean
+          tipo_id: string
+          updated_at: string
+        }
+        Insert: {
+          adiantado?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data: string
+          id?: string
+          nucleo_impacto?: string | null
+          observacao?: string | null
+          pessoa_nome?: string | null
+          projeto_adiantado?: boolean
+          projeto_id?: string | null
+          projeto_nome?: string | null
+          rg_adiantada?: boolean
+          tipo_id: string
+          updated_at?: string
+        }
+        Update: {
+          adiantado?: boolean
+          created_at?: string
+          criado_por?: string | null
+          data?: string
+          id?: string
+          nucleo_impacto?: string | null
+          observacao?: string | null
+          pessoa_nome?: string | null
+          projeto_adiantado?: boolean
+          projeto_id?: string | null
+          projeto_nome?: string | null
+          rg_adiantada?: boolean
+          tipo_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconhecimentos_tipo_id_fkey"
+            columns: ["tipo_id"]
+            isOneToOne: false
+            referencedRelation: "reconhecimento_tipos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
+      regras_bonificacao: {
+        Row: {
+          ativo: boolean
+          ciclo: number
+          created_at: string
+          criterio: string
+          descricao_premiacao: string
+          id: string
+          nome: string
+          ordem: number
+          prazo_dias: number | null
+          quantidade_necessaria: number
+          requer_projeto_adiantado: boolean
+          requer_rg_adiantada: boolean
+          tipo_id: string | null
+          tipo_premiacao: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean
+          ciclo?: number
+          created_at?: string
+          criterio?: string
+          descricao_premiacao?: string
+          id?: string
+          nome: string
+          ordem?: number
+          prazo_dias?: number | null
+          quantidade_necessaria?: number
+          requer_projeto_adiantado?: boolean
+          requer_rg_adiantada?: boolean
+          tipo_id?: string | null
+          tipo_premiacao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          ativo?: boolean
+          ciclo?: number
+          created_at?: string
+          criterio?: string
+          descricao_premiacao?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          prazo_dias?: number | null
+          quantidade_necessaria?: number
+          requer_projeto_adiantado?: boolean
+          requer_rg_adiantada?: boolean
+          tipo_id?: string | null
+          tipo_premiacao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "regras_bonificacao_tipo_id_fkey"
+            columns: ["tipo_id"]
+            isOneToOne: false
+            referencedRelation: "reconhecimento_tipos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }

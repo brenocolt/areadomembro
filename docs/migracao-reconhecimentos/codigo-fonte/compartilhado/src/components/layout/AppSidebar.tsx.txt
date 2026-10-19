@@ -1,0 +1,179 @@
+import {
+  LayoutDashboard,
+  ArrowLeftRight,
+  TrendingUp,
+  TrendingDown,
+  CalendarDays,
+  Bot,
+  ChevronDown,
+  Eye,
+  PencilLine,
+  Settings,
+  Landmark,
+  UserCog,
+  Wallet,
+  Award,
+} from 'lucide-react';
+import { NavLink } from '@/components/NavLink';
+import { useLocation } from 'react-router-dom';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+  useSidebar,
+} from '@/components/ui/sidebar';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import logoProdutiva from '@/assets/produtiva-junior-logo.png';
+import { isAdmin } from '@/lib/auth-utils';
+
+const mainItems = [
+  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Fluxo Mensal', url: '/fluxo', icon: ArrowLeftRight },
+  { title: 'Orçamentos de Eventos', url: '/eventos', icon: CalendarDays },
+  { title: 'Assembleia Geral Ordinária', url: '/assembleia', icon: Landmark },
+  { title: 'Acompanhamento de Gastos', url: '/gastos', icon: Wallet },
+  { title: 'Reconhecimentos e Bonificações', url: '/reconhecimentos', icon: Award },
+  { title: 'Assistente de IA', url: '/assistente', icon: Bot },
+];
+
+const projecaoSaidasSubs = [
+  { title: 'Visualização', url: '/projecoes', icon: Eye },
+  { title: 'Editar Projeções', url: '/projecoes/editar', icon: PencilLine },
+  { title: 'Configurar Centros de Custos', url: '/projecoes/categorias', icon: Settings },
+];
+
+const projecaoEntradasSubs = [
+  { title: 'Visualização', url: '/projecoes-entradas', icon: Eye },
+  { title: 'Editar Projeções', url: '/projecoes-entradas/editar', icon: PencilLine },
+  { title: 'Configurar Projetos', url: '/projecoes-entradas/categorias', icon: Settings },
+];
+
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === 'collapsed';
+  const location = useLocation();
+  const isProjecaoSaidas = location.pathname.startsWith('/projecoes') && !location.pathname.startsWith('/projecoes-entradas');
+  const isProjecaoEntradas = location.pathname.startsWith('/projecoes-entradas');
+
+  return (
+    <Sidebar collapsible="icon" className="border-r-0">
+      <SidebarContent className="pt-4">
+        <div className="px-4 pb-4 mb-2 border-b border-sidebar-border">
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-start'}`}>
+            <img
+              src={logoProdutiva}
+              alt="Produtiva Júnior"
+              className={collapsed ? 'h-8 w-8 object-contain' : 'h-12 w-auto object-contain'}
+            />
+          </div>
+        </div>
+
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-sidebar-foreground/50 uppercase text-xs tracking-wider">Menu</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainItems.slice(0, 2).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                      <item.icon className="h-4 w-4 mr-2" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              {/* Projeções Saídas */}
+              <Collapsible defaultOpen={isProjecaoSaidas} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className={`hover:bg-sidebar-accent ${isProjecaoSaidas ? 'bg-sidebar-accent text-sidebar-primary font-medium' : ''}`}>
+                      <TrendingDown className="h-4 w-4 mr-2" />
+                      {!collapsed && <span>Projeções Saídas</span>}
+                      {!collapsed && <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  {!collapsed && (
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {projecaoSaidasSubs.map((sub) => (
+                          <SidebarMenuSubItem key={sub.url}>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to={sub.url} end className="hover:bg-sidebar-accent" activeClassName="text-sidebar-primary font-medium">
+                                <sub.icon className="h-3 w-3 mr-2" />
+                                <span>{sub.title}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  )}
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {/* Projeções Entradas */}
+              <Collapsible defaultOpen={isProjecaoEntradas} className="group/collapsible-entradas">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton className={`hover:bg-sidebar-accent ${isProjecaoEntradas ? 'bg-sidebar-accent text-sidebar-primary font-medium' : ''}`}>
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      {!collapsed && <span>Projeções Entradas</span>}
+                      {!collapsed && <ChevronDown className="ml-auto h-4 w-4 transition-transform group-data-[state=open]/collapsible-entradas:rotate-180" />}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  {!collapsed && (
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {projecaoEntradasSubs.map((sub) => (
+                          <SidebarMenuSubItem key={sub.url}>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink to={sub.url} end className="hover:bg-sidebar-accent" activeClassName="text-sidebar-primary font-medium">
+                                <sub.icon className="h-3 w-3 mr-2" />
+                                <span>{sub.title}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  )}
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {mainItems.slice(2).map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <NavLink to={item.url} end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                      <item.icon className="h-4 w-4 mr-2" />
+                      {!collapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              {isAdmin() && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink to="/contas" end className="hover:bg-sidebar-accent" activeClassName="bg-sidebar-accent text-sidebar-primary font-medium">
+                      <UserCog className="h-4 w-4 mr-2" />
+                      {!collapsed && <span>Contas e Solicitações</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  );
+}

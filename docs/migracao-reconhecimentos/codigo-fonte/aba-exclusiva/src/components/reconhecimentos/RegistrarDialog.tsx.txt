@@ -1,0 +1,272 @@
+import { useMemo, useState } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCategoriasEntradas, useCentrosCustoEntradas } from '@/hooks/useFinanceData';
+import { useTiposReconhecimento, useReconhecimentos } from '@/hooks/useBonificacoes';
+import { sincronizarBonificacoes, currentUser } from '@/lib/bonificacoes-engine';
+
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Categorias (pastas) que realmente contêm projetos atendidos.
+const CATEGORIA_VALIDA = (nome: string) => {
+  const n = norm(nome);
+  return ((n.includes('consultoria') || n.includes('assessoria')) && n.includes('2026')) || n.includes('mentoria');
+};
+
+const NUCLEOS = ['Gestão de Pessoas', 'Presidência', 'Vice-Presidência', 'Marketing', 'CIT', 'CIEP', 'CS'];
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function RegistrarDialog({ open, onOpenChange }: Props) {
+  const queryClient = useQueryClient();
+  const { data: tipos = [] } = useTiposReconhecimento();
+  const { data: categorias = [] } = useCategoriasEntradas();
+  const { data: centros = [] } = useCentrosCustoEntradas();
+  const { data: reconhecimentos = [] } = useReconhecimentos();
+
+  const [tipoId, setTipoId] = useState('');
+  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [projetoId, setProjetoId] = useState('');
+  const [pessoa, setPessoa] = useState('');
+  const [adiantado, setAdiantado] = useState(false);
+  const [nucleo, setNucleo] = useState('');
+  const [rgsAnteriores, setRgsAnteriores] = useState('');
+  const [observacao, setObservacao] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const tipo = tipos.find((t: any) => t.id === tipoId);
+  const isProjeto = tipo?.escopo === 'projeto';
+  const isNucleoImpacto = !!tipo && norm(tipo.nome || '').includes('nucleo');
+
+  // Projetos reais = centros de custo de entrada dentro das pastas de Consultoria/Assessoria 2026 e Mentorias.
+  const todosProjetos = useMemo(() => {
+    const catsValidas = new Set(
+      (categorias as any[]).filter((c) => c.ativo !== false && CATEGORIA_VALIDA(c.nome)).map((c) => c.id),
+    );
+    return (centros as any[])
+      .filter((c) => c.ativo !== false && catsValidas.has(c.categoria_entrada_id))
+      .map((c) => ({ id: c.id, nome: c.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [categorias, centros]);
+
+  const pessoasConhecidas = useMemo(() => {
+    const set = new Set<string>();
+    (reconhecimentos as any[]).forEach((r) => r.pessoa_nome && set.add(r.pessoa_nome));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [reconhecimentos]);
+
+  const reset = () => {
+    setTipoId('');
+    setData(new Date().toISOString().slice(0, 10));
+    setProjetoId('');
+    setPessoa('');
+    setAdiantado(false);
+    setNucleo('');
+    setRgsAnteriores('');
+    setObservacao('');
+  };
+
+  const salvar = async () => {
+    if (!tipoId) return toast.error('Selecione o tipo de reconhecimento');
+    if (isProjeto && !projetoId) return toast.error('Selecione o projeto');
+    if (isNucleoImpacto && !nucleo) return toast.error('Selecione o núcleo');
+    if (!isProjeto && !isNucleoImpacto && !pessoa.trim()) return toast.error('Informe o nome da pessoa reconhecida');
+
+    setSaving(true);
+    try {
+      const projeto = todosProjetos.find((item) => item.id === projetoId);
+      const rows: any[] = isProjeto
+        ? [{
+            tipo_id: tipoId,
+            data,
+            projeto_id: projetoId,
+            projeto_nome: projeto?.nome || '',
+            adiantado,
+            rg_adiantada: false,
+            projeto_adiantado: false,
+            nucleo_impacto: null,
+            observacao: observacao || null,
+            criado_por: currentUser(),
+          }]
+        : [
+            {
+              tipo_id: tipoId,
+              data,
+              pessoa_nome: isNucleoImpacto ? nucleo : pessoa.trim(),
+              nucleo_impacto: isNucleoImpacto ? nucleo : null,
+              observacao: observacao || null,
+              criado_por: currentUser(),
+            },
+          ];
+
+      // RGs adiantadas registradas antes do uso do sistema (opcional) — entram na contagem automática.
+      const qtdAnteriores = Math.max(0, Math.floor(Number(rgsAnteriores) || 0));
+      if (isProjeto && qtdAnteriores > 0) {
+        for (let i = 0; i < qtdAnteriores; i++) {
+          rows.push({
+            tipo_id: tipoId,
+            data,
+            projeto_id: projetoId,
+            projeto_nome: projeto?.nome || '',
+            adiantado: true,
+            rg_adiantada: false,
+            projeto_adiantado: false,
+            nucleo_impacto: null,
+            observacao: 'RG adiantada registrada antes do uso do sistema',
+            criado_por: currentUser(),
+          });
+        }
+      }
+
+      const { error } = await supabase.from('reconhecimentos').insert(rows);
+      if (error) throw error;
+      await sincronizarBonificacoes();
+      queryClient.invalidateQueries({ queryKey: ['reconhecimentos'] });
+      queryClient.invalidateQueries({ queryKey: ['bonificacoes'] });
+      toast.success('Reconhecimento registrado!');
+      reset();
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao registrar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) reset(); }}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Registrar reconhecimento</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Tipo de reconhecimento</Label>
+            <Select value={tipoId} onValueChange={setTipoId}>
+              <SelectTrigger><SelectValue placeholder="Selecionar tipo" /></SelectTrigger>
+              <SelectContent>
+                {(tipos as any[]).filter((t) => t.ativo).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {tipoId && isProjeto && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Data</Label>
+                <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Projeto</Label>
+                <SearchableSelect
+                  value={projetoId}
+                  onValueChange={setProjetoId}
+                  options={todosProjetos.map((p) => ({ value: p.id, label: p.nome }))}
+                  placeholder="Pesquisar ou selecionar projeto..."
+                  searchPlaceholder="Pesquisar pelo nome..."
+                  emptyText="Nenhum projeto encontrado"
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-md border border-border p-3">
+                <Label className="font-normal">Adiantado?</Label>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>{adiantado ? 'Sim' : 'Não'}</span>
+                  <Switch checked={adiantado} onCheckedChange={setAdiantado} />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>RGs adiantadas antes deste registro (opcional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={rgsAnteriores}
+                  onChange={(e) => setRgsAnteriores(e.target.value)}
+                  placeholder="0"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Informe quantas RGs adiantadas o projeto já tinha ANTES deste registro, sem contar a que você está registrando agora. Elas entram na contagem automática.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Observação (opcional)</Label>
+                <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} />
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                As contagens total e de reconhecimentos adiantados são calculadas automaticamente pelo histórico do projeto.
+              </p>
+            </>
+          )}
+
+          {tipoId && !isProjeto && !isNucleoImpacto && (
+            <div className="space-y-1.5">
+              <Label>Pessoa reconhecida</Label>
+              <Input
+                list="pessoas-reconhecidas"
+                value={pessoa}
+                onChange={(e) => setPessoa(e.target.value)}
+                placeholder="Pesquisar ou digitar o nome..."
+              />
+              <datalist id="pessoas-reconhecidas">
+                {pessoasConhecidas.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
+            </div>
+          )}
+
+          {tipoId && !isProjeto && isNucleoImpacto && (
+            <div className="space-y-1.5">
+              <Label>Núcleos</Label>
+              <Select value={nucleo} onValueChange={setNucleo}>
+                <SelectTrigger><SelectValue placeholder="Selecionar núcleo" /></SelectTrigger>
+                <SelectContent>
+                  {NUCLEOS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {tipoId && !isProjeto && (
+            <>
+              <div className="space-y-1.5">
+                <Label>Data do reconhecimento</Label>
+                <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Observação (opcional)</Label>
+                <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} rows={3} />
+              </div>
+
+            </>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={salvar} disabled={saving}>{saving ? 'Salvando...' : 'Registrar'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

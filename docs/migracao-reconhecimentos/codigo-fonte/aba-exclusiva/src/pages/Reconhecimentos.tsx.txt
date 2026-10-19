@@ -1,0 +1,410 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Award, Gift, CheckCircle2, XCircle, Plus, Search, Trash2, LayoutGrid, History, Settings, ClipboardList, Calculator,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { formatCurrency, formatDate } from '@/lib/formatters';
+import { useBonificacoes, useReconhecimentos, useTiposReconhecimento } from '@/hooks/useBonificacoes';
+import { RegistrarDialog } from '@/components/reconhecimentos/RegistrarDialog';
+import { AjustarRgsDialog } from '@/components/reconhecimentos/AjustarRgsDialog';
+import { KanbanBonificacoes } from '@/components/reconhecimentos/KanbanBonificacoes';
+import { BonificacaoDetalhe } from '@/components/reconhecimentos/BonificacaoDetalhe';
+import { ConfiguracoesRegras } from '@/components/reconhecimentos/ConfiguracoesRegras';
+import { STATUS_CLASS, STATUS_LABEL, sincronizarBonificacoes } from '@/lib/bonificacoes-engine';
+
+const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+export default function Reconhecimentos() {
+  const queryClient = useQueryClient();
+  const { data: bonificacoes = [] } = useBonificacoes();
+  const { data: reconhecimentos = [] } = useReconhecimentos();
+  const { data: tipos = [] } = useTiposReconhecimento();
+
+  const [registrarOpen, setRegistrarOpen] = useState(false);
+  const [ajustarOpen, setAjustarOpen] = useState(false);
+  const [selecionada, setSelecionada] = useState<any | null>(null);
+
+  const [busca, setBusca] = useState('');
+  const [de, setDe] = useState('');
+  const [ate, setAte] = useState('');
+  const [projetoId, setProjetoId] = useState('todos');
+  const [nucleo, setNucleo] = useState('todos');
+  const [tipoNome, setTipoNome] = useState('todos');
+  const [status, setStatus] = useState('todos');
+
+  useEffect(() => {
+    sincronizarBonificacoes()
+      .then((n) => {
+        if (n > 0) queryClient.invalidateQueries({ queryKey: ['bonificacoes'] });
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const bonifFiltradas = useMemo(() => {
+    const q = norm(busca);
+    return (bonificacoes as any[]).filter((b) => {
+      if (q && !norm(`${b.projeto_nome} ${b.pessoa_nome} ${b.tipo_nome} ${b.regra_nome} ${b.motivo}`).includes(q)) return false;
+      if (de && b.liberada_em < de) return false;
+      if (ate && b.liberada_em > ate) return false;
+      if (projetoId !== 'todos') {
+        const sujeito = b.projeto_id ? `projeto:${b.projeto_id}` : `pessoa:${b.pessoa_nome}`;
+        if (sujeito !== projetoId) return false;
+      }
+      if (nucleo !== 'todos' && b.nucleo_impacto !== nucleo) return false;
+      if (tipoNome !== 'todos' && b.tipo_nome !== tipoNome) return false;
+      if (status !== 'todos' && b.status !== status) return false;
+      return true;
+    });
+  }, [bonificacoes, busca, de, ate, projetoId, nucleo, tipoNome, status]);
+
+  const recFiltrados = useMemo(() => {
+    const q = norm(busca);
+    return (reconhecimentos as any[]).filter((r) => {
+      const nomeTipo = r.reconhecimento_tipos?.nome || '';
+      if (q && !norm(`${r.projeto_nome} ${r.pessoa_nome} ${nomeTipo}`).includes(q)) return false;
+      if (de && r.data < de) return false;
+      if (ate && r.data > ate) return false;
+      if (projetoId !== 'todos') {
+        const sujeito = r.projeto_id ? `projeto:${r.projeto_id}` : `pessoa:${r.pessoa_nome}`;
+        if (sujeito !== projetoId) return false;
+      }
+      if (nucleo !== 'todos' && r.nucleo_impacto !== nucleo) return false;
+      if (tipoNome !== 'todos' && nomeTipo !== tipoNome) return false;
+      return true;
+    });
+  }, [reconhecimentos, busca, de, ate, projetoId, nucleo, tipoNome]);
+
+  const sujeitos = useMemo(() => {
+    const mapa = new Map<string, string>();
+    for (const item of [...(reconhecimentos as any[]), ...(bonificacoes as any[])]) {
+      if (item.projeto_id && item.projeto_nome) mapa.set(`projeto:${item.projeto_id}`, item.projeto_nome);
+      if (!item.projeto_id && item.pessoa_nome) mapa.set(`pessoa:${item.pessoa_nome}`, item.pessoa_nome);
+    }
+    return [...mapa.entries()].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  }, [reconhecimentos, bonificacoes]);
+
+  const nucleos = useMemo(() => {
+    const valores = new Set<string>();
+    for (const item of [...(reconhecimentos as any[]), ...(bonificacoes as any[])]) {
+      if (item.nucleo_impacto) valores.add(item.nucleo_impacto);
+    }
+    return [...valores].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [reconhecimentos, bonificacoes]);
+
+  const mesAtual = new Date().toISOString().slice(0, 7);
+  const cards = [
+    {
+      label: 'Liberadas no mês',
+      valor: bonifFiltradas.filter((b) => String(b.liberada_em).slice(0, 7) === mesAtual).length,
+      icon: Award,
+      cor: 'text-primary bg-primary/10',
+    },
+    {
+      label: 'Disponíveis',
+      valor: bonifFiltradas.filter((b) => b.status === 'disponivel').length,
+      icon: Gift,
+      cor: 'text-accent bg-accent/10',
+    },
+    {
+      label: 'Entregues',
+      valor: bonifFiltradas.filter((b) => b.status === 'entregue').length,
+      icon: CheckCircle2,
+      cor: 'text-success bg-success/10',
+    },
+    {
+      label: 'Canceladas / expiradas',
+      valor: bonifFiltradas.filter((b) => b.status === 'cancelada' || b.status === 'expirada').length,
+      icon: XCircle,
+      cor: 'text-destructive bg-destructive/10',
+    },
+  ];
+
+  const excluirReconhecimento = async (id: string) => {
+    const { error } = await supabase.from('reconhecimentos').delete().eq('id', id);
+    if (error) return toast.error(error.message);
+    toast.success('Reconhecimento removido (bonificações já geradas são mantidas no histórico)');
+    queryClient.invalidateQueries({ queryKey: ['reconhecimentos'] });
+  };
+
+  const linhaTempo = useMemo(() => {
+    type Item = { chave: string; nome: string; data: string; descricao: string };
+    const itens: Item[] = [];
+    for (const r of recFiltrados) {
+      const nome = r.projeto_nome || r.pessoa_nome || 'Sem identificação';
+      itens.push({
+        chave: nome,
+        nome,
+        data: r.data,
+        descricao: `${r.reconhecimento_tipos?.nome || 'Reconhecimento'}${r.adiantado || r.rg_adiantada || r.projeto_adiantado ? ' — Adiantado' : r.projeto_id ? ' — Normal' : ''}${r.nucleo_impacto ? ` — ${r.nucleo_impacto}` : ''}`,
+      });
+    }
+    for (const b of bonifFiltradas) {
+      const nome = b.projeto_nome || b.pessoa_nome || 'Sem identificação';
+      itens.push({
+        chave: nome,
+        nome,
+        data: b.liberada_em,
+        descricao: `Bonificação liberada — ${b.descricao_premiacao || formatCurrency(Number(b.valor))} (${b.motivo})`,
+      });
+      if (b.entregue_em) {
+        itens.push({ chave: nome, nome, data: String(b.entregue_em).slice(0, 10), descricao: 'Bonificação entregue' });
+      }
+      if (b.cancelada_em) {
+        itens.push({
+          chave: nome, nome, data: String(b.cancelada_em).slice(0, 10),
+          descricao: `Bonificação cancelada — ${b.justificativa_cancelamento || ''}`,
+        });
+      }
+    }
+    const grupos = new Map<string, Item[]>();
+    for (const i of itens) grupos.set(i.chave, [...(grupos.get(i.chave) || []), i]);
+    return [...grupos.entries()]
+      .map(([nome, lista]) => [nome, lista.sort((a, b) => a.data.localeCompare(b.data))] as const)
+      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+  }, [recFiltrados, bonifFiltradas]);
+
+  const Filtros = ({ comStatus = true, compacto = false }: { comStatus?: boolean; compacto?: boolean }) => {
+    const conteudo = (
+      <div className={compacto ? 'grid min-w-[1120px] grid-cols-[1.5fr_repeat(6,minmax(130px,1fr))] gap-2' : 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4'}>
+        <div className="space-y-1">
+          <Label className="text-xs">Pesquisar</Label>
+          <div className="flex items-center gap-2 rounded-md border border-input px-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Projeto, pessoa ou reconhecimento"
+              className="h-9 w-full bg-transparent text-sm outline-none"
+            />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Período de</Label>
+          <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Período até</Label>
+          <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Projeto/Pessoa</Label>
+          <Select value={projetoId} onValueChange={setProjetoId}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {sujeitos.map(([valor, nome]) => <SelectItem key={valor} value={valor}>{nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Núcleo</Label>
+          <Select value={nucleo} onValueChange={setNucleo}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {nucleos.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Tipo</Label>
+          <Select value={tipoNome} onValueChange={setTipoNome}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os tipos</SelectItem>
+              {(tipos as any[]).map((t) => <SelectItem key={t.id} value={t.nome}>{t.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {comStatus && (
+          <div className="space-y-1">
+            <Label className="text-xs">Status</Label>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os status</SelectItem>
+                {Object.entries(STATUS_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+    );
+    return compacto ? (
+      <div className="overflow-x-auto rounded-md border border-border/60 bg-card p-3">{conteudo}</div>
+    ) : (
+      <Card><CardContent className="p-4">{conteudo}</CardContent></Card>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-heading font-bold text-foreground">Reconhecimentos e Bonificações</h1>
+          <p className="text-sm text-muted-foreground">Registre reconhecimentos e acompanhe as bonificações geradas automaticamente</p>
+        </div>
+        <Button onClick={() => setRegistrarOpen(true)}>
+          <Plus className="mr-1 h-4 w-4" /> Registrar reconhecimento
+        </Button>
+      </div>
+
+      <Tabs defaultValue="visao" className="space-y-6">
+        <TabsList className="flex-wrap border border-border/60 bg-card">
+          <TabsTrigger value="visao" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Award className="h-4 w-4" />Visão Geral</TabsTrigger>
+          <TabsTrigger value="registrar" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><ClipboardList className="h-4 w-4" />Registrar</TabsTrigger>
+          <TabsTrigger value="bonificacoes" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><LayoutGrid className="h-4 w-4" />Bonificações</TabsTrigger>
+          <TabsTrigger value="historico" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><History className="h-4 w-4" />Histórico</TabsTrigger>
+          <TabsTrigger value="config" className="gap-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="visao" className="space-y-6">
+          <Filtros />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {cards.map((c) => (
+              <div key={c.label} className="stat-card">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${c.cor}`}>
+                    <c.icon className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">{c.label}</span>
+                </div>
+                <p className="font-display text-3xl font-bold">{c.valor}</p>
+              </div>
+            ))}
+          </div>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Bonificações recentes</CardTitle></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Projeto / Pessoa</TableHead>
+                    <TableHead>Reconhecimento</TableHead>
+                    <TableHead>Motivo</TableHead>
+                    <TableHead>Premiação</TableHead>
+                    <TableHead>Liberada</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bonifFiltradas.slice(0, 10).map((b) => (
+                    <TableRow key={b.id} className="cursor-pointer" onClick={() => setSelecionada(b)}>
+                      <TableCell className="font-medium">{b.projeto_nome || b.pessoa_nome}</TableCell>
+                      <TableCell>{b.tipo_nome}</TableCell>
+                      <TableCell>{b.motivo}</TableCell>
+                      <TableCell>{b.descricao_premiacao || formatCurrency(Number(b.valor))}</TableCell>
+                      <TableCell>{formatDate(b.liberada_em)}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={STATUS_CLASS[b.status]}>{STATUS_LABEL[b.status]}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {bonifFiltradas.length === 0 && (
+                    <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">Nenhuma bonificação encontrada</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="registrar" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+              <CardTitle className="text-base">Reconhecimentos registrados</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setAjustarOpen(true)}><Calculator className="mr-1 h-4 w-4" />Ajustar RGs anteriores</Button>
+                <Button onClick={() => setRegistrarOpen(true)}><Plus className="mr-1 h-4 w-4" />Registrar reconhecimento</Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Projeto / Pessoa</TableHead>
+                    <TableHead>Adiantado?</TableHead>
+                    <TableHead>Núcleo</TableHead>
+                    <TableHead>Observação</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(reconhecimentos as any[]).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{formatDate(r.data)}</TableCell>
+                      <TableCell>{r.reconhecimento_tipos?.nome}</TableCell>
+                      <TableCell className="font-medium">{r.projeto_nome || r.pessoa_nome}</TableCell>
+                      <TableCell>
+                        {r.projeto_id ? (r.adiantado || r.rg_adiantada || r.projeto_adiantado ? 'Sim' : 'Não') : '—'}
+                      </TableCell>
+                      <TableCell>{r.nucleo_impacto || '—'}</TableCell>
+                      <TableCell className="max-w-xs truncate text-muted-foreground">{r.observacao}</TableCell>
+                      <TableCell className="text-right">
+                        <Button size="icon" variant="ghost" onClick={() => excluirReconhecimento(r.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {reconhecimentos.length === 0 && (
+                    <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">Nenhum reconhecimento registrado</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bonificacoes" className="space-y-6">
+          <Filtros compacto />
+          <KanbanBonificacoes bonificacoes={bonifFiltradas} onSelect={setSelecionada} />
+        </TabsContent>
+
+        <TabsContent value="historico" className="space-y-6">
+          <Filtros />
+          <Card>
+            <CardHeader><CardTitle className="text-base">Linha do tempo</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+              {linhaTempo.length === 0 && <p className="py-8 text-center text-muted-foreground">Nenhum registro encontrado</p>}
+              {linhaTempo.map(([nome, itens]) => (
+                <div key={nome}>
+                  <h4 className="mb-2 font-semibold">{nome}</h4>
+                  <ul className="space-y-1.5 border-l border-border pl-4 text-sm">
+                    {itens.map((i, idx) => (
+                      <li key={idx} className="text-muted-foreground">
+                        <span className="tabular-nums text-foreground">{formatDate(i.data)}</span> — {i.descricao}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="config">
+          <ConfiguracoesRegras />
+        </TabsContent>
+      </Tabs>
+
+      <RegistrarDialog open={registrarOpen} onOpenChange={setRegistrarOpen} />
+      <AjustarRgsDialog open={ajustarOpen} onOpenChange={setAjustarOpen} />
+      <BonificacaoDetalhe bonificacao={selecionada} onOpenChange={(o) => !o && setSelecionada(null)} />
+    </div>
+  );
+}

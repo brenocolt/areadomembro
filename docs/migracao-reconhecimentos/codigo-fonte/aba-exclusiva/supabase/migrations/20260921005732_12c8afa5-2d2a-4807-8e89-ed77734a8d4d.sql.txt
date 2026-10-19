@@ -1,0 +1,19 @@
+ALTER TABLE public.reconhecimentos DROP CONSTRAINT IF EXISTS reconhecimentos_projeto_id_fkey;
+ALTER TABLE public.bonificacoes DROP CONSTRAINT IF EXISTS bonificacoes_projeto_id_fkey;
+
+UPDATE public.regras_bonificacao SET nome = 'Piloto de Elite (simbólico)', criterio = 'simbolico', tipo_premiacao = 'simbolica', valor = 0
+WHERE id = '62e9f639-9b79-4efc-b787-2de30f19d293';
+
+UPDATE public.regras_bonificacao SET nome = 'Líder de Voo', criterio = 'por_reconhecimento', tipo_premiacao = 'financeira', valor = 50
+WHERE id = 'c41af89e-aedd-434c-b722-20cf125228a4';
+
+INSERT INTO public.reconhecimento_tipos (nome, escopo, ativo, ordem)
+SELECT 'Núcleo de Impacto', 'pessoa', true, COALESCE((SELECT MAX(ordem) FROM public.reconhecimento_tipos), 0) + 1
+WHERE NOT EXISTS (SELECT 1 FROM public.reconhecimento_tipos WHERE nome = 'Núcleo de Impacto');
+
+INSERT INTO public.regras_bonificacao (tipo_id, nome, criterio, quantidade_necessaria, ciclo, requer_rg_adiantada, requer_projeto_adiantado, tipo_premiacao, valor, descricao_premiacao, ativo, ordem)
+SELECT t.id, 'Núcleo de Impacto', 'por_reconhecimento', 1, 0, false, false, 'financeira', 30, 'R$ 30 por membro do núcleo', true,
+  COALESCE((SELECT MAX(ordem) FROM public.regras_bonificacao), 0) + 1
+FROM public.reconhecimento_tipos t
+WHERE t.nome = 'Núcleo de Impacto'
+  AND NOT EXISTS (SELECT 1 FROM public.regras_bonificacao WHERE nome = 'Núcleo de Impacto');

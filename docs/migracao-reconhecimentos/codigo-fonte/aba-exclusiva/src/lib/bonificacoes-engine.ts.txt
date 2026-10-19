@@ -1,0 +1,162 @@
+import { supabase } from '@/integrations/supabase/client';
+
+export const currentUser = () =>
+  (typeof window !== 'undefined' && localStorage.getItem('app_user_email')) || 'sistema';
+
+const addDays = (iso: string, days: number) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+type Rec = any;
+type Regra = any;
+
+function subjectOf(rec: Rec) {
+  const key = rec.projeto_id || rec.projeto_nome || rec.pessoa_nome || 'sem-identificacao';
+  return {
+    key: String(key),
+    projeto_id: rec.projeto_id || null,
+    projeto_nome: rec.projeto_nome || null,
+    pessoa_nome: rec.pessoa_nome || null,
+    label: rec.projeto_nome || rec.pessoa_nome || 'Sem identificação',
+  };
+}
+
+/**
+ * Recalcula as bonificações a partir dos reconhecimentos registrados.
+ * Só cria o que ainda não existe (chave de marco única) e expira prazos vencidos.
+ */
+export async function sincronizarBonificacoes() {
+  const [{ data: regras }, { data: recs }, { data: config }, { data: existentes }] = await Promise.all([
+    supabase.from('regras_bonificacao').select('*, reconhecimento_tipos(nome)').eq('ativo', true),
+    supabase.from('reconhecimentos').select('*, reconhecimento_tipos(nome)').order('data'),
+    supabase.from('bonificacoes_config').select('*').limit(1).maybeSingle(),
+    supabase.from('bonificacoes').select('id, marco_chave, status, prazo_limite'),
+  ]);
+
+  const prazoPadrao = config?.prazo_padrao_dias ?? null;
+  const jaExistem = new Set((existentes || []).map((b: any) => b.marco_chave));
+  const novas: any[] = [];
+
+  const push = (regra: Regra, rec: Rec, marco: number, chave: string, motivo: string, liberadaEm: string) => {
+    if (jaExistem.has(chave)) return;
+    jaExistem.add(chave);
+    const s = subjectOf(rec);
+    const dias = regra.prazo_dias ?? prazoPadrao;
+    novas.push({
+      regra_id: regra.id,
+      reconhecimento_id: rec.id,
+      marco_chave: chave,
+      marco,
+      projeto_id: s.projeto_id,
+      projeto_nome: s.projeto_nome,
+      pessoa_nome: s.pessoa_nome,
+      nucleo_impacto: rec.nucleo_impacto || null,
+      tipo_nome: regra.reconhecimento_tipos?.nome || '',
+      regra_nome: regra.nome,
+      motivo,
+      tipo_premiacao: regra.tipo_premiacao,
+      valor: Number(regra.valor || 0),
+      descricao_premiacao: regra.descricao_premiacao,
+      status: 'disponivel',
+      liberada_em: liberadaEm,
+      prazo_limite: dias ? addDays(liberadaEm, Number(dias)) : null,
+    });
+  };
+
+  for (const regra of (regras || []) as Regra[]) {
+    if (regra.criterio === 'simbolico') continue;
+    const doTipo = ((recs || []) as Rec[]).filter((r) => r.tipo_id === regra.tipo_id);
+    const elegiveis = doTipo.filter(
+      (r) =>
+        (!(regra.requer_rg_adiantada || regra.requer_projeto_adiantado) || r.adiantado || r.rg_adiantada || r.projeto_adiantado),
+    );
+
+    if (regra.criterio === 'por_reconhecimento') {
+      for (const rec of elegiveis) {
+        push(regra, rec, 1, `${regra.id}:rec:${rec.id}`, regra.nome, rec.data);
+      }
+      continue;
+    }
+
+    // acumulado
+    const grupos = new Map<string, Rec[]>();
+    for (const rec of elegiveis) {
+      const k = subjectOf(rec).key;
+      grupos.set(k, [...(grupos.get(k) || []), rec]);
+    }
+    for (const [k, lista] of grupos) {
+      lista.sort((a, b) => a.data.localeCompare(b.data));
+      const q = Math.max(1, Number(regra.quantidade_necessaria || 1));
+      const ciclo = Number(regra.ciclo || 0);
+      for (let m = q; m <= lista.length; m += ciclo > 0 ? ciclo : Number.MAX_SAFE_INTEGER) {
+        const gatilho = lista[m - 1];
+        const exigeAdiantado = regra.requer_rg_adiantada || regra.requer_projeto_adiantado;
+        const rotulo = exigeAdiantado ? 'reconhecimentos adiantados' : 'reconhecimentos';
+        push(regra, gatilho, m, `${regra.id}:${k}:${m}`, `${m} ${rotulo}`, gatilho.data);
+        if (ciclo <= 0) break;
+      }
+    }
+  }
+
+  if (novas.length) {
+    const { data: inseridas, error } = await supabase.from('bonificacoes').insert(novas).select('id');
+    if (error) throw error;
+    if (inseridas?.length) {
+      await supabase.from('bonificacao_eventos').insert(
+        inseridas.map((b: any) => ({
+          bonificacao_id: b.id,
+          evento: 'criada',
+          detalhe: 'Bonificação gerada automaticamente pela regra',
+          usuario: currentUser(),
+        })),
+      );
+    }
+  }
+
+  // Expirar prazos vencidos
+  const hoje = todayISO();
+  const vencidas = (existentes || []).filter(
+    (b: any) => b.status === 'disponivel' && b.prazo_limite && b.prazo_limite < hoje,
+  );
+  if (vencidas.length) {
+    await supabase
+      .from('bonificacoes')
+      .update({ status: 'expirada' })
+      .in('id', vencidas.map((b: any) => b.id));
+    await supabase.from('bonificacao_eventos').insert(
+      vencidas.map((b: any) => ({
+        bonificacao_id: b.id,
+        evento: 'expirada',
+        detalhe: `Prazo limite ${b.prazo_limite} ultrapassado`,
+        usuario: 'sistema',
+      })),
+    );
+  }
+
+  return novas.length;
+}
+
+export const STATUS_LABEL: Record<string, string> = {
+  disponivel: 'Disponível',
+  entregue: 'Entregue',
+  expirada: 'Expirada',
+  cancelada: 'Cancelada',
+};
+
+export const STATUS_CLASS: Record<string, string> = {
+  disponivel: 'bg-primary/10 text-primary',
+  entregue: 'bg-success/10 text-success',
+  expirada: 'bg-warning/10 text-warning',
+  cancelada: 'bg-destructive/10 text-destructive',
+};
+
+export function diasRestantes(prazo?: string | null) {
+  if (!prazo) return null;
+  const hoje = new Date(`${todayISO()}T00:00:00`).getTime();
+  const fim = new Date(`${prazo}T00:00:00`).getTime();
+  return Math.round((fim - hoje) / 86400000);
+}

@@ -1,0 +1,260 @@
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Pencil } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRegrasBonificacao, useTiposReconhecimento, useBonificacoesConfig } from '@/hooks/useBonificacoes';
+import { sincronizarBonificacoes } from '@/lib/bonificacoes-engine';
+import { formatCurrency } from '@/lib/formatters';
+
+const CRITERIOS = [
+  { value: 'por_reconhecimento', label: 'A cada reconhecimento' },
+  { value: 'acumulado', label: 'Acumulado (marcos)' },
+  { value: 'simbolico', label: 'Simbólico (sem bonificação)' },
+];
+
+const PREMIACOES = [
+  { value: 'financeira', label: 'Financeira' },
+  { value: 'premio', label: 'Prêmio / voucher' },
+  { value: 'simbolica', label: 'Simbólica' },
+];
+
+const vazia = {
+  nome: '',
+  tipo_id: '',
+  criterio: 'acumulado',
+  quantidade_necessaria: 1,
+  ciclo: 0,
+  requer_rg_adiantada: false,
+  requer_projeto_adiantado: false,
+  tipo_premiacao: 'financeira',
+  valor: 0,
+  descricao_premiacao: '',
+  prazo_dias: '' as number | '',
+  ativo: true,
+};
+
+export function ConfiguracoesRegras() {
+  const queryClient = useQueryClient();
+  const { data: regras = [] } = useRegrasBonificacao();
+  const { data: tipos = [] } = useTiposReconhecimento();
+  const { data: config } = useBonificacoesConfig();
+
+  const [prazoPadrao, setPrazoPadrao] = useState<string>('');
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<any>(vazia);
+  const [novoTipo, setNovoTipo] = useState('');
+
+  useEffect(() => {
+    setPrazoPadrao(config?.prazo_padrao_dias != null ? String(config.prazo_padrao_dias) : '');
+  }, [config]);
+
+  const salvarPrazoPadrao = async () => {
+    const valor = prazoPadrao === '' ? null : Number(prazoPadrao);
+    if (config?.id) {
+      const { error } = await supabase.from('bonificacoes_config').update({ prazo_padrao_dias: valor }).eq('id', config.id);
+      if (error) return toast.error(error.message);
+    } else {
+      const { error } = await supabase.from('bonificacoes_config').insert({ prazo_padrao_dias: valor });
+      if (error) return toast.error(error.message);
+    }
+    toast.success('Prazo padrão salvo');
+    queryClient.invalidateQueries({ queryKey: ['bonificacoes_config'] });
+  };
+
+  const abrirNova = () => { setEditId(null); setForm(vazia); setOpen(true); };
+  const abrirEdicao = (r: any) => {
+    setEditId(r.id);
+    setForm({ ...r, prazo_dias: r.prazo_dias ?? '' });
+    setOpen(true);
+  };
+
+  const salvarRegra = async () => {
+    if (!form.nome.trim()) return toast.error('Informe o nome da regra');
+    if (!form.tipo_id) return toast.error('Selecione o tipo de reconhecimento');
+    const payload: any = {
+      nome: form.nome.trim(),
+      tipo_id: form.tipo_id,
+      criterio: form.criterio,
+      quantidade_necessaria: Number(form.quantidade_necessaria) || 1,
+      ciclo: Number(form.ciclo) || 0,
+      requer_rg_adiantada: !!(form.requer_rg_adiantada || form.requer_projeto_adiantado),
+      requer_projeto_adiantado: false,
+      tipo_premiacao: form.tipo_premiacao,
+      valor: Number(form.valor) || 0,
+      descricao_premiacao: form.descricao_premiacao || '',
+      prazo_dias: form.prazo_dias === '' ? null : Number(form.prazo_dias),
+      ativo: !!form.ativo,
+    };
+    const { error } = editId
+      ? await supabase.from('regras_bonificacao').update(payload).eq('id', editId)
+      : await supabase.from('regras_bonificacao').insert(payload);
+    if (error) return toast.error(error.message);
+    await sincronizarBonificacoes();
+    toast.success('Regra salva. Bonificações já geradas mantêm o valor original.');
+    setOpen(false);
+    queryClient.invalidateQueries({ queryKey: ['regras_bonificacao'] });
+    queryClient.invalidateQueries({ queryKey: ['bonificacoes'] });
+  };
+
+  const criarTipo = async () => {
+    if (!novoTipo.trim()) return;
+    const { error } = await supabase.from('reconhecimento_tipos').insert({
+      nome: novoTipo.trim(),
+      escopo: 'pessoa',
+      ordem: (tipos as any[]).length + 1,
+    });
+    if (error) return toast.error(error.message);
+    setNovoTipo('');
+    toast.success('Tipo de reconhecimento criado');
+    queryClient.invalidateQueries({ queryKey: ['reconhecimento_tipos'] });
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><CardTitle className="text-base">Prazo padrão das bonificações</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label>Prazo: ___ dias após liberação</Label>
+            <Input
+              type="number"
+              className="w-40"
+              placeholder="Sem prazo"
+              value={prazoPadrao}
+              onChange={(e) => setPrazoPadrao(e.target.value)}
+            />
+          </div>
+          <Button onClick={salvarPrazoPadrao}>Salvar</Button>
+          <p className="text-xs text-muted-foreground">Deixe vazio para não aplicar prazo. Cada regra pode ter o seu próprio prazo.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Tipos de reconhecimento</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {(tipos as any[]).map((t) => (
+              <Badge key={t.id} variant="secondary">{t.nome}</Badge>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Input value={novoTipo} onChange={(e) => setNovoTipo(e.target.value)} placeholder="Novo tipo de reconhecimento" className="max-w-xs" />
+            <Button variant="outline" onClick={criarTipo}><Plus className="mr-1 h-4 w-4" />Criar tipo</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Regras de bonificação</CardTitle>
+          <Button onClick={abrirNova}><Plus className="mr-1 h-4 w-4" />Criar nova regra</Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {(regras as any[]).map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 p-3">
+              <div className="min-w-0">
+                <p className="font-medium">{r.nome}</p>
+                <p className="text-xs text-muted-foreground">
+                  {r.reconhecimento_tipos?.nome} · {CRITERIOS.find((c) => c.value === r.criterio)?.label}
+                  {r.criterio === 'acumulado' && ` · a partir de ${r.quantidade_necessaria}${r.ciclo > 0 ? `, repetindo a cada ${r.ciclo}` : ''}`}
+                  {(r.requer_rg_adiantada || r.requer_projeto_adiantado) && ' · exige reconhecimento adiantado'}
+                  {r.prazo_dias ? ` · prazo ${r.prazo_dias} dias` : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium">{r.descricao_premiacao || formatCurrency(Number(r.valor))}</span>
+                <Badge variant="secondary" className={r.ativo ? 'bg-success/10 text-success' : ''}>
+                  {r.ativo ? 'Ativa' : 'Inativa'}
+                </Badge>
+                <Button size="icon" variant="ghost" onClick={() => abrirEdicao(r)}><Pencil className="h-4 w-4" /></Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+          <DialogHeader><DialogTitle>{editId ? 'Editar regra' : 'Nova regra'}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nome da regra</Label>
+              <Input value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Tipo de reconhecimento</Label>
+                <Select value={form.tipo_id} onValueChange={(v) => setForm({ ...form, tipo_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                  <SelectContent>
+                    {(tipos as any[]).map((t) => <SelectItem key={t.id} value={t.id}>{t.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Critério</Label>
+                <Select value={form.criterio} onValueChange={(v) => setForm({ ...form, criterio: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CRITERIOS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Quantidade necessária</Label>
+                <Input type="number" value={form.quantidade_necessaria} onChange={(e) => setForm({ ...form, quantidade_necessaria: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Repetir a cada (0 = não repete)</Label>
+                <Input type="number" value={form.ciclo} onChange={(e) => setForm({ ...form, ciclo: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tipo de premiação</Label>
+                <Select value={form.tipo_premiacao} onValueChange={(v) => setForm({ ...form, tipo_premiacao: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PREMIACOES.map((p) => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Valor (R$)</Label>
+                <Input type="number" value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label>Descrição da premiação</Label>
+                <Input value={form.descricao_premiacao} onChange={(e) => setForm({ ...form, descricao_premiacao: e.target.value })} placeholder="Ex.: R$ 30 / McDonald's" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prazo para utilização (dias)</Label>
+                <Input type="number" value={form.prazo_dias} onChange={(e) => setForm({ ...form, prazo_dias: e.target.value })} placeholder="Usa o prazo padrão" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+                <Label className="font-normal">Depende de reconhecimento adiantado</Label>
+                <Switch checked={form.requer_rg_adiantada || form.requer_projeto_adiantado} onCheckedChange={(v) => setForm({ ...form, requer_rg_adiantada: v, requer_projeto_adiantado: false })} />
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <Label className="font-normal">Regra ativa</Label>
+              <Switch checked={form.ativo} onCheckedChange={(v) => setForm({ ...form, ativo: v })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+            <Button onClick={salvarRegra}>Salvar regra</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

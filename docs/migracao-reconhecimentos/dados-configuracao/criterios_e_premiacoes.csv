@@ -1,0 +1,9 @@
+campo,codigo,rotulo_ui,significado
+criterio,por_reconhecimento,A cada reconhecimento,"Gera 1 bonificação para cada reconhecimento elegível do tipo"
+criterio,acumulado,Acumulado (marcos),"Conta reconhecimentos elegíveis por projeto/pessoa e gera bonificação ao atingir quantidade_necessaria e depois a cada 'ciclo'"
+criterio,simbolico,Simbólico (sem bonificação),"Regra apenas informativa; o motor a ignora e nunca gera bonificação"
+tipo_premiacao,financeira,Financeira,"Premiação em dinheiro (usa valor)"
+tipo_premiacao,premio,Prêmio / voucher,"Premiação em item/voucher (usa descricao_premiacao)"
+tipo_premiacao,simbolica,Simbólica,"Sem valor financeiro"
+escopo,projeto,Projeto,"Reconhecimento vinculado a um projeto (centro de custo de entrada); permite 'Adiantado?' e RGs anteriores"
+escopo,pessoa,Pessoa,"Reconhecimento vinculado a uma pessoa (texto livre) ou, para o tipo Núcleo de Impacto, a um núcleo"

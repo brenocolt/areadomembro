@@ -1,0 +1,5 @@
+ordem_kanban,codigo,rotulo,cor_ui,origem_da_transicao
+1,disponivel,Disponível,azul (primary),"Criada pelo motor ao atingir a regra"
+2,entregue,Entregue,verde (success),"Ação manual 'Marcar como entregue' (a partir de disponivel ou expirada)"
+3,expirada,Expirada,amarelo (warning),"Automática: prazo_limite < hoje e status = disponivel (avaliada a cada sincronização)"
+4,cancelada,Cancelada,vermelho (destructive),"Ação manual 'Cancelar bonificação' (a partir de disponivel ou expirada)"

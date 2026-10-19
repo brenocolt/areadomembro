@@ -1,0 +1,46 @@
+tabela,campo,tipo,obrigatorio,padrao,descricao
+reconhecimento_tipos,id,uuid,sim,gen_random_uuid(),PK
+reconhecimento_tipos,nome,text,sim,,Nome exibido
+reconhecimento_tipos,escopo,text (projeto|pessoa),sim,pessoa,Define o formulário de registro
+reconhecimento_tipos,ativo,boolean,sim,true,Só tipos ativos aparecem no formulário "Registrar"
+reconhecimento_tipos,ordem,integer,sim,0,Ordenação
+regras_bonificacao,nome,text,sim,,Nome da regra (copiado para bonificacoes.regra_nome)
+regras_bonificacao,tipo_id,uuid FK reconhecimento_tipos,não (UI exige),,Tipo ao qual a regra se aplica; ON DELETE CASCADE
+regras_bonificacao,criterio,text (por_reconhecimento|acumulado|simbolico),sim,por_reconhecimento,Estratégia de geração
+regras_bonificacao,quantidade_necessaria,integer,sim,1,Marco inicial (só para acumulado); mínimo efetivo 1
+regras_bonificacao,ciclo,integer,sim,0,0 = marco único; n>0 = repete a cada n reconhecimentos
+regras_bonificacao,requer_rg_adiantada,boolean,sim,false,"Se true só contam reconhecimentos com adiantado=true (UI grava aqui o switch 'Depende de reconhecimento adiantado')"
+regras_bonificacao,requer_projeto_adiantado,boolean,sim,false,Legado; UI sempre grava false. O motor trata como OR com requer_rg_adiantada
+regras_bonificacao,tipo_premiacao,text (financeira|premio|simbolica),sim,financeira,Natureza da premiação
+regras_bonificacao,valor,numeric,sim,0,Valor em R$ (copiado para a bonificação)
+regras_bonificacao,descricao_premiacao,text,sim,'',Texto exibido no lugar do valor quando preenchido
+regras_bonificacao,prazo_dias,integer,não,NULL,Dias de validade a partir da liberação; NULL usa o prazo padrão; 0/NULL = sem prazo
+regras_bonificacao,ativo,boolean,sim,true,Só regras ativas são processadas pelo motor
+regras_bonificacao,ordem,integer,sim,0,Ordenação na tela de configurações
+reconhecimentos,tipo_id,uuid FK reconhecimento_tipos,sim,,ON DELETE CASCADE
+reconhecimentos,data,date,sim,hoje (preenchido pela UI),Data do reconhecimento
+reconhecimentos,projeto_id,uuid (sem FK),não,,Id do projeto (centro_custo_entradas.id)
+reconhecimentos,projeto_nome,text,não,,Snapshot do nome do projeto
+reconhecimentos,pessoa_nome,text,não,,Pessoa reconhecida; para Núcleo de Impacto guarda o nome do núcleo
+reconhecimentos,adiantado,boolean,sim,false,Campo vigente: reconhecimento adiantado
+reconhecimentos,rg_adiantada,boolean,sim,false,Legado (UI grava false; motor lê como OR)
+reconhecimentos,projeto_adiantado,boolean,sim,false,Legado (UI grava false; motor lê como OR)
+reconhecimentos,nucleo_impacto,text CHECK (7 valores),não,,Preenchido só no tipo Núcleo de Impacto
+reconhecimentos,observacao,text,não,,Texto livre. Valor literal especial marca RGs anteriores ao sistema
+reconhecimentos,criado_por,text,não,,E-mail do usuário logado (ou 'sistema')
+bonificacoes,regra_id,uuid FK regras_bonificacao,não,,ON DELETE SET NULL
+bonificacoes,reconhecimento_id,uuid FK reconhecimentos,não,,Reconhecimento gatilho; ON DELETE SET NULL
+bonificacoes,marco_chave,text UNIQUE,sim,,Chave de idempotência do motor
+bonificacoes,marco,integer,sim,1,"Posição no acumulado (ex.: 2, 4, 6...); 1 para por_reconhecimento"
+bonificacoes,projeto_id / projeto_nome / pessoa_nome / nucleo_impacto,uuid/text,não,,Snapshot do sujeito
+bonificacoes,tipo_nome / regra_nome / motivo,text,sim,'',Snapshots textuais
+bonificacoes,tipo_premiacao / valor / descricao_premiacao,text/numeric/text,sim,,Snapshot da premiação vigente na época da geração
+bonificacoes,status,text,sim,disponivel,disponivel|entregue|expirada|cancelada (sem CHECK no banco)
+bonificacoes,liberada_em,date,sim,CURRENT_DATE,Data do reconhecimento gatilho
+bonificacoes,prazo_limite,date,não,,liberada_em + dias
+bonificacoes,entregue_em / entregue_por / entregue_para / observacao_entrega,timestamptz/text,não,,Dados da entrega; entregue_para = nomes separados por "; "
+bonificacoes,cancelada_em / cancelada_por / justificativa_cancelamento,timestamptz/text,não,,Dados do cancelamento
+bonificacao_eventos,bonificacao_id,uuid FK bonificacoes,sim,,ON DELETE CASCADE
+bonificacao_eventos,evento,text,sim,,criada|entregue|cancelada|expirada
+bonificacao_eventos,detalhe / usuario,text,não,,Texto do evento e quem o gerou
+bonificacoes_config,prazo_padrao_dias,integer,não,NULL,Tabela de 1 linha

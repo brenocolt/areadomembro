@@ -1,0 +1,2 @@
+chave,valor,observacao
+prazo_padrao_dias,,Vazio = bonificações sem prazo de utilização. Cada regra pode sobrescrever com prazo_dias.
