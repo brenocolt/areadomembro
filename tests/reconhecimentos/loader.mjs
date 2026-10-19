@@ -11,6 +11,9 @@ const arquivo = (p) => existsSync(p) && statSync(p).isFile()
 
 registerHooks({
     resolve(specifier, context, next) {
+        // Só mexe em imports do próprio projeto (nunca em pacotes de terceiros/CJS).
+        const pai = context.parentURL
+        if (pai && (!pai.startsWith(pathToFileURL(raiz).href) || pai.includes('/node_modules/'))) return next(specifier, context)
         let base
         if (specifier.startsWith('@/')) base = path.join(raiz, 'src', specifier.slice(2))
         else if ((specifier.startsWith('./') || specifier.startsWith('../')) && context.parentURL?.startsWith('file:')) {
