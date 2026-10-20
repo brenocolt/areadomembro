@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { comAcessoReconhecimentos } from '@/lib/reconhecimentos/guard'
-import { listarProjetos } from '@/lib/reconhecimentos/repositorio'
+import * as svc from '@/lib/reconhecimentos/servico'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-    return comAcessoReconhecimentos(async ({ db }) => NextResponse.json({ projetos: await listarProjetos(db) }))
+    return comAcessoReconhecimentos(async ({ db }) => NextResponse.json({ projetos: await svc.listarProjetos(db) }))
 }

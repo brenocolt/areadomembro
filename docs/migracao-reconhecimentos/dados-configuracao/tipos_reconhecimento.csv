@@ -1,8 +1,0 @@
-ordem,nome,escopo,ativo,verificacao
-1,RG / Projeto reconhecido,projeto,true,SEED (migration 20260921004534)
-2,Piloto de Elite,pessoa,true,SEED
-3,Líder de Voo,pessoa,true,SEED
-4,SDR do Mês,pessoa,true,SEED
-5,Closer do Mês,pessoa,true,SEED
-6,Consultor do Mês,pessoa,true,SEED
-7,Núcleo de Impacto,pessoa,true,MIGRATION 20260921005732

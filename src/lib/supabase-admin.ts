@@ -11,7 +11,19 @@ export class ConfiguracaoPendenteError extends Error {
     }
 }
 
-export function createAdminSupabaseClient() {
+export interface IdentidadeAuditoria {
+    id?: string | null
+    email: string
+}
+
+// Cabeçalhos HTTP só aceitam ASCII imprimível: qualquer outro caractere é escapado.
+const ascii = (v: string) => (/^[\x20-\x7E]*$/.test(v) ? v : encodeURIComponent(v))
+
+/**
+ * @param identidade quem está agindo. É enviada ao PostgREST nos cabeçalhos x-app-usuario-*, que os triggers
+ *                   de auditoria do banco leem (current_setting('request.headers')) para gravar o autor.
+ */
+export function createAdminSupabaseClient(identidade?: IdentidadeAuditoria) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!url || !key) {
@@ -19,5 +31,10 @@ export function createAdminSupabaseClient() {
             'Configuração do servidor pendente: defina SUPABASE_SERVICE_ROLE_KEY nas variáveis de ambiente do servidor.',
         )
     }
-    return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+    const headers: Record<string, string> = {}
+    if (identidade) {
+        headers['x-app-usuario-email'] = ascii(identidade.email)
+        if (identidade.id) headers['x-app-usuario-id'] = ascii(identidade.id)
+    }
+    return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers } })
 }

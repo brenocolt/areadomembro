@@ -1,7 +1,0 @@
-colunas A/B: 73 73 | igual: true
-cons {"soNaOrigem":[],"soNoConsolidado":[]}
-trg {"soNaOrigem":[],"soNoConsolidado":[]}
-pol {"soNaOrigem":[],"soNoConsolidado":[]}
-constraints (migrations):
-UNIQUE marco_chave: duplicate key value violates unique constraint "bonificacoes_marco_chave_key"
-CHECK núcleo: new row for relation "reconhecimentos" violates check constraint "reconhecimentos_nucleo_impacto_check"

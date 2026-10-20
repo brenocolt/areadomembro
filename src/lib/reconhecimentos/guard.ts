@@ -34,7 +34,10 @@ export async function obterAcessoReconhecimentos(): Promise<ResultadoAcesso> {
 
 export interface ContextoReconhecimentos {
     usuario: UsuarioAutorizado
+    /** Cliente cujo autor de auditoria é o usuário logado. */
     db: ReturnType<typeof createAdminSupabaseClient>
+    /** Cliente cujo autor de auditoria é "sistema" (ex.: expiração automática). */
+    dbSistema: ReturnType<typeof createAdminSupabaseClient>
 }
 
 export type RespostaErro = { error: string; detalhe?: string }
@@ -47,8 +50,9 @@ export async function comAcessoReconhecimentos(
     const acesso = await obterAcessoReconhecimentos()
     if (!acesso.ok) return NextResponse.json({ error: acesso.erro }, { status: acesso.status })
     try {
-        const db = createAdminSupabaseClient()
-        return await handler({ usuario: acesso.usuario, db })
+        const db = createAdminSupabaseClient({ id: acesso.usuario.id, email: acesso.usuario.email })
+        const dbSistema = createAdminSupabaseClient({ email: 'sistema' })
+        return await handler({ usuario: acesso.usuario, db, dbSistema })
     } catch (e) {
         if (e instanceof ConfiguracaoPendenteError) {
             return NextResponse.json({ error: e.message, configuracaoPendente: true }, { status: 503 })

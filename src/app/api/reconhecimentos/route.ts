@@ -1,19 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { comAcessoReconhecimentos } from '@/lib/reconhecimentos/guard'
-import { listarDados, registrarReconhecimento } from '@/lib/reconhecimentos/repositorio'
-import { parseRegistro } from '@/lib/reconhecimentos/validacao'
+import * as svc from '@/lib/reconhecimentos/servico'
 
 export const dynamic = 'force-dynamic'
 
-// GET: tudo que a aba precisa para renderizar (tipos, regras, reconhecimentos, bonificações, configuração).
+const corpo = (req: NextRequest) => req.json().catch(() => null)
+
+// GET: tudo que a aba precisa para renderizar (tipos, núcleos, regras, reconhecimentos, bonificações, entregas).
 export async function GET() {
-    return comAcessoReconhecimentos(async ({ db }) => NextResponse.json(await listarDados(db)))
+    return comAcessoReconhecimentos(async ({ db }) => NextResponse.json(await svc.listarDados(db)))
 }
 
-// POST: registra reconhecimento(s) e roda o motor (gatilho 2).
+// POST: registra um reconhecimento e gera as bonificações devidas.
 export async function POST(req: NextRequest) {
-    return comAcessoReconhecimentos(async ({ db, usuario }) => {
-        const entrada = parseRegistro(await req.json().catch(() => null))
-        return NextResponse.json(await registrarReconhecimento(db, usuario.email, entrada))
-    })
+    return comAcessoReconhecimentos(async ({ db, usuario }) =>
+        NextResponse.json(await svc.criarReconhecimento(db, usuario, await corpo(req)), { status: 201 }))
 }

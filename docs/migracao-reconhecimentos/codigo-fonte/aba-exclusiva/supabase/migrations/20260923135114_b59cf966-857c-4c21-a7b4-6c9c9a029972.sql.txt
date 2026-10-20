@@ -1,1 +1,0 @@
-ALTER TABLE public.bonificacoes ADD COLUMN IF NOT EXISTS entregue_para TEXT;

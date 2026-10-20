@@ -1,6 +1,8 @@
 # Reconhecimentos e Bonificações — nova implementação (proposta para validação)
 
-**Status: PROPOSTA. Nada foi implementado, nenhuma migration foi executada, nenhuma alteração em produção.**
+**Status: PROPOSTA APROVADA (recomendações aceitas, "sim") e IMPLEMENTADA em desenvolvimento. Nenhuma migration foi executada e nada foi publicado em produção.** Veja `README.md` (o que foi construído) e `GUIA-APLICACAO.md` (como aplicar, etapa por etapa, com a sua autorização).
+
+> Ajustes feitos na implementação em relação ao texto abaixo: a vigência da regra é por **instante** (`vigente_desde`, comparado com o momento do registro) em vez de data; a tabela `reconhecimento_nucleos` guarda só exceções (núcleo sem linha = elegível); o aviso de RG fora de ordem aparece no formulário.
 A aba será criada do zero na arquitetura atual (Next.js + NextAuth + Supabase), usando as imagens como referência visual. Sem migração histórica, sem importação de CSV, sem reprodução do banco anterior.
 
 ## 0. Cancelamento da migração (o que muda no que já existe)

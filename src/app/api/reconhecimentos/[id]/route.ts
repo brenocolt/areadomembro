@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { comAcessoReconhecimentos } from '@/lib/reconhecimentos/guard'
-import { excluirReconhecimento } from '@/lib/reconhecimentos/repositorio'
+import * as svc from '@/lib/reconhecimentos/servico'
 import { exigirUuid } from '@/lib/reconhecimentos/validacao'
 
-// Excluir reconhecimento: não roda o motor e mantém as bonificações já geradas.
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    return comAcessoReconhecimentos(async ({ db }) => {
-        await excluirReconhecimento(db, exigirUuid((await params).id, 'Reconhecimento inválido'))
-        return NextResponse.json({ ok: true })
+// PUT: edita (data, projeto/colaborador/núcleo, nº da RG, observações). O histórico registra de → para e o autor.
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    return comAcessoReconhecimentos(async ({ db, usuario }) => {
+        const id = exigirUuid((await params).id, 'Reconhecimento inválido.')
+        return NextResponse.json(await svc.editarReconhecimento(db, usuario, id, await req.json().catch(() => null)))
     })
 }

@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { comAcessoReconhecimentos } from '@/lib/reconhecimentos/guard'
-import { criarTipo } from '@/lib/reconhecimentos/repositorio'
-import { parseTipo } from '@/lib/reconhecimentos/validacao'
+import * as svc from '@/lib/reconhecimentos/servico'
 
 export async function POST(req: NextRequest) {
-    return comAcessoReconhecimentos(async ({ db }) => {
-        const { nome } = parseTipo(await req.json().catch(() => null))
-        await criarTipo(db, nome)
-        return NextResponse.json({ ok: true })
-    })
+    return comAcessoReconhecimentos(async ({ db }) => NextResponse.json({ tipo: await svc.criarTipo(db, await req.json().catch(() => null)) }, { status: 201 }))
 }
