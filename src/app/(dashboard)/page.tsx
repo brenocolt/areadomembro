@@ -6,6 +6,7 @@ import {
     PendingFormsWidget,
     PlanoPunicaoAlert
 } from "./components/home-widgets";
+import { MyAbsencesWidget } from "./components/my-absences-widget";
 
 export default function DashboardPage() {
     return (
@@ -15,8 +16,9 @@ export default function DashboardPage() {
             <MetricCards />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 space-y-6">
                     <RecentActivity />
+                    <MyAbsencesWidget />
                 </div>
                 <div>
                     <QuickActions />
