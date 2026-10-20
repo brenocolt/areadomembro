@@ -47,7 +47,7 @@ Correções técnicas permitidas (sem mudar o comportamento no Brasil): datas de
 ## Como rodar os testes
 
 ```bash
-npm run test:reconhecimentos                    # 43 testes (Node >= 22.15, sem dependências novas)
+npm run test:reconhecimentos                    # 45 testes (Node >= 22.15, sem dependências novas)
 # inclui validação da migration em PostgreSQL real (PGlite, em memória):
 mkdir /tmp/pg && (cd /tmp/pg && npm init -y && npm i @electric-sql/pglite)
 PGLITE_MODULE=/tmp/pg/node_modules/@electric-sql/pglite/dist/index.js npm run test:reconhecimentos

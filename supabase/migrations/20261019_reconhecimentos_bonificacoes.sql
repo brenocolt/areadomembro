@@ -20,11 +20,16 @@
 --     sistema anterior de forma idempotente e sem tocar nos registros novos
 --     (ver docs/reconhecimentos-implementacao/IMPORTACAO-HISTORICA.md).
 --
--- Impacto: apenas CREATE em objetos NOVOS. Nenhuma tabela, coluna, policy,
--- trigger ou dado preexistente é alterado. Pré-requisito: função
--- public.update_updated_at_column() (criada em 001_create_all_tables.sql); se por
--- algum motivo não existir, é criada com o corpo padrão (se existir, não é tocada).
+-- Impacto: SOMENTE objetos novos — 6 tabelas, 3 índices únicos, 4 triggers,
+-- RLS/REVOKE/GRANT nessas tabelas e dados iniciais NELAS. Nenhuma tabela, coluna,
+-- policy, trigger, função ou dado preexistente é alterado.
+-- Pré-requisito: função public.update_updated_at_column() (criada em
+-- 001_create_all_tables.sql). Se não existir, a migration ABORTA com mensagem
+-- clara, sem criar nada (não a recria, para não tocar em objetos compartilhados).
+-- Atômica: roda dentro de BEGIN/COMMIT — ou cria tudo, ou nada.
 -- Idempotente: pode ser reexecutada sem duplicar estrutura nem dados.
+
+BEGIN;
 
 DO $$
 BEGIN
@@ -32,11 +37,7 @@ BEGIN
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public' AND p.proname = 'update_updated_at_column'
   ) THEN
-    EXECUTE $f$
-      CREATE FUNCTION public.update_updated_at_column() RETURNS trigger AS $b$
-      BEGIN NEW.updated_at = now(); RETURN NEW; END;
-      $b$ LANGUAGE plpgsql
-    $f$;
+    RAISE EXCEPTION 'Pré-requisito ausente: função public.update_updated_at_column(). Nada foi criado. Avise o responsável antes de continuar.';
   END IF;
 END $$;
 
@@ -240,3 +241,5 @@ SELECT NULL
 WHERE NOT EXISTS (SELECT 1 FROM public.bonificacoes_config);
 
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;

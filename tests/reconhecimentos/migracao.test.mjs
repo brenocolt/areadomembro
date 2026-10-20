@@ -177,16 +177,34 @@ pg('migração não altera objetos preexistentes', async () => {
     assert.equal((await db.query(`select count(*)::int n from pg_policies where schemaname='public' and tablename in ('projetos','colaboradores')`)).rows[0].n, 0)
 })
 
-pg('função update_updated_at_column ausente é criada; presente não é tocada', async () => {
+pg('função update_updated_at_column ausente: a migration ABORTA sem criar nada; presente: não é tocada', async () => {
     const sem = await novoBanco({ semFuncao: true })
-    assert.equal((await sem.query(`select count(*)::int n from pg_proc where proname='update_updated_at_column'`)).rows[0].n, 0)
-    await sem.exec(MIGRATION)
-    assert.equal((await sem.query(`select count(*)::int n from pg_proc where proname='update_updated_at_column'`)).rows[0].n, 1)
+    const msg = await falha(() => sem.exec(MIGRATION))
+    assert.match(msg ?? 'ACEITOU', /Pré-requisito ausente/)
+    await sem.exec('ROLLBACK') // o SQL Editor/cliente encerra a transação abortada; aqui fazemos explicitamente
+    assert.equal((await sem.query(`select count(*)::int n from information_schema.tables where table_schema='public' and table_name = any($1)`, [TABELAS])).rows[0].n, 0, 'nenhuma tabela foi criada')
+    assert.equal((await sem.query(`select count(*)::int n from pg_proc where proname='update_updated_at_column'`)).rows[0].n, 0, 'a função não foi criada')
 
     const com = await novoBanco()
     await com.exec(`CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger AS $$ BEGIN NEW.updated_at = '2001-01-01'; RETURN NEW; END; $$ LANGUAGE plpgsql;`)
     await com.exec(MIGRATION)
     assert.match((await com.query(`select prosrc from pg_proc where proname='update_updated_at_column'`)).rows[0].prosrc, /2001-01-01/, 'a função existente não foi sobrescrita')
+})
+
+pg('atomicidade: erro DEPOIS de criar as tabelas desfaz tudo (nada fica pela metade)', async () => {
+    const db = new PGlite()
+    // Ambiente sem o papel service_role: o GRANT no fim da migration falha, depois de as tabelas já terem sido criadas.
+    await db.exec(`CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
+        CREATE FUNCTION public.update_updated_at_column() RETURNS trigger AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END; $$ LANGUAGE plpgsql;`)
+    const msg = await falha(() => db.exec(MIGRATION))
+    assert.match(msg ?? 'ACEITOU', /service_role/)
+    await db.exec('ROLLBACK') // o cliente/SQL Editor encerra a transação abortada
+    assert.equal((await db.query(`select count(*)::int n from information_schema.tables where table_schema='public' and table_name = any($1)`, [TABELAS])).rows[0].n, 0, 'nenhuma tabela ficou')
+    assert.equal((await db.query(`select count(*)::int n from pg_indexes where schemaname='public' and indexname like '%origem_unq'`)).rows[0].n, 0)
+    // e depois de corrigir o ambiente, aplica normalmente
+    await db.exec(`CREATE ROLE service_role NOLOGIN BYPASSRLS`)
+    await db.exec(MIGRATION)
+    assert.equal(await contar(db, 'reconhecimento_tipos'), 7)
 })
 
 pg('procedência: CHECK e unicidade', async () => {
@@ -253,4 +271,64 @@ pg('importação histórica: idempotente, não sobrescreve o novo e as chaves ba
     await db.exec(`delete from bonificacao_eventos where origem = 'sistema-antigo'; delete from bonificacoes where origem = 'sistema-antigo'; delete from reconhecimentos where origem = 'sistema-antigo'`)
     await importar(false)
     assert.equal(await sincronizar(), 1, 'documenta o risco: chave antiga => duplicidade')
+})
+
+pg('auditoria de catálogo: antes × depois — nada removido nem alterado, só objetos das 6 tabelas', async () => {
+    const db = await novoBanco()
+    // Objetos "de produção" preexistentes, para que qualquer efeito colateral apareça no diff.
+    await db.exec(`
+        ALTER TABLE public.projetos ADD COLUMN status text DEFAULT 'Ativo';
+        CREATE INDEX projetos_status_idx ON public.projetos (status);
+        ALTER TABLE public.projetos ENABLE ROW LEVEL SECURITY;
+        CREATE POLICY "Allow all projetos" ON public.projetos FOR ALL USING (true) WITH CHECK (true);
+        CREATE TRIGGER update_projetos_updated_at BEFORE UPDATE ON public.projetos FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.projetos TO anon, authenticated;
+        INSERT INTO public.projetos(nome) VALUES ('Projeto A'), ('Projeto B');
+        CREATE SEQUENCE public.seq_existente;
+        CREATE VIEW public.v_existente AS SELECT id, nome FROM public.projetos;
+    `)
+    const snapshot = async () => {
+        const q = async (sql) => (await db.query(sql)).rows.map(r => JSON.stringify(r))
+        return {
+            relacoes: await q(`select c.relname, c.relkind, c.relrowsecurity rls, c.relacl::text acl from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','v','S','i') order by 1`),
+            colunas: await q(`select table_name, column_name, data_type, is_nullable, coalesce(column_default,'') d from information_schema.columns where table_schema='public' order by 1,2`),
+            constraints: await q(`select conrelid::regclass::text t, conname, pg_get_constraintdef(oid) d from pg_constraint where connamespace='public'::regnamespace order by 1,2`),
+            indices: await q(`select tablename, indexname, indexdef from pg_indexes where schemaname='public' order by 1,2`),
+            triggers: await q(`select event_object_table t, trigger_name, action_statement from information_schema.triggers where event_object_schema='public' order by 1,2`),
+            policies: await q(`select tablename, policyname, cmd, qual, with_check from pg_policies where schemaname='public' order by 1,2`),
+            funcoes: await q(`select proname, md5(prosrc) h from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' order by 1`),
+            grants: await q(`select table_name, grantee, privilege_type from information_schema.role_table_grants where table_schema='public' order by 1,2,3`),
+            dados: await q(`select 'projetos' t, count(*)::int n from public.projetos`),
+            papeis: await q(`select rolname from pg_roles where rolname in ('anon','authenticated','service_role') order by 1`),
+            extensoes: await q(`select extname from pg_extension order by 1`),
+        }
+    }
+    const antes = await snapshot()
+    await db.exec(MIGRATION)
+    const depois = await snapshot()
+
+    const novas = new Set(TABELAS)
+    const ehDasNovas = (linha) => {
+        const o = JSON.parse(linha)
+        const tabela = o.relname ?? o.table_name ?? o.t ?? o.tablename
+        if (o.relkind === 'i') return TABELAS.some(t => String(o.relname).startsWith(t) || String(o.relname).endsWith('_origem_unq'))
+        return novas.has(tabela)
+    }
+    const relatorio = {}
+    for (const categoria of Object.keys(antes)) {
+        const a = new Set(antes[categoria]), d = new Set(depois[categoria])
+        const removidasOuAlteradas = antes[categoria].filter(x => !d.has(x))
+        const adicionadas = depois[categoria].filter(x => !a.has(x))
+        assert.deepEqual(removidasOuAlteradas, [], `${categoria}: algo preexistente foi removido/alterado`)
+        const estranhas = adicionadas.filter(x => !ehDasNovas(x))
+        assert.deepEqual(estranhas, [], `${categoria}: objeto novo que não pertence às 6 tabelas`)
+        relatorio[categoria] = adicionadas.length
+    }
+    // A auditoria precisa de fato ter enxergado a criação (não pode ser vácua).
+    assert.equal(relatorio.relacoes >= 6 + 6 + 3, true, JSON.stringify(relatorio)) // 6 tabelas + PKs + índices
+    assert.equal(relatorio.triggers, 4)
+    assert.equal(relatorio.policies, 0)
+    assert.equal(relatorio.funcoes, 0)
+    assert.equal(relatorio.dados, 0)
+    console.log('      objetos novos por categoria:', JSON.stringify(relatorio))
 })
