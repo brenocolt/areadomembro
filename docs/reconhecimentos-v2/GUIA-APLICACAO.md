@@ -1,19 +1,29 @@
-# Aplicação da aba Reconhecimentos e Bonificações — passo a passo (banco atual do Supabase)
+# Colocando a aba Reconhecimentos e Bonificações em funcionamento — projeto Supabase único
 
-Decisão: usar o banco atual ("Area do Membro"), sem projeto de homologação.
-Regra de trabalho: **uma etapa por vez, com autorização explícita antes de cada ação em produção.** O Supabase conectado à sessão do Claude é somente leitura e não há acesso ao Coolify: tudo abaixo é executado **por você**; o Claude orienta e confere o que você contar (sem credenciais).
+**Regra deste processo:** um único projeto Supabase (o atual, "Area do Membro"), **nenhum projeto, banco, ambiente ou preview novo**. Só se usa o que já existe: **SQL Editor do Supabase**, **Coolify** e o **Claude** (código, testes e conferência em modo leitura). Nada é executado em produção sem a sua autorização explícita, fase por fase.
 
-| Etapa | O quê | Quem |
-|---|---|---|
-| 1 | Garantir um backup válido | você |
-| 2 | Conferir o que a migration faz (revisão já feita) | Claude (feito) |
-| 3 | Aplicar a migration no SQL Editor | você |
-| 4 | Configurar `SUPABASE_SERVICE_ROLE_KEY` no Coolify | você |
-| 5 | Verificar a conexão aplicação ↔ banco e as permissões | você (com Claude conferindo) |
+## Por que dá para fazer com segurança no mesmo banco
+1. A migration é **aditiva**: cria 7 tabelas novas que nenhuma tela atual lê. Aplicá-la não muda o comportamento de nada que existe. Não há chaves estrangeiras para tabelas existentes, então nem bloqueia tabelas em uso.
+2. Antes de gravar qualquer coisa, existe um **DRY-RUN** (`supabase/dry-run/20261020_reconhecimentos_DRY_RUN.sql`): aplica a migration e roda 32 verificações **no banco real** dentro de um único comando que se desfaz sozinho. **Nada fica gravado.** Verifica que nada preexistente mudou, que `anon`/`authenticated` não leem nem gravam as tabelas novas (mesmo com os privilégios padrão do Supabase), que RG repetida/pessoa duplicada/datas impossíveis são barradas e que o histórico é automático e imutável.
+3. O histórico da aba é imutável por desenho — então testes feitos em produção ficariam para sempre. Por isso existe a **limpeza controlada** (`supabase/rollbacks/20261020_reconhecimentos_LIMPAR_DADOS_DE_TESTE.sql`): zera **só** os dados criados na aba (não toca em nenhuma tabela existente), em dois passos (simulação → confirmação). Você valida com registros marcados `[TESTE]` e limpa antes do uso real.
+4. A aba só é visível e acessível para **ADMIN e Vice Presidência**. Quem não tem acesso nunca vê dados nem o menu; a API devolve 401/403.
+5. O **preview do PR** que o Coolify cria sozinho usa o mesmo banco; **você não precisa usá-lo**. O código sobe para produção direto pelo fluxo normal (merge → deploy do Coolify).
 
----
+## Visão geral das fases
+| Fase | O quê | Quem | Reversão |
+|---|---|---|---|
+| 1 | Backup válido | você | — |
+| 2 | Pré-checagem + **DRY-RUN** (nada grava) | você roda; Claude confere o relatório | nada a reverter |
+| 3 | Aplicar a migration | você | script de rollback (apaga só as 7 tabelas novas) |
+| 4 | `SUPABASE_SERVICE_ROLE_KEY` no Coolify | você | remover a variável |
+| 5 | Publicar o código (merge do PR → deploy do Coolify) | você autoriza; Claude faz o merge se você pedir | Coolify → Rollback para o deploy anterior |
+| 6 | Validar em produção com registros `[TESTE]` (VP e não-VP) | você; Claude confere em modo leitura | fase 7 |
+| 7 | Limpar os dados de teste | você | — (é a própria limpeza) |
+| 8 | Cadastrar as regras reais e liberar o uso | você | desativar regras |
 
-## Etapa 1 — Backup válido
+Ordem pensada para o risco: as fases 2–4 não mudam nada do que os usuários veem; só a fase 5 coloca a aba no ar, e ela já encontra as tabelas e a chave prontas.
+
+## Fase 1 — Backup válido
 A migration só **cria** objetos novos; o backup é um seguro contra imprevistos.
 
 **1A. Backup automático (plano Pro):** painel → projeto *Area do Membro* → **Database → Backups → Scheduled backups**: confirme um backup de **hoje ou ontem**, concluído. **Não clique em Restore.** Anote data/hora.
@@ -32,7 +42,9 @@ Guarde o arquivo em local seguro (tem dados pessoais): **não** versionar, **nã
 
 ---
 
-## Etapa 2 — O que a migration faz (revisão feita pelo Claude)
+---
+
+## O que a migration faz (revisão feita pelo Claude)
 Arquivo: `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` · reversão: `supabase/rollbacks/20261020_reconhecimentos_bonificacoes_ROLLBACK.sql`.
 
 **Só cria objetos novos; não altera nada existente:**
@@ -47,83 +59,81 @@ Comprovado em PostgreSQL real (PGlite) por `npm run test:reconhecimentos`: audit
 
 ---
 
-## Etapa 3 — Aplicar a migration (só após a Etapa 1 e com a sua autorização explícita)
+---
 
-### 3A. Pré-checagem (somente leitura)
+## Fase 2 — Pré-checagem e DRY-RUN (nada é gravado)
+
+### 2A. Pré-checagem (somente leitura)
 SQL Editor → **New query**, um bloco por vez:
 ```sql
 -- (1) função compartilhada existe? esperado: 1 linha
 SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'public' AND proname = 'update_updated_at_column';
 
--- (2) as 7 tabelas ainda NÃO existem? esperado: 0 linhas
+-- (2) nada com os nomes novos existe? esperado: 0 linhas
 SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN
  ('reconhecimento_tipos','reconhecimento_nucleos','reconhecimentos','regras_bonificacao','bonificacoes','bonificacao_entregas','reconhecimento_historico');
+SELECT proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname IN ('rec_registrar_historico','rec_historico_imutavel');
 
 -- (3) papéis do Supabase presentes? esperado: 3 linhas
 SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_role');
-
--- (4) tabelas de apoio existentes? esperado: 2 linhas
-SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('projetos','colaboradores');
 ```
-Se algo vier diferente do esperado: **pare** e me avise.
+(Em 19–20/10 o Claude já conferiu em modo leitura: nenhuma das 7 tabelas existe e `update_updated_at_column` existe.)
 
-### 3B. Aplicação
-1. Copie o conteúdo **inteiro** de `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` (do PR, branch `claude/eager-bohr-uryun2`; começa em `BEGIN;`, termina em `COMMIT;`).
-2. SQL Editor → **New query** → cole → **Run**. Esperado: `Success. No rows returned`.
-3. Se houver erro, **nada foi criado** (transação): copie a mensagem e me envie. Se o editor avisar sobre "destructive operations" por causa de `DROP TRIGGER IF EXISTS`, é o alerta padrão (só dos triggers novos).
+### 2B. DRY-RUN
+1. Abra `supabase/dry-run/20261020_reconhecimentos_DRY_RUN.sql` (PR → branch `claude/eager-bohr-uryun2`), copie **tudo**, cole numa nova query e **Run**.
+2. **O SQL Editor vai mostrar um ERRO em vermelho — é o esperado**: o relatório vem na mensagem de erro e o comando inteiro é desfeito pelo banco.
+3. Leia a última linha: `RESULTADO: TODAS AS 32 VERIFICAÇÕES PASSARAM.` → siga. Qualquer linha `FALHA` → **pare** e cole o texto inteiro para o Claude.
+4. Conferência: rodar de novo a pré-checagem (2) mostra **0 linhas** (nada foi criado) — e, se quiser, o Claude confirma pelo Supabase em modo leitura.
 
-### 3C. Verificação pós-aplicação
+---
+
+## Fase 3 — Aplicar a migration (só após a fase 1 e com a sua autorização explícita)
+1. Copie o conteúdo **inteiro** de `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` (começa em `BEGIN;`, termina em `COMMIT;`), cole numa nova query e **Run**. Esperado: `Success. No rows returned`.
+2. Se houver erro, nada foi criado (transação): copie a mensagem para o Claude. O aviso "destructive operations" por causa de `DROP TRIGGER IF EXISTS` é o alerta padrão (só dos triggers novos).
+3. **Verificação sem você escrever SQL:** avise o Claude. Ele confere em modo leitura pelo Supabase conectado à sessão (tabelas, RLS ligado, nº de linhas e o Security Advisor). O Advisor passará a mostrar o aviso informativo "RLS enabled, no policy" nas 7 tabelas (**intencional**) e 2 avisos de baixa severidade de `search_path` nas funções novas.
+   Ou rode você: 
 ```sql
--- 7 tabelas, RLS ligado, nenhuma policy (esperado: 7 linhas, rls = true, policies = 0)
 SELECT c.relname, c.relrowsecurity AS rls,
        (SELECT count(*) FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname) AS policies
-FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE n.nspname='public' AND c.relkind='r' AND c.relname IN
+FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind='r' AND c.relname IN
  ('reconhecimento_tipos','reconhecimento_nucleos','reconhecimentos','regras_bonificacao','bonificacoes','bonificacao_entregas','reconhecimento_historico')
-ORDER BY 1;
-
--- dados iniciais (esperado: tipos = 7; regras = 0; reconhecimentos = 0; bonificacoes = 0)
+ORDER BY 1;   -- 7 linhas, rls = true, policies = 0
 SELECT (SELECT count(*) FROM reconhecimento_tipos) AS tipos, (SELECT count(*) FROM regras_bonificacao) AS regras,
-       (SELECT count(*) FROM reconhecimentos) AS reconhecimentos, (SELECT count(*) FROM bonificacoes) AS bonificacoes;
-
--- anon/authenticated sem acesso (esperado: 0 linhas)
-SELECT table_name, grantee, privilege_type FROM information_schema.role_table_grants
-WHERE table_schema='public' AND grantee IN ('anon','authenticated','PUBLIC') AND table_name IN
- ('reconhecimento_tipos','reconhecimento_nucleos','reconhecimentos','regras_bonificacao','bonificacoes','bonificacao_entregas','reconhecimento_historico');
+       (SELECT count(*) FROM reconhecimentos) AS reconhecimentos;   -- 7, 0, 0
 ```
-Em **Advisors → Security**, o aviso informativo "RLS enabled, no policy" nessas tabelas é **intencional** (só o servidor acessa).
-
-### 3D. Reversão (só se necessário e com autorização)
-Rode `supabase/rollbacks/20261020_reconhecimentos_bonificacoes_ROLLBACK.sql`: apaga **apenas** as 7 tabelas e as 2 funções (e os dados desta aba).
+4. Reversão (só se necessário): `supabase/rollbacks/20261020_reconhecimentos_bonificacoes_ROLLBACK.sql` apaga **apenas** as 7 tabelas e as 2 funções.
 
 ---
 
-## Etapa 4 — `SUPABASE_SERVICE_ROLE_KEY` no Coolify
+## Fase 4 — `SUPABASE_SERVICE_ROLE_KEY` no Coolify
 A chave de serviço **ignora RLS**: nunca no navegador, nunca em `NEXT_PUBLIC_*`, nunca no repositório/chat/logs/prints; só em **tempo de execução** do servidor.
+1. Supabase → **Project Settings → API Keys**. Preferível: criar uma **chave secreta nova** (`sb_secret_…`) só para este app (revogável isoladamente). Evite rotacionar o JWT secret (derruba a chave anon e o app).
+2. Coolify → aplicação do portal (a de produção) → **Environment Variables → Add**: nome `SUPABASE_SERVICE_ROLE_KEY`, valor a chave, **somente runtime** (desmarque a opção de build), como secreta/oculta. Não altere nenhuma variável existente.
+3. Confirme que `NEXT_PUBLIC_SUPABASE_URL` é do projeto `jskzxtpabmwvmgnuhbjf` (é o único).
+4. Não precisa reiniciar agora: o código atual de produção não usa a variável. Ela passa a valer no deploy da fase 5.
+5. Se a chave vazar: **revogue na hora** e gere outra.
 
-1. Supabase → **Project Settings → API Keys**. Preferível: criar uma **chave secreta nova** (`sb_secret_…`) só para este app (revogável isoladamente). Alternativa: `service_role` legacy (não rotacione o JWT secret: derruba a chave anon e o app).
-2. Coolify → aplicação do portal → **Environment Variables → Add**: nome `SUPABASE_SERVICE_ROLE_KEY`, valor a chave, marcado **somente runtime** (desmarque a opção de build) e como secreta/oculta.
-3. Confirme que `NEXT_PUBLIC_SUPABASE_URL` é do **mesmo** projeto (`jskzxtpabmwvmgnuhbjf`).
-4. **Previews de PR**: sem banco de homologação, o preview usa o **mesmo banco de produção**; prefira uma chave secreta **separada** para o preview.
-5. **Redeploy** (variável de runtime só vale após reiniciar). Em produção a chave só será usada quando o código da aba for publicado; até lá fica sem uso.
-6. Se a chave vazar: **revogue na hora** e gere outra.
+## Fase 5 — Publicar o código (merge do PR #77)
+Pré-requisitos: fases 2–4 concluídas e a sua autorização. O Claude confirma antes que os testes e o build do PR continuam verdes.
+1. Merge do PR #77 em `main` (você, ou o Claude se você pedir). O Coolify faz o deploy de produção pelo fluxo normal; acompanhe em **Deployments** (build sem erro).
+2. Se a produção não faz deploy automático, use **Deploy** manualmente.
+3. Comportamento esperado logo após o deploy: **nada muda** para quem não é ADMIN/VP; para VP/ADMIN surge o grupo "Vice Presidência → Reconhecimentos e Bonificações".
+4. **Reversão do código:** Coolify → aplicação → Deployments → **Rollback** para o deploy anterior (ou `git revert` do merge). As tabelas novas podem ficar: nenhuma tela antiga as usa.
 
----
+## Fase 6 — Validar em produção (com dados `[TESTE]`)
+Só ADMIN/VP veem a aba, então o impacto é mínimo. Use sempre o texto `[TESTE]` nas observações e nos nomes de regra.
+1. **Não-VP** (ex.: estratégico de outro núcleo e quem tem `paginas_permitidas`): sem item de menu; `/reconhecimentos` volta ao início; no console `fetch('/api/reconhecimentos').then(r=>r.status)` → **403**; sem login → **401**.
+2. **VP/ADMIN**: abra a aba; `fetch('/api/reconhecimentos').then(r=>r.json()).then(d=>({tipos:d.tipos?.length, regras:d.regras?.length, erro:d.error}))` → `{tipos: 7, regras: 0}`. `erro` "Configuração do servidor pendente" → fase 4/redeploy; "relation … does not exist" → fase 3.
+3. **Fluxo** (roteiro do e2e, com dados de teste): criar uma regra `[TESTE]` (ex.: RG a partir da 5ª, premiação "teste"); registrar uma RG em um projeto de teste (a sugestão deve ser a próxima da sequência; um número repetido deve ser recusado); conferir o cartão no kanban; adicionar 2 colaboradores à bonificação e avançar cada um (solicitada → aprovada → entregue) — o cartão só vira "Entregue" com "Concluir"; editar a RG e ver o "de → para" no histórico.
+4. O Claude confere em modo leitura (contagens, RLS e Advisor) e o relatório do que foi criado.
+5. **Chave pública sem acesso** (digite a chave só no terminal): `curl -s -o /dev/null -w "%{http_code}\n" "https://jskzxtpabmwvmgnuhbjf.supabase.co/rest/v1/reconhecimentos?select=id" -H "apikey: $K" -H "Authorization: Bearer $K"` → 401/403.
 
-## Etapa 5 — Verificar conexão e permissões (no preview do PR)
-1. Logs do Coolify sem erro de inicialização e sem "Configuração do servidor pendente".
-2. Como **VP**: o menu mostra **Vice Presidência → Reconhecimentos e Bonificações**; a aba abre sem faixa de erro; **Configurações** lista os 7 tipos e "Nenhuma regra cadastrada".
-3. Console (F12), logado como VP — não expõe chaves:
-   ```js
-   fetch('/api/reconhecimentos').then(r => r.json()).then(d => ({ tipos: d.tipos?.length, regras: d.regras?.length, erro: d.error }))
-   // esperado: { tipos: 7, regras: 0, erro: undefined }
-   ```
-   `erro` "Configuração do servidor pendente" → a variável não chegou ao runtime (Etapa 4/redeploy). `relation … does not exist` → migration não aplicada (Etapa 3).
-4. **Barreiras** — usuário **não VP** (inclusive diretor estratégico de outro núcleo e quem tem `paginas_permitidas`): sem item de menu; `/reconhecimentos` volta ao início; `fetch('/api/reconhecimentos').then(r=>r.status)` → **403**. Sem login: `curl -i https://<preview>/api/reconhecimentos` → **401**.
-5. **Chave pública sem acesso** (esperado 401/403/vazio), digitando a chave só no terminal:
-   ```bash
-   read -s -p "anon key: " K; echo
-   curl -s -o /dev/null -w "%{http_code}\n" "https://jskzxtpabmwvmgnuhbjf.supabase.co/rest/v1/reconhecimentos?select=id" -H "apikey: $K" -H "Authorization: Bearer $K"; unset K
-   ```
-6. **Fluxo de validação com usuários reais** (só depois dos itens acima): cadastrar as regras reais em Configurações; registrar uma RG (a sugestão deve ser a próxima da sequência); conferir o cartão no kanban; adicionar colaboradores à bonificação e avançar cada um (solicitada → aprovada → entregue); editar um registro e ver o histórico; testar com um usuário não VP.
+## Fase 7 — Limpar os dados de teste (antes do uso real)
+1. Abra `supabase/rollbacks/20261020_reconhecimentos_LIMPAR_DADOS_DE_TESTE.sql`, cole e **Run** como está: **simulação** — dá erro em vermelho dizendo quantos registros seriam apagados e **quem os criou**. Confira que são só os de teste.
+2. Troque `confirmar constant boolean := false` por `true` e rode de novo (tudo ou nada). Mantém os 7 tipos; zera reconhecimentos, bonificações, entregas, regras e histórico; **não toca em nenhuma tabela existente**; religa o bloqueio do histórico.
+3. **Nunca rode depois que o uso real começar.**
+
+## Fase 8 — Uso real
+Cadastre as regras e valores reais em **Configurações** (nada vem pronto). A partir daí, registros e histórico são permanentes.
+

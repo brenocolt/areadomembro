@@ -2,7 +2,7 @@
 
 Rota `/reconhecimentos` · menu **Vice Presidência → Reconhecimentos e Bonificações** · exclusiva de **ADMIN** e **membros ativos da Vice Presidência**.
 
-> Estado: implementada e testada em ambiente isolado. **A migration `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` NÃO foi aplicada em nenhum banco real e nada foi publicado.** Para aplicar: `GUIA-APLICACAO.md`.
+> Estado: implementada e testada em ambiente isolado. **A migration `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` NÃO foi aplicada em nenhum banco real e nada foi publicado.** Para colocar em funcionamento num único projeto Supabase, sem preview nem ambiente novo: `GUIA-APLICACAO.md` (backup → **dry-run que não grava nada** → migration → chave no Coolify → deploy → validação com dados `[TESTE]` → limpeza controlada).
 
 ## O que a aba faz
 | Aba | Conteúdo |
@@ -31,11 +31,12 @@ Autorizado = ADMIN ou colaborador **ativo** com núcleo atual **Vice Presidênci
 * `src/app/api/reconhecimentos/**` — rotas (todas atrás do guard).
 * `src/app/(dashboard)/reconhecimentos/` — página (servidor) e `components/`.
 * `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` + `supabase/rollbacks/…_ROLLBACK.sql`.
+* `supabase/dry-run/…_DRY_RUN.sql` (gerado por `tests/reconhecimentos/gerar-dry-run.mjs`; aplica a migration e se desfaz sozinho) e `supabase/rollbacks/…_LIMPAR_DADOS_DE_TESTE.sql` (zera só os dados da aba).
 
 ## Testes (nada toca banco real)
 | Comando | O que cobre |
 |---|---|
-| `npm run test:reconhecimentos` | 51 testes: acesso (VP/ADMIN × demais), motor (marcos, vigência, idempotência, expiração, entregas), validação, **banco real em memória (PGlite)** com a migration (unicidades, histórico imutável, RLS, atomicidade, rollback, auditoria de catálogo) e **serviço** contra o protocolo do supabase-js (cenário Prorestaure João/Maria/Pedro, concorrência, paginação > 1000) |
+| `npm run test:reconhecimentos` | 59 testes (inclui o DRY-RUN e a limpeza de dados de teste em Postgres real): acesso (VP/ADMIN × demais), motor (marcos, vigência, idempotência, expiração, entregas), validação, **banco real em memória (PGlite)** com a migration (unicidades, histórico imutável, RLS, atomicidade, rollback, auditoria de catálogo) e **serviço** contra o protocolo do supabase-js (cenário Prorestaure João/Maria/Pedro, concorrência, paginação > 1000) |
 | `npm run test:reconhecimentos:e2e` | `next dev` + Postgres em memória + Chromium (Playwright): autorização HTTP com sessões reais (21 endpoints × usuários autorizados e não autorizados) e a aba no navegador (RG com sugestão, bonificação, entrega por colaborador, edição com histórico, filtros, celular, não-VP bloqueado, sem erros de JavaScript). Requer `PLAYWRIGHT_MODULE=<caminho do playwright>` |
 
 ## Limitações conscientes (v1)
