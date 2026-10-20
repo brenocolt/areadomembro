@@ -203,7 +203,7 @@ CREATE INDEX IF NOT EXISTS historico_reconhecimento_idx ON public.reconhecimento
 CREATE INDEX IF NOT EXISTS historico_bonificacao_idx ON public.reconhecimento_historico (bonificacao_id) WHERE bonificacao_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.rec_historico_imutavel() RETURNS trigger
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $fn$
 BEGIN
   RAISE EXCEPTION 'reconhecimento_historico é imutável (% bloqueado)', TG_OP USING ERRCODE = 'insufficient_privilege';
 END;
@@ -218,7 +218,7 @@ CREATE TRIGGER rec_historico_imutavel_truncate BEFORE TRUNCATE ON public.reconhe
 
 -- Registro automático do histórico (autor vindo dos cabeçalhos enviados pelo servidor).
 CREATE OR REPLACE FUNCTION public.rec_registrar_historico() RETURNS trigger
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $fn$
 DECLARE
   v_ent     text := TG_ARGV[0];
   v_headers json;
@@ -423,6 +423,13 @@ BEGIN
   SELECT count(*) INTO t FROM unnest(v_fun_antes) x WHERE NOT (x = ANY (v_depois));
   IF v_n = 0 AND t.count = 0 THEN v_linhas := v_linhas || '  OK    funções: só rec_registrar_historico e rec_historico_imutavel foram criadas; nenhuma preexistente mudou'::text;
   ELSE v_falhas := v_falhas + 1; v_linhas := v_linhas || 'FALHA  funções preexistentes alteradas ou funções novas inesperadas'::text; END IF;
+
+  v_total := v_total + 1;
+  SELECT count(*) INTO v_n FROM pg_proc f
+   WHERE f.pronamespace = 'public'::regnamespace AND f.proname IN ('rec_registrar_historico', 'rec_historico_imutavel')
+     AND EXISTS (SELECT 1 FROM unnest(coalesce(f.proconfig, '{}')) c WHERE c LIKE 'search_path=%');
+  IF v_n = 2 THEN v_linhas := v_linhas || '  OK    as 2 funções novas têm search_path fixo (sem aviso no Security Advisor)'::text;
+  ELSE v_falhas := v_falhas + 1; v_linhas := v_linhas || format('FALHA  funções novas sem search_path fixo (%s de 2 com)', v_n); END IF;
 
   v_total := v_total + 1;
   SELECT count(*) INTO v_n FROM pg_class c

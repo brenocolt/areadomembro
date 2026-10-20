@@ -4,7 +4,7 @@
 
 ## Por que dá para fazer com segurança no mesmo banco
 1. A migration é **aditiva**: cria 7 tabelas novas que nenhuma tela atual lê. Aplicá-la não muda o comportamento de nada que existe. Não há chaves estrangeiras para tabelas existentes, então nem bloqueia tabelas em uso.
-2. Antes de gravar qualquer coisa, existe um **DRY-RUN** (`supabase/dry-run/20261020_reconhecimentos_DRY_RUN.sql`): aplica a migration e roda 32 verificações **no banco real** dentro de um único comando que se desfaz sozinho. **Nada fica gravado.** Verifica que nada preexistente mudou, que `anon`/`authenticated` não leem nem gravam as tabelas novas (mesmo com os privilégios padrão do Supabase), que RG repetida/pessoa duplicada/datas impossíveis são barradas e que o histórico é automático e imutável.
+2. Antes de gravar qualquer coisa, existe um **DRY-RUN** (`supabase/dry-run/20261020_reconhecimentos_DRY_RUN.sql`): aplica a migration e roda 33 verificações **no banco real** dentro de um único comando que se desfaz sozinho. **Nada fica gravado.** Verifica que nada preexistente mudou, que `anon`/`authenticated` não leem nem gravam as tabelas novas (mesmo com os privilégios padrão do Supabase), que RG repetida/pessoa duplicada/datas impossíveis são barradas e que o histórico é automático e imutável.
 3. O histórico da aba é imutável por desenho — então testes feitos em produção ficariam para sempre. Por isso existe a **limpeza controlada** (`supabase/rollbacks/20261020_reconhecimentos_LIMPAR_DADOS_DE_TESTE.sql`): zera **só** os dados criados na aba (não toca em nenhuma tabela existente), em dois passos (simulação → confirmação). Você valida com registros marcados `[TESTE]` e limpa antes do uso real.
 4. A aba só é visível e acessível para **ADMIN e Vice Presidência**. Quem não tem acesso nunca vê dados nem o menu; a API devolve 401/403.
 5. O **preview do PR** que o Coolify cria sozinho usa o mesmo banco; **você não precisa usá-lo**. O código sobe para produção direto pelo fluxo normal (merge → deploy do Coolify).
@@ -83,7 +83,7 @@ SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_r
 ### 2B. DRY-RUN
 1. Abra `supabase/dry-run/20261020_reconhecimentos_DRY_RUN.sql` (PR → branch `claude/eager-bohr-uryun2`), copie **tudo**, cole numa nova query e **Run**.
 2. **O SQL Editor vai mostrar um ERRO em vermelho — é o esperado**: o relatório vem na mensagem de erro e o comando inteiro é desfeito pelo banco.
-3. Leia a última linha: `RESULTADO: TODAS AS 32 VERIFICAÇÕES PASSARAM.` → siga. Qualquer linha `FALHA` → **pare** e cole o texto inteiro para o Claude.
+3. Leia a última linha: `RESULTADO: TODAS AS 33 VERIFICAÇÕES PASSARAM.` → siga. Qualquer linha `FALHA` → **pare** e cole o texto inteiro para o Claude.
 4. Conferência: rodar de novo a pré-checagem (2) mostra **0 linhas** (nada foi criado) — e, se quiser, o Claude confirma pelo Supabase em modo leitura.
 
 ---
@@ -91,7 +91,7 @@ SELECT rolname FROM pg_roles WHERE rolname IN ('anon','authenticated','service_r
 ## Fase 3 — Aplicar a migration (só após a fase 1 e com a sua autorização explícita)
 1. Copie o conteúdo **inteiro** de `supabase/migrations/20261020_reconhecimentos_bonificacoes.sql` (começa em `BEGIN;`, termina em `COMMIT;`), cole numa nova query e **Run**. Esperado: `Success. No rows returned`.
 2. Se houver erro, nada foi criado (transação): copie a mensagem para o Claude. O aviso "destructive operations" por causa de `DROP TRIGGER IF EXISTS` é o alerta padrão (só dos triggers novos).
-3. **Verificação sem você escrever SQL:** avise o Claude. Ele confere em modo leitura pelo Supabase conectado à sessão (tabelas, RLS ligado, nº de linhas e o Security Advisor). O Advisor passará a mostrar o aviso informativo "RLS enabled, no policy" nas 7 tabelas (**intencional**) e 2 avisos de baixa severidade de `search_path` nas funções novas.
+3. **Verificação sem você escrever SQL:** avise o Claude. Ele confere em modo leitura pelo Supabase conectado à sessão (tabelas, RLS ligado, nº de linhas e o Security Advisor). O Advisor passará a mostrar o aviso informativo "RLS enabled, no policy" nas 7 tabelas (**intencional**).
    Ou rode você: 
 ```sql
 SELECT c.relname, c.relrowsecurity AS rls,

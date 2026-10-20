@@ -186,7 +186,7 @@ CREATE INDEX IF NOT EXISTS historico_reconhecimento_idx ON public.reconhecimento
 CREATE INDEX IF NOT EXISTS historico_bonificacao_idx ON public.reconhecimento_historico (bonificacao_id) WHERE bonificacao_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.rec_historico_imutavel() RETURNS trigger
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $fn$
 BEGIN
   RAISE EXCEPTION 'reconhecimento_historico é imutável (% bloqueado)', TG_OP USING ERRCODE = 'insufficient_privilege';
 END;
@@ -201,7 +201,7 @@ CREATE TRIGGER rec_historico_imutavel_truncate BEFORE TRUNCATE ON public.reconhe
 
 -- Registro automático do histórico (autor vindo dos cabeçalhos enviados pelo servidor).
 CREATE OR REPLACE FUNCTION public.rec_registrar_historico() RETURNS trigger
-LANGUAGE plpgsql AS $fn$
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $fn$
 DECLARE
   v_ent     text := TG_ARGV[0];
   v_headers json;

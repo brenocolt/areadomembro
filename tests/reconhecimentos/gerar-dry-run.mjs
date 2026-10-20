@@ -112,6 +112,13 @@ BEGIN
   ELSE v_falhas := v_falhas + 1; v_linhas := v_linhas || 'FALHA  funções preexistentes alteradas ou funções novas inesperadas'::text; END IF;
 
   v_total := v_total + 1;
+  SELECT count(*) INTO v_n FROM pg_proc f
+   WHERE f.pronamespace = 'public'::regnamespace AND f.proname IN ('rec_registrar_historico', 'rec_historico_imutavel')
+     AND EXISTS (SELECT 1 FROM unnest(coalesce(f.proconfig, '{}')) c WHERE c LIKE 'search_path=%');
+  IF v_n = 2 THEN v_linhas := v_linhas || '  OK    as 2 funções novas têm search_path fixo (sem aviso no Security Advisor)'::text;
+  ELSE v_falhas := v_falhas + 1; v_linhas := v_linhas || format('FALHA  funções novas sem search_path fixo (%s de 2 com)', v_n); END IF;
+
+  v_total := v_total + 1;
   SELECT count(*) INTO v_n FROM pg_class c
    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r' AND (c.relname::text || ':' || c.relrowsecurity::text) = ANY (v_rls_antes);
   IF v_n = cardinality(v_rls_antes) THEN v_linhas := v_linhas || format('  OK    RLS das %s tabelas preexistentes inalterado', v_n);
