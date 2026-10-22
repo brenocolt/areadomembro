@@ -145,6 +145,8 @@ export default function PdiPage() {
             dataStr: detalhe.data,
             horaStr: detalhe.hora,
             detalhes: `Colaborador: ${colaborador?.nome || ''} / Tipo: ${tiposTexto}${detalhe.descricao ? ' / ' + detalhe.descricao : ''}`,
+            // Convida só os líderes que já aceitaram.
+            convidados: (detalhe.pdi_solicitacao_lideres || []).filter((l: any) => l.aceito_em).map((l: any) => l.lider?.email_corporativo).filter(Boolean),
         })
         const eventos = (detalhe.pdi_eventos || []).slice().sort((a: any, b: any) => new Date(a.criado_em).getTime() - new Date(b.criado_em).getTime())
 

@@ -14,7 +14,7 @@ export async function GET() {
     const supabase = createServerSupabaseClient()
     const { data, error } = await supabase
         .from('pdi_solicitacoes')
-        .select('*, pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome))')
+        .select('*, pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome, email_corporativo))')
         .eq('colaborador_id', colaboradorId)
         .order('criado_em', { ascending: false })
 
