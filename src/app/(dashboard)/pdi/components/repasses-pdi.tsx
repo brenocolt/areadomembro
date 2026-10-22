@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { CalendarCheck, ExternalLink, Loader2, Plus, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
-    formatarDataBr, formatarDataHoraSp, gerarHorariosDisponiveis, dataParaChave, linkAdicionarAgenda,
+    formatarDataBr, formatarDataHoraSp, gerarHorariosRepasse, dataParaChave, linkAdicionarAgenda,
     type PdiRepasse, type PdiTipoMomento,
 } from "@/lib/pdi"
 
@@ -105,7 +105,7 @@ function DialogNovoRepasse({ areas, onClose, onCriado }: { areas: string[], onCl
                             <Label>Horário</Label>
                             <Select value={hora} onValueChange={setHora}>
                                 <SelectTrigger><SelectValue placeholder="Hora" /></SelectTrigger>
-                                <SelectContent>{gerarHorariosDisponiveis().map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                                <SelectContent>{gerarHorariosRepasse().map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-1.5">
@@ -238,7 +238,7 @@ export function RepassesPdi({ tipos }: { tipos: PdiTipoMomento[] }) {
                                         ? <span className="text-xs text-emerald-600 self-center">✓ Evento criado no Google Agenda, convites enviados</span>
                                         : (
                                             <a target="_blank" rel="noopener noreferrer" href={linkAdicionarAgenda({
-                                                titulo: `Repasse de PDI: ${r.titulo}`, dataStr: r.data, horaStr: String(r.hora).slice(0, 5), duracaoMin: r.duracao_min,
+                                                titulo: `Repasse de cronograma: ${r.titulo}`, dataStr: r.data, horaStr: String(r.hora).slice(0, 5), duracaoMin: r.duracao_min,
                                                 detalhes: [r.descricao, `Participantes: ${participantes.map(p => p.colaborador?.nome).filter(Boolean).join(', ')}`].filter(Boolean).join('\n'),
                                                 convidados: emails,
                                             })}>

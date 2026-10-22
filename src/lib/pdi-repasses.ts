@@ -40,7 +40,7 @@ export function montarMensagemRepasse(r: PdiRepasse): { text: string, blocks: Sl
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ''
 
     const blocks: SlackBlock[] = [
-        { type: 'header', text: { type: 'plain_text', text: `Repasse de PDI: ${r.titulo}`.slice(0, 150) } },
+        { type: 'header', text: { type: 'plain_text', text: `Repasse de cronograma: ${r.titulo}`.slice(0, 150) } },
         {
             type: 'section',
             fields: [
@@ -72,7 +72,7 @@ export function montarMensagemRepasse(r: PdiRepasse): { text: string, blocks: Sl
     if (appUrl) botoes.push({ type: 'button', action_id: 'repasse_abrir', text: { type: 'plain_text', text: 'Abrir na Área do Membro' }, url: `${appUrl}/pdi` })
     if (botoes.length > 0) blocks.push({ type: 'actions', elements: botoes })
 
-    return { text: `Repasse de PDI: ${r.titulo} — ${formatarDataBr(r.data)} às ${hhmm(r.hora)}`, blocks }
+    return { text: `Repasse de cronograma: ${r.titulo} — ${formatarDataBr(r.data)} às ${hhmm(r.hora)}`, blocks }
 }
 
 // Posta a mensagem do repasse (primeira vez) ou atualiza a existente.
@@ -171,7 +171,7 @@ export async function confirmarRepasse(supabase: Supabase, repasseId: string, co
         const fimMin = h * 60 + m + r.duracao_min
         const pad = (n: number) => String(n).padStart(2, '0')
         const evento: EventoAgenda = {
-            titulo: `Repasse de PDI: ${r.titulo}`,
+            titulo: `Repasse de cronograma: ${r.titulo}`,
             descricao: [r.descricao, `Responsável: ${r.criador.nome}`, `Participantes: ${participantes.map(p => p.colaborador?.nome).filter(Boolean).join(', ')}`].filter(Boolean).join('\n'),
             inicio: `${r.data}T${hora}:00`,
             fim: `${r.data}T${pad(Math.floor(fimMin / 60) % 24)}:${pad(fimMin % 60)}:00`,
