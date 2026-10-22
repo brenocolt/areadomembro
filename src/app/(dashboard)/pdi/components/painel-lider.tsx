@@ -179,6 +179,11 @@ function CardSolicitacaoLider({ s, papeis, tipos, meuPapelId, acting, onAceitar,
                             dataStr: s.data,
                             horaStr: s.hora,
                             detalhes: `Colaborador: ${s.colaborador?.nome || ''} / Tipo: ${tiposTexto}${s.descricao ? ' / ' + s.descricao : ''}`,
+                            // Convida só quem já está no momento: o solicitante e os outros líderes que aceitaram.
+                            convidados: [
+                                s.colaborador?.email_corporativo,
+                                ...(s.pdi_solicitacao_lideres || []).filter((l: any) => l.aceito_em && l.lider_id !== minhaLinha?.lider_id).map((l: any) => l.lider?.email_corporativo),
+                            ].filter(Boolean),
                         })} target="_blank" rel="noopener">
                             <Button size="sm" variant="outline" type="button" className="rounded-xl font-bold">Adicionar ao Google Agenda</Button>
                         </a>

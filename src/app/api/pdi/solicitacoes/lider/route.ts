@@ -30,7 +30,7 @@ export async function GET() {
 
     const { data: solicitacoes, error } = await supabase
         .from('pdi_solicitacoes')
-        .select('*, colaborador:colaborador_id(nome, nucleo_atual), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome))')
+        .select('*, colaborador:colaborador_id(nome, nucleo_atual, email_corporativo), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome, email_corporativo))')
         .contains('cargos', [papelId])
         .neq('status', 'cancelado')
         .order('data', { ascending: true })

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const { data: solicitacao, error } = await supabase
         .from('pdi_solicitacoes')
-        .select('*, pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome)), pdi_anotacoes(*), pdi_eventos(*)')
+        .select('*, pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome, email_corporativo)), pdi_anotacoes(*), pdi_eventos(*)')
         .eq('id', id)
         .single()
 
