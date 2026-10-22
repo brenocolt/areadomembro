@@ -3,7 +3,7 @@ import { auth } from '@/auth'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { exigirLider } from '@/lib/pdi-server'
 import { sincronizarSlackRepasse } from '@/lib/pdi-repasses'
-import { isDataValida, gerarHorariosDisponiveis, instanteSp } from '@/lib/pdi'
+import { isDataValida, gerarHorariosRepasse, instanteSp } from '@/lib/pdi'
 
 const DURACOES = [30, 60, 90, 120]
 const SELECT = '*, criador:criador_id(nome), participantes:pdi_repasse_participantes(colaborador_id, entrou_em, colaborador:colaborador_id(nome, email_corporativo))'
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     if ((categoria?.length ?? 0) > 60) return NextResponse.json({ error: 'Área muito longa.' }, { status: 400 })
 
     if (typeof b.data !== 'string' || !isDataValida(b.data, true)) return NextResponse.json({ error: 'Data inválida — escolha um dia útil de hoje até 60 dias à frente.' }, { status: 400 })
-    if (typeof b.hora !== 'string' || !gerarHorariosDisponiveis().includes(b.hora)) return NextResponse.json({ error: 'Horário inválido.' }, { status: 400 })
+    if (typeof b.hora !== 'string' || !gerarHorariosRepasse().includes(b.hora)) return NextResponse.json({ error: 'Horário inválido.' }, { status: 400 })
     const duracao = Number(b.duracao_min ?? 60)
     if (!DURACOES.includes(duracao)) return NextResponse.json({ error: 'Duração inválida.' }, { status: 400 })
 

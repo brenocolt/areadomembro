@@ -122,3 +122,15 @@ export async function removerEventoComAviso(emailUsuario: string, eventId: strin
         throw new Error(`Google Calendar remover (${emailUsuario}): ${res.status}`)
     }
 }
+
+// Atualiza o evento em grupo: horário/título e a lista de convidados (quem
+// aceitou). Retorna false se o evento não existe mais, para recriá-lo.
+export async function atualizarEventoComConvidados(emailOrganizador: string, eventId: string, e: EventoAgenda, convidados: string[]): Promise<boolean> {
+    const res = await chamar(emailOrganizador, `${API}/${encodeURIComponent(eventId)}?sendUpdates=all`, 'PATCH', {
+        ...corpoDoEvento(e),
+        attendees: convidados.map(email => ({ email })),
+    })
+    if (res.status === 404 || res.status === 410) return false
+    if (!res.ok) throw new Error(`Google Calendar atualizar evento em grupo (${emailOrganizador}): ${res.status} ${(await res.json()).error?.message}`)
+    return (await res.json()).status !== 'cancelled'
+}

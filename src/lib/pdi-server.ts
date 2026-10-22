@@ -11,7 +11,7 @@
 //    /api/slack/interactions) e mantém a mensagem atualizada.
 //  - Incoming Webhook (SLACK_WEBHOOK_URL): só avisa, sem botões.
 import { resolverPapelId, formatarDataBr, formatarTiposComOpcoes, BANCOS_ABERTOS_PARA_TODOS } from '@/lib/pdi'
-import { agendaConfigurada, criarEvento, atualizarEvento, removerEvento, type EventoAgenda } from '@/lib/google-calendar'
+import { agendaConfigurada, criarEventoComConvidados, atualizarEventoComConvidados, removerEventoComAviso, type EventoAgenda } from '@/lib/google-calendar'
 import {
     slackBotConfigurado, postarMensagem, atualizarMensagem, responderNaThread, type SlackBlock,
 } from '@/lib/slack'
@@ -403,11 +403,12 @@ export function lerItemDoBanco(body: Record<string, unknown>):
 }
 
 // ---------------------------------------------------------------------------
-// Google Agenda: cada pessoa envolvida (quem pediu + quem aceitou) tem um
-// evento na própria agenda. Funciona por "reconciliação": lê o estado atual
-// da solicitação no banco e deixa as agendas iguais a ele (cria o que falta,
-// atualiza horário/título, remove quem saiu ou se cancelou) — por isso serve
-// para qualquer evento (novo pedido, aceite, novo horário, cancelamento).
+// Google Agenda: UM evento na agenda de quem pediu o momento, e só quem já
+// aceitou entra como convidado (recebe o convite do Google). Funciona por
+// "reconciliação": lê o estado atual da solicitação no banco e deixa a agenda
+// igual a ele (cria, atualiza horário/título/convidados ou remove se cancelou).
+// O id do evento fica em pdi_agenda_eventos (uma linha por solicitação, com
+// o solicitante como dono).
 // ---------------------------------------------------------------------------
 
 function somarUmaHora(dataStr: string, hora: string): string {
@@ -428,38 +429,35 @@ export async function sincronizarAgenda(supabase: any, solicitacaoId: string): P
     if (!s) return
     const { data: tipos } = await supabase.from('pdi_tipos_momento').select('*')
     const { data: existentes } = await supabase.from('pdi_agenda_eventos').select('*').eq('solicitacao_id', solicitacaoId)
-
-    type Pessoa = { id: string, nome: string, email: string | null }
-    // Quem deve ter o evento: solicitante + líderes que já aceitaram. Cancelada = ninguém.
-    const pessoas = new Map<string, Pessoa>()
-    if (s.status !== 'cancelado') {
-        if (s.colaborador) pessoas.set(s.colaborador.id, { id: s.colaborador.id, nome: s.colaborador.nome, email: s.colaborador.email_corporativo })
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const l of (s.pdi_solicitacao_lideres || []) as any[]) {
-            if (l.lider) pessoas.set(l.lider.id, { id: l.lider.id, nome: l.lider.nome, email: l.lider.email_corporativo })
-        }
-    }
-
-    // Remove eventos de quem não deve mais ter (cancelamento ou saída).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const ex of (existentes || []) as any[]) {
-        if (pessoas.has(ex.colaborador_id)) continue
+    const lista = (existentes || []) as any[]
+    const dono = s.colaborador
+
+    // Remove eventos que não são o evento único do solicitante (modelo antigo,
+    // um por pessoa) ou todos, se a solicitação foi cancelada.
+    for (const ex of lista) {
+        if (s.status !== 'cancelado' && ex.colaborador_id === dono?.id) continue
         try {
-            await removerEvento(ex.email, ex.google_event_id)
+            await removerEventoComAviso(ex.email, ex.google_event_id)
             await supabase.from('pdi_agenda_eventos').delete().eq('solicitacao_id', solicitacaoId).eq('colaborador_id', ex.colaborador_id)
         } catch (err) {
             console.error('Erro ao remover evento do Google Agenda:', err)
         }
     }
-    if (pessoas.size === 0) return
+    if (s.status === 'cancelado') return
+    if (!dono?.email_corporativo) { console.warn(`PDI/Agenda: ${dono?.nome} sem e-mail corporativo, evento não criado.`); return }
+
+    // Convidados: apenas os líderes que já aceitaram.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lideres = ((s.pdi_solicitacao_lideres || []) as any[]).filter(l => l.lider)
+    const convidados: string[] = lideres.map(l => l.lider.email_corporativo).filter((e: string | null): e is string => !!e && e !== dono.email_corporativo)
 
     const tiposTexto = formatarTiposComOpcoes(tipos || [], s.tipos || [], s.detalhes || {}, s.outro_texto)
     const hora = String(s.hora).slice(0, 5)
     const prefixo: Record<string, string> = { aguardando: '[Aguardando aceite] ', reagendado: '[Novo horário sugerido] ', concluido: '[Concluído] ' }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const aceitos = ((s.pdi_solicitacao_lideres || []) as any[]).filter(l => l.lider?.nome).map(l => l.lider.nome as string)
+    const aceitos = lideres.map(l => l.lider.nome as string)
     const linhas = [
-        `Solicitante: ${s.colaborador?.nome || '—'}`,
+        `Solicitante: ${dono.nome || '—'}`,
         `Tipo: ${tiposTexto || '—'}`,
         `Líder: ${aceitos.length > 0 ? aceitos.join(', ') : 'aguardando alguém aceitar'}`,
     ]
@@ -478,18 +476,14 @@ export async function sincronizarAgenda(supabase: any, solicitacaoId: string): P
         solicitacaoId: s.id,
     }
 
-    for (const pessoa of pessoas.values()) {
-        if (!pessoa.email) { console.warn(`PDI/Agenda: ${pessoa.nome} sem e-mail corporativo, evento não criado.`); continue }
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ex = ((existentes || []) as any[]).find(e => e.colaborador_id === pessoa.id)
-            if (ex && await atualizarEvento(ex.email, ex.google_event_id, evento)) continue
-            const id = await criarEvento(pessoa.email, evento)
-            await supabase.from('pdi_agenda_eventos').upsert({
-                solicitacao_id: s.id, colaborador_id: pessoa.id, email: pessoa.email, google_event_id: id,
-            })
-        } catch (err) {
-            console.error(`Erro no Google Agenda de ${pessoa.nome}:`, err)
-        }
+    try {
+        const ex = lista.find(e => e.colaborador_id === dono.id)
+        if (ex && await atualizarEventoComConvidados(ex.email, ex.google_event_id, evento, convidados)) return
+        const id = await criarEventoComConvidados(dono.email_corporativo, evento, convidados)
+        await supabase.from('pdi_agenda_eventos').upsert({
+            solicitacao_id: s.id, colaborador_id: dono.id, email: dono.email_corporativo, google_event_id: id,
+        })
+    } catch (err) {
+        console.error(`Erro no Google Agenda de ${dono.nome}:`, err)
     }
 }
