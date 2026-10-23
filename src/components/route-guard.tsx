@@ -3,7 +3,7 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useColaborador } from "@/hooks/use-supabase"
-import { paginaPermitida } from "@/lib/access-control"
+import { paginaPermitida, isRotaExclusivaVP } from "@/lib/access-control"
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
     // Role vem do mesmo hook que controla o loading — sem race condition
@@ -24,8 +24,11 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
         return parent ? paginaPermitida(parent, colaborador, role) : false
     })()
 
-    const isAllowed =
-        paginaPermitida(pathname, colaborador, role) ||
+    // Rotas exclusivas da VP só dependem de paginaPermitida: nem rota-pai
+    // implícita nem exceção manual (paginas_permitidas) as liberam.
+    const isAllowed = isRotaExclusivaVP(pathname)
+        ? paginaPermitida(pathname, colaborador, role)
+        : paginaPermitida(pathname, colaborador, role) ||
         impliedByParent ||     // rota implícita por outra rota permitida
         (colaborador?.paginas_permitidas ?? []).some((p: string) => pathname.startsWith(p + '/'))
 

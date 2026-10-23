@@ -20,6 +20,7 @@ export interface AccessColaborador {
     cargo_atual?: string | null
     nucleo_atual?: string | null
     paginas_permitidas?: string[] | null
+    status?: string | null
 }
 
 export function isAdmin(role?: string | null): boolean {
@@ -53,6 +54,25 @@ export function isNucleoVicePresidencia(nucleo?: string | null): boolean {
 
 function isNucleoOverlay(nucleo?: string | null): boolean {
     return isNucleoGestaoDePessoas(nucleo) || isNucleoVicePresidencia(nucleo)
+}
+
+// Rotas EXCLUSIVAS da Vice Presidência (e do ADMIN). Ficam fora da matriz por
+// cargo/núcleo de propósito: Estratégico de outros núcleos NÃO as recebe e
+// `paginas_permitidas` NÃO consegue liberá-las. Qualquer rota nova deste tipo
+// deve entrar aqui; paginaPermitida e o RouteGuard tratam-nas antes da matriz.
+export const ROTAS_EXCLUSIVAS_VP = ['/reconhecimentos']
+
+export function isRotaExclusivaVP(pathname: string): boolean {
+    return ROTAS_EXCLUSIVAS_VP.some(r => pathname === r || pathname.startsWith(r + '/'))
+}
+
+// Quem pode usar as rotas exclusivas da VP: ADMIN, ou colaborador ativo cujo
+// núcleo atual é Vice Presidência (qualquer cargo). Não considera cargo
+// Estratégico nem `paginas_permitidas`.
+export function podeAcessarRotaExclusivaVP(colaborador: AccessColaborador | null | undefined, role?: string | null): boolean {
+    if (isAdmin(role)) return true
+    if ((colaborador?.status ?? '') === 'Desligado') return false
+    return isNucleoVicePresidencia(colaborador?.nucleo_atual)
 }
 
 // Páginas que todo cargo (Operacional+) enxerga, independente de núcleo.
@@ -140,6 +160,8 @@ export function podeEditarCamposSensiveisUsuarios(cargo?: string | null): boolea
 // matriz padrão + exceção manual (paginas_permitidas só soma, nunca
 // restringe abaixo do padrão).
 export function paginaPermitida(pathname: string, colaborador: AccessColaborador | null | undefined, role?: string | null): boolean {
+    if (isRotaExclusivaVP(pathname)) return podeAcessarRotaExclusivaVP(colaborador, role)
+
     if (isAdmin(role)) return true
 
     if (pathname === '/nps-gerente' && isCargoGerencial(colaborador?.cargo_atual, colaborador?.nucleo_atual)) {
