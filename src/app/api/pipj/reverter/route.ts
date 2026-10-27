@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { exigirAcessoPipj } from '@/lib/pipj-acesso'
 
 export async function POST(req: NextRequest) {
   try {
+    // Só ADMIN ou quem tem acesso a /pipj-management pode reverter um lançamento (antes a rota era aberta).
+    const acesso = await exigirAcessoPipj()
+    if (acesso.erro) return acesso.erro
+
     const body = await req.json().catch(() => ({}))
     const lancamentoId: string | undefined = body.lancamentoId
 
