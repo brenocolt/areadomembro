@@ -9,9 +9,12 @@ import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import {
     ArrowUpRight, ArrowDownLeft, Clock, Banknote, Check, X,
-    Loader2, Search, ArrowUpDown
+    Loader2, Search, ArrowUpDown, RotateCcw
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "sonner"
 
 // ─── Category color palette (deterministic by name) ────────────────────────
 
@@ -56,6 +59,8 @@ function parseBankingInfo(descricao: string) {
     } catch { /* ignore */ }
     return { motivo, dados }
 }
+
+const formatarMoeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 type SortKey = 'data_desc' | 'data_asc' | 'valor_desc' | 'valor_asc' | 'decisao_desc' | 'decisao_asc'
 
@@ -441,6 +446,10 @@ export function SaquePendingRequestsList() {
         return list
     }, [saques, search, tipoFilter, minValor, maxValor, sortKey])
 
+    // Totais em R$ do que ainda falta aprovar (a lista já exclui desligados e contas administrativas).
+    const totalPendente = useMemo(() => saques.reduce((soma, s) => soma + Number(s.valor || 0), 0), [saques])
+    const totalFiltrado = useMemo(() => filtered.reduce((soma, s) => soma + Number(s.valor || 0), 0), [filtered])
+
     if (loading) return <Card className="h-48 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-3xl border-none" />
 
     return (
@@ -460,6 +469,21 @@ export function SaquePendingRequestsList() {
                     )}
                 </div>
             </CardHeader>
+
+            {saques.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-slate-100 bg-amber-50/60 px-6 py-3 dark:border-white/5 dark:bg-amber-500/5" data-testid="total-pendente">
+                    <div>
+                        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Total solicitado aguardando aprovação</p>
+                        <p className="text-xl font-bold text-slate-900 dark:text-white">{formatarMoeda(totalPendente)}</p>
+                    </div>
+                    <div className="text-right text-xs text-slate-500 dark:text-slate-400">
+                        <p>{saques.length} solicitaç{saques.length === 1 ? 'ão' : 'ões'} pendente{saques.length === 1 ? '' : 's'}</p>
+                        {filtered.length !== saques.length && (
+                            <p className="font-medium text-slate-700 dark:text-slate-200">Nos filtros atuais: {formatarMoeda(totalFiltrado)} ({filtered.length})</p>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {saques.length > 0 && (
                 <FilterBar
@@ -586,6 +610,39 @@ export function SaqueHistoryList() {
     const [dataDecisaoInicio, setDataDecisaoInicio] = useState('')
     const [dataDecisaoFim, setDataDecisaoFim] = useState('')
     const [sortKey, setSortKey] = useState<SortKey>('data_desc')
+
+    // Reversão de saque aprovado
+    const [reverterAlvo, setReverterAlvo] = useState<{ id: string; valor: number | string; colaboradores?: { nome?: string | null } | null } | null>(null)
+    const [motivoReversao, setMotivoReversao] = useState('')
+    const [revertendo, setRevertendo] = useState(false)
+
+    const fecharReversao = () => { if (!revertendo) { setReverterAlvo(null); setMotivoReversao('') } }
+
+    const confirmarReversao = async () => {
+        if (!reverterAlvo) return
+        setRevertendo(true)
+        try {
+            const res = await fetch('/api/pipj/saque/reverter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: reverterAlvo.id, motivo: motivoReversao }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(data.error || 'Erro ao reverter o saque.')
+                return
+            }
+            toast.success(`Saque revertido: ${formatarMoeda(Number(data.valor))} devolvidos a ${reverterAlvo.colaboradores?.nome || 'colaborador'}. A solicitação voltou para "Solicitações de Saque".`)
+            setSaques(prev => prev.filter(s => s.id !== reverterAlvo.id))
+            window.dispatchEvent(new Event('refreshPipjData'))
+            setReverterAlvo(null)
+            setMotivoReversao('')
+        } catch {
+            toast.error('Erro de conexão.')
+        } finally {
+            setRevertendo(false)
+        }
+    }
 
     useEffect(() => {
         async function fetchData() {
@@ -733,6 +790,18 @@ export function SaqueHistoryList() {
                                             <Badge className={STATUS_COLORS[s.status] || 'bg-slate-100 text-slate-600'}>
                                                 {s.status || 'DESCONHECIDO'}
                                             </Badge>
+                                            {s.status === 'APROVADO' && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="mt-1 h-7 rounded-lg border-slate-200 px-2.5 text-xs text-slate-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 dark:border-white/10 dark:text-slate-300"
+                                                    onClick={() => setReverterAlvo(s)}
+                                                    aria-label={`Reverter saque de ${s.colaboradores?.nome || 'colaborador'}`}
+                                                >
+                                                    <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                                                    Reverter
+                                                </Button>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="flex flex-wrap gap-2 text-xs text-slate-500">
@@ -780,6 +849,43 @@ export function SaqueHistoryList() {
                     </div>
                 )}
             </CardContent>
+
+            <Dialog open={!!reverterAlvo} onOpenChange={(aberto) => { if (!aberto) fecharReversao() }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reverter saque aprovado</DialogTitle>
+                        <DialogDescription>
+                            {reverterAlvo && (
+                                <>
+                                    {formatarMoeda(Number(reverterAlvo.valor))} serão devolvidos ao saldo de PIPJ de <strong>{reverterAlvo.colaboradores?.nome}</strong> e a solicitação volta para
+                                    &quot;Solicitações de Saque&quot; (pendente), onde pode ser aprovada de novo ou rejeitada.
+                                </>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+                        Se o pagamento (PIX) já foi feito, a reversão <strong>não</strong> o desfaz: ela só ajusta o saldo no sistema. Aprovar de novo gera nova notificação de pagamento.
+                    </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="motivo-reversao" className="text-sm font-medium">Motivo da reversão *</label>
+                        <Textarea
+                            id="motivo-reversao"
+                            rows={3}
+                            maxLength={300}
+                            value={motivoReversao}
+                            onChange={(e) => setMotivoReversao(e.target.value)}
+                            placeholder="Ex.: valor aprovado errado"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={fecharReversao} disabled={revertendo}>Cancelar</Button>
+                        <Button onClick={confirmarReversao} disabled={revertendo || motivoReversao.trim().length < 3}>
+                            {revertendo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                            Reverter saque
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Card>
     )
 }

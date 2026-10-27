@@ -2,6 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Wallet, TrendingDown, ArrowDownCircle, ShieldAlert } from "lucide-react"
+import { PREFIXO_ESTORNO } from "@/lib/pipj-saque"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import { OCULTOS_SALDOS_EQUIPE } from "@/lib/pipj-oculto"
@@ -22,9 +23,11 @@ export function PipjStats() {
 
             const now = new Date()
 
-            const [colabsRes, saidasRes, aprovadosRes] = await Promise.all([
+            const [colabsRes, saidasBrutasRes, estornosRes, aprovadosRes] = await Promise.all([
                 supabase.from('colaboradores').select('id, saldo_pipj').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA),
                 supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'SAIDA'),
+                // Saque aprovado que foi revertido: o estorno (ENTRADA) abate a saída original.
+                supabase.from('transacoes_pipj').select('valor, data').eq('tipo', 'ENTRADA').ilike('descricao', `${PREFIXO_ESTORNO}%`),
                 // Limite mensal conta pelo mês em que a solicitação foi
                 // APROVADA, não pelo mês em que foi solicitada.
                 supabase
@@ -40,7 +43,13 @@ export function PipjStats() {
                 .reduce((s, c) => s + Number(c.saldo_pipj || 0), 0) || 0
             setTotalPipj(total)
 
-            if (saidasRes.data && saidasRes.data.length > 0) {
+            const saidasRes = {
+                data: [
+                    ...(saidasBrutasRes.data || []),
+                    ...(estornosRes.data || []).map((e) => ({ ...e, valor: -Number(e.valor || 0) })),
+                ],
+            }
+            if (saidasRes.data.length > 0) {
                 const monthMap = new Map<string, number>()
                 saidasRes.data.forEach((s: any) => {
                     const d = new Date(s.data)
