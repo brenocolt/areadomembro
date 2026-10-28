@@ -3,7 +3,7 @@ import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Plane, Star, Users, Megaphone, Rocket, Share2, Medal, FileText, UserPlus, TrendingUp, CheckCircle2, ThumbsUp, Award, Loader2, PlusCircle, Upload } from "lucide-react"
+import { Plane, Star, Users, Megaphone, Share2, Medal, FileText, UserPlus, ThumbsUp, Award, Loader2, PlusCircle, Upload } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 
@@ -25,19 +25,16 @@ const ACTIVITY_GROUPS = [
             { id: "consultor_mes", title: "Consultor do Mês", dbValue: "Conquistar o reconhecimento formal de Consultor do Mês", initials: "C.M." },
             { id: "gerente_mes", title: "Gerente do Mês", dbValue: "Conquistar o reconhecimento formal de Gerente do Mês", initials: "G.M." },
             { id: "sdr_mes", title: "SDR do Mês", dbValue: "Conquistar o reconhecimento formal de SDR do Mês", initials: "S.M." },
-            { id: "projeto_impacto", title: "Projeto Impacto", dbValue: "Conquistar o reconhecimento formal de Projeto de Impacto", icon: Rocket },
             { id: "nucleo_impacto", title: "Núcleo Impacto", dbValue: "Conquistar o reconhecimento formal de Núcleo de Impacto", icon: Share2 },
             { id: "patente_alta", title: "Patente Alta", dbValue: "Conquistar o reconhecimento formal de Trainee Patente Alta", icon: Medal },
             { id: "editais", title: "Editais", dbValue: "Participação em editais", icon: FileText },
-            { id: "indicar_leads", title: "Indicar 15+ Leads", dbValue: "Indicar 15 ou mais leads", icon: UserPlus }
+            { id: "indicar_leads", title: "Indicar 5+ Leads", dbValue: "Indicar 5 ou mais leads", icon: UserPlus }
         ]
     },
     {
         label: "GANHE 10 MILHAS",
         points: 10,
         items: [
-            { id: "cem_desempenho", title: "100% Desempenho", dbValue: "Alcançar o desempenho interno de 100% no mês", icon: TrendingUp },
-            { id: "entregas_prazo", title: "Entregas no Prazo", dbValue: "Ter 100% das entregas concluidas sem atraso, sendo estas definidas para um período delimitado", icon: CheckCircle2 },
             { id: "nota_maxima", title: "Nota Máxima CSAT", dbValue: "Alcançar a nota máxima em CSAT ou NPS", icon: ThumbsUp }
         ]
     }
