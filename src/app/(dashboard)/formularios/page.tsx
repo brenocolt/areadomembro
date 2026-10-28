@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 import { FileQuestion, CheckCircle2, Clock, Send, ArrowRight, Loader2, Lock, Pencil } from "lucide-react"
@@ -78,13 +78,17 @@ export default function FormulariosPage() {
     // (ex.: NPS Projetos).
     const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
 
-    const fetchData = async () => {
-        await supabase
-            .from('formularios')
-            .update({ status: 'encerrado' })
-            .eq('status', 'ativo')
-            .lt('data_prazo', new Date().toISOString())
-            .not('data_prazo', 'is', null)
+    // `silencioso`: atualização automática da lista (ver o useEffect de
+    // atualização abaixo) — não grava nada no banco nem mostra erro em toast.
+    const fetchData = async (opcoes?: { silencioso?: boolean }) => {
+        if (!opcoes?.silencioso) {
+            await supabase
+                .from('formularios')
+                .update({ status: 'encerrado' })
+                .eq('status', 'ativo')
+                .lt('data_prazo', new Date().toISOString())
+                .not('data_prazo', 'is', null)
+        }
 
         const { data: formsData, error: formsError } = await supabase
             .from('formularios')
@@ -93,6 +97,9 @@ export default function FormulariosPage() {
             .order('created_at', { ascending: false })
         if (formsError) {
             console.error('Erro ao carregar formulários ativos:', formsError)
+            // Na atualização automática, um erro passageiro só mantém a lista
+            // que já está na tela.
+            if (opcoes?.silencioso) return
             toast.error('Erro ao carregar os formulários: ' + formsError.message)
         }
 
@@ -106,7 +113,10 @@ export default function FormulariosPage() {
         const { data: pData } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome')
         setProjetos(pData || [])
 
-        let visibleForms = formsData || []
+        // Prazo vencido some da lista mesmo antes de alguém gravar o
+        // "encerrado" (a atualização automática não grava).
+        const agora = Date.now()
+        let visibleForms = (formsData || []).filter(f => !f.data_prazo || new Date(f.data_prazo).getTime() >= agora)
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
 
         if (visibleForms.length > 0 && colaborador) {
@@ -212,6 +222,42 @@ export default function FormulariosPage() {
         if (loadingColaborador) return
         fetchData()
     }, [loadingColaborador, colaborador?.id])
+
+    // Formulário aberto (ou fechado) na Gestão de Formulários aparece para
+    // quem já está nesta tela, sem recarregar: na hora, pelo Realtime do
+    // Supabase (se a tabela formularios estiver na publicação), e, de
+    // qualquer forma, ao voltar para a aba/janela e a cada 30 s com a aba
+    // visível. Não mexe na tela enquanto um formulário está sendo preenchido.
+    const formAbertoRef = useRef<string | null>(null)
+    formAbertoRef.current = activeFormId
+    const atualizandoRef = useRef(false)
+    useEffect(() => {
+        if (loadingColaborador) return
+        const atualizar = async () => {
+            if (document.visibilityState !== 'visible' || formAbertoRef.current || atualizandoRef.current) return
+            atualizandoRef.current = true
+            try {
+                await fetchData({ silencioso: true })
+            } finally {
+                atualizandoRef.current = false
+            }
+        }
+        const canal = supabase
+            .channel(`formularios_membro_${colaborador?.id || 'anon'}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'formularios' }, atualizar)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'formulario_publico_responde' }, atualizar)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'formulario_publico_recebe' }, atualizar)
+            .subscribe()
+        const intervalo = setInterval(atualizar, 30_000)
+        document.addEventListener('visibilitychange', atualizar)
+        window.addEventListener('focus', atualizar)
+        return () => {
+            supabase.removeChannel(canal)
+            clearInterval(intervalo)
+            document.removeEventListener('visibilitychange', atualizar)
+            window.removeEventListener('focus', atualizar)
+        }
+    }, [loadingColaborador, colaborador?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Modo de resposta do formulário — ver
     // supabase/migrations/20260908_formularios_modo_resposta.sql. Ausente
