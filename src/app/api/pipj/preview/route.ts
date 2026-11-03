@@ -1,3 +1,4 @@
+import { exigirAcessoPipj } from '@/lib/pipj-acesso'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
@@ -94,6 +95,9 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
 }
 
 export async function GET(req: NextRequest) {
+    const acesso = await exigirAcessoPipj()
+  if ('erro' in acesso) return acesso.erro
+
   try {
     const supabaseAdmin = createServerSupabaseClient()
     const now = new Date()

@@ -1,3 +1,4 @@
+import { exigirLogin, respostaErro } from '@/lib/require-auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { syncMondayAlocacoes } from '@/lib/monday-sync'
 
@@ -7,6 +8,9 @@ import { syncMondayAlocacoes } from '@/lib/monday-sync'
 // Não está plugada no agendamento automático ainda; disparo manual apenas,
 // até ser validada.
 export async function GET(req: NextRequest) {
+    const login = await exigirLogin()
+  if ('erro' in login) return respostaErro(login)
+
     try {
         const dryRunParam = req.nextUrl.searchParams.get('dryRun')
         const dryRun = dryRunParam !== 'false'

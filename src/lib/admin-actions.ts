@@ -2,8 +2,12 @@
 
 import bcrypt from 'bcryptjs';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { exigirGestaoUsuarios } from '@/lib/require-auth';
 
 export async function approveAccountRequest(id: string) {
+    const perm = await exigirGestaoUsuarios(1);
+    if ('erro' in perm) return { success: false, error: perm.erro };
+
     const supabase = createServerSupabaseClient();
 
     // 1. Get the request
@@ -186,6 +190,9 @@ export async function approveAccountRequest(id: string) {
 }
 
 export async function desligarMembro(colaboradorId: string) {
+    const perm = await exigirGestaoUsuarios(1);
+    if ('erro' in perm) return { success: false, error: perm.erro };
+
     const supabase = createServerSupabaseClient();
 
     const { error } = await supabase
@@ -200,6 +207,9 @@ export async function desligarMembro(colaboradorId: string) {
 }
 
 export async function reativarMembro(colaboradorId: string) {
+    const perm = await exigirGestaoUsuarios(1);
+    if ('erro' in perm) return { success: false, error: perm.erro };
+
     const supabase = createServerSupabaseClient();
 
     const { error } = await supabase
@@ -214,6 +224,9 @@ export async function reativarMembro(colaboradorId: string) {
 }
 
 export async function deleteUserCompletely(colaboradorId: string) {
+    const perm = await exigirGestaoUsuarios(3);
+    if ('erro' in perm) return { success: false, error: perm.erro };
+
     const supabase = createServerSupabaseClient();
 
     // 1. Get colaborador email to find related solicitacoes_conta and membros_pre_cadastro

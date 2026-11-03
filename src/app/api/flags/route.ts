@@ -1,7 +1,11 @@
+import { exigirLogin, respostaErro } from '@/lib/require-auth'
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export async function GET() {
+    const login = await exigirLogin()
+    if ('erro' in login) return respostaErro(login)
+
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
@@ -18,6 +22,9 @@ export async function GET() {
 }
 
 export async function DELETE(request: Request) {
+    const login = await exigirLogin()
+    if ('erro' in login) return respostaErro(login)
+
     const supabase = createServerSupabaseClient()
 
     const { id } = await request.json()
