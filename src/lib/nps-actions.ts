@@ -1,5 +1,7 @@
 'use server';
 
+import { exigirGestaoUsuarios } from '@/lib/require-auth';
+
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 // "gabriel bacellar e ana gabriela sao a mesma pessoa"
@@ -34,6 +36,9 @@ const MONTHS: Record<string, number> = {
 
 export async function importNpsData(rows: Record<string, unknown>[]) {
     try {
+        const perm = await exigirGestaoUsuarios(3);
+        if ('erro' in perm) return { success: false, error: perm.erro };
+
         const supabase = createServerSupabaseClient();
         
         const userNps: Record<string, Record<string, unknown>[]> = {};

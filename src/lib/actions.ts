@@ -5,6 +5,7 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { exigirLogin, exigirGestaoUsuarios } from '@/lib/require-auth';
 
 // Define schema for input validation if needed, but we do it in client too.
 
@@ -97,6 +98,18 @@ export async function resetPasswordLocal(email: string, dataNascimento: string, 
 }
 
 export async function changePasswordLocal(colaboradorId: string, novaSenha: string) {
+    // Só o próprio dono da conta troca a senha; trocar a de outro exige
+    // Gestão de Usuários nível 3 (ADMIN/Estratégico).
+    const login = await exigirLogin();
+    if ('erro' in login) return { success: false, message: login.erro };
+    if (login.colaboradorId !== colaboradorId) {
+        const perm = await exigirGestaoUsuarios(3);
+        if ('erro' in perm) return { success: false, message: perm.erro };
+    }
+    if (typeof novaSenha !== 'string' || novaSenha.length < 8) {
+        return { success: false, message: 'A senha deve ter ao menos 8 caracteres.' };
+    }
+
     const supabase = createServerSupabaseClient();
     
     const hashedPassword = await bcrypt.hash(novaSenha, 10);

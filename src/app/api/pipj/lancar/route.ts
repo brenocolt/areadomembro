@@ -1,3 +1,4 @@
+import { exigirAcessoPipj } from '@/lib/pipj-acesso'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { CARGO_FANTASMA } from '@/lib/cargos'
@@ -64,6 +65,7 @@ const NPS_CSAT_BONUS_PERCENT = 0.10
 // acima, nem é reduzido/limitado por eles.
 const RECONHECIMENTO_BONUS_VALOR = 50
 const MAX_PER_PERSON = 300
+const MAX_VALOR_MANUAL = 1000
 
 // Roles that get exclusive role bonus (no level bonus)
 const EXCLUSIVE_ROLES: string[] = [
@@ -102,6 +104,9 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
 }
 
 export async function POST(req: NextRequest) {
+    const acesso = await exigirAcessoPipj()
+  if ('erro' in acesso) return acesso.erro
+
   try {
     const body = await req.json().catch(() => ({}));
     const overrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = body.overrides || {};
@@ -114,7 +119,33 @@ export async function POST(req: NextRequest) {
     const mes: number = body.mes ? parseInt(body.mes) : now.getMonth() + 1
     const ano: number = body.ano ? parseInt(body.ano) : now.getFullYear()
 
-    // Monthly limit check removed for testing purposes
+    if (!Number.isInteger(mes) || mes < 1 || mes > 12 || !Number.isInteger(ano) || ano < 2020 || ano > now.getFullYear() + 1) {
+      return NextResponse.json({ error: 'Mês/ano inválidos.' }, { status: 400 })
+    }
+
+    // Trava de um lançamento por mês: só libera de novo se o anterior foi revertido.
+    const { data: lancamentoDoMes } = await supabaseAdmin
+      .from('lancamentos_pipj')
+      .select('id')
+      .eq('mes', mes)
+      .eq('ano', ano)
+      .is('revertido_em', null)
+      .limit(1)
+    if (lancamentoDoMes && lancamentoDoMes.length > 0) {
+      return NextResponse.json({ error: 'Já existe um lançamento para este mês. Reverta o anterior antes de lançar de novo.' }, { status: 409 })
+    }
+
+    // Teto de segurança para valores digitados à mão (suposição: R$ 1.000 por pessoa).
+    for (const o of Object.values(overrides)) {
+      const vf = o?.valor_final
+      const dd = o?.deducao
+      if (vf !== undefined && (!Number.isFinite(Number(vf)) || Number(vf) < 0 || Number(vf) > MAX_VALOR_MANUAL)) {
+        return NextResponse.json({ error: `Valor final manual inválido (máximo R$ ${MAX_VALOR_MANUAL}).` }, { status: 400 })
+      }
+      if (dd !== undefined && (!Number.isFinite(Number(dd)) || Number(dd) < 0 || Number(dd) > MAX_VALOR_MANUAL)) {
+        return NextResponse.json({ error: 'Dedução manual inválida.' }, { status: 400 })
+      }
+    }
 
     // Fetch active colaboradores sorted alphabetically (desligados e contas
     // fantasma de administrador não recebem PIPJ nos lançamentos)
