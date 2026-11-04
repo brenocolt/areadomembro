@@ -2,7 +2,6 @@
 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Button } from "@/components/ui/button"
 import { TrendingUp } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
@@ -20,7 +19,7 @@ export function TopOffenders() {
                 .neq('cargo_atual', CARGO_FANTASMA)
                 .gt('pontos_negativos', 0)
                 .order('pontos_negativos', { ascending: false })
-                .limit(5)
+                .order('nome')
             if (data) setOffenders(data)
         }
         fetch()
@@ -49,11 +48,12 @@ export function TopOffenders() {
                         <CardDescription className="text-slate-500 dark:text-slate-400 text-xs">Ranking de pontos negativos</CardDescription>
                     </div>
                     <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 px-2 py-1 rounded-lg text-[10px] font-bold text-slate-500 dark:text-slate-300">
-                        Geral
+                        {offenders.length} {offenders.length === 1 ? 'pessoa' : 'pessoas'}
                     </div>
                 </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            {/* Lista inteira, com rolagem: passe o mouse e role (ou use a barra lateral) para ver todos. */}
+            <CardContent className="space-y-4 max-h-[26rem] overflow-y-auto pr-3 mr-3 mb-4">
                 {offenders.length > 0 ? offenders.map((user, index) => (
                     <div key={user.id} className="group">
                         <div className="flex justify-between items-end mb-2">
@@ -76,12 +76,6 @@ export function TopOffenders() {
                     <p className="text-sm text-slate-400 italic text-center py-4">Nenhum colaborador com pontos negativos</p>
                 )}
             </CardContent>
-
-            <div className="p-6 pt-0 mt-auto">
-                <Button variant="ghost" className="w-full text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl uppercase tracking-wider font-bold h-10 border border-transparent hover:border-slate-200 dark:hover:border-white/5">
-                    Ver Ranking Completo
-                </Button>
-            </div>
         </Card>
     )
 }
