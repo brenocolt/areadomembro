@@ -122,3 +122,67 @@ function cnpjValido(cnpj: string): boolean {
     }
     return dv(cnpj.slice(0, 12)) === Number(cnpj[12]) && dv(cnpj.slice(0, 13)) === Number(cnpj[13])
 }
+
+export const STATUS_VIAGEM = ['Pendente', 'Em solicitação', 'Reembolsado', 'Vencido'] as const
+export type StatusViagem = typeof STATUS_VIAGEM[number]
+
+export interface GasolinaViagem {
+    id: string
+    colaborador_id: string
+    veiculo_id: string | null
+    centro_custo_id: string | null
+    projeto: string
+    projeto_original: string | null
+    origem_local: string
+    destino_local: string
+    paradas: string[]
+    distancia_km: number
+    data_viagem: string
+    autonomia_usada: number | null
+    litros: number | null
+    preco_litro: number | null
+    valor: number | null
+    status: StatusViagem
+    solicitacao_id: string | null
+    origem: 'app' | 'planilha'
+    criado_em: string
+}
+
+// Prazo da planilha: a viagem pode ser reembolsada até 2 meses depois do dia
+// em que aconteceu; depois disso vira "Vencido".
+export const PRAZO_MESES = 2
+
+// Datas como "AAAA-MM-DD", no fuso de Brasília (o servidor roda em UTC e o
+// dia vira 3h antes por lá).
+export function hojeBrasil(): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+}
+
+function somarMeses(data: string, meses: number): string {
+    const [a, m, d] = data.split('-').map(Number)
+    const alvo = new Date(Date.UTC(a, m - 1 + meses, 1))
+    // Mantém o dia, limitado ao último dia do mês (31/12 + 2 meses = 28 ou 29/02).
+    const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
+    alvo.setUTCDate(Math.min(d, ultimoDia))
+    return alvo.toISOString().slice(0, 10)
+}
+
+// Último dia em que a viagem ainda pode ser solicitada.
+export function prazoDaViagem(dataViagem: string): string {
+    return somarMeses(dataViagem, PRAZO_MESES)
+}
+
+// Viagens com data ANTERIOR a este dia já venceram.
+export function dataMaisAntigaPermitida(hoje = hojeBrasil()): string {
+    return somarMeses(hoje, -PRAZO_MESES)
+}
+
+export function diasAte(data: string, hoje = hojeBrasil()): number {
+    const ms = Date.parse(`${data}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)
+    return Math.round(ms / 86400000)
+}
+
+export function formatarData(data: string): string {
+    const [a, m, d] = data.slice(0, 10).split('-')
+    return `${d}/${m}/${a}`
+}

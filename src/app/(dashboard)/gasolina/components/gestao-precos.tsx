@@ -43,8 +43,8 @@ export function GestaoPrecos() {
     async function salvar() {
         setSalvando(true)
         try {
-            await gasolinaApi("/api/gasolina/precos", { method: "PUT", body: JSON.stringify({ mes, preco_litro: valor }) })
-            toast.success(`Preço de ${formatarMes(`${mes}-01`)} salvo.`)
+            const r = await gasolinaApi<{ recalculadas: number }>("/api/gasolina/precos", { method: "PUT", body: JSON.stringify({ mes, preco_litro: valor }) })
+            toast.success(`Preço de ${formatarMes(`${mes}-01`)} salvo.${r.recalculadas ? ` ${r.recalculadas} viagem(ns) pendente(s) atualizada(s).` : ""}`)
             setValor("")
             carregar()
         } catch (e) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { exigirGestorGasolina, exigirMembroGasolina } from '@/lib/gasolina-server'
+import { exigirGestorGasolina, exigirMembroGasolina, recalcularPendentes } from '@/lib/gasolina-server'
 import { lerNumero } from '@/lib/gasolina'
 
 // PATCH: só a VP corrige a autonomia (o membro, se precisar mudar, exclui e
@@ -31,7 +31,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .maybeSingle()
     if (error) return NextResponse.json({ error: 'Erro ao alterar a autonomia.' }, { status: 500 })
     if (!data) return NextResponse.json({ error: 'Carro não encontrado.' }, { status: 404 })
-    return NextResponse.json({ veiculo: data })
+
+    // A correção vale para as viagens ainda pendentes feitas com esse carro.
+    const recalculadas = await recalcularPendentes(supabase, { veiculoId: id })
+    return NextResponse.json({ veiculo: data, recalculadas })
 }
 
 // DELETE: o membro exclui o próprio carro. Fica guardado como inativo para

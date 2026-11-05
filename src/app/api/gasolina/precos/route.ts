@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { exigirGestorGasolina, exigirMembroGasolina } from '@/lib/gasolina-server'
+import { exigirGestorGasolina, exigirMembroGasolina, recalcularPendentes } from '@/lib/gasolina-server'
 import { lerNumero } from '@/lib/gasolina'
 
 // Preço médio do litro por mês (antiga aba "Histórico de preços").
@@ -42,5 +42,8 @@ export async function PUT(req: NextRequest) {
         .select('*')
         .single()
     if (error) return NextResponse.json({ error: 'Erro ao salvar o preço.' }, { status: 500 })
-    return NextResponse.json({ preco: data })
+
+    // Viagens pendentes daquele mês passam a ter valor (ou valor corrigido).
+    const recalculadas = await recalcularPendentes(supabase, { mes: `${mes}-01` })
+    return NextResponse.json({ preco: data, recalculadas })
 }

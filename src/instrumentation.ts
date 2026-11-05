@@ -16,4 +16,7 @@ export async function register() {
 
     const { scheduleReunioesProcessamento } = await import('./lib/reunioes-scheduler')
     scheduleReunioesProcessamento()
+
+    const { scheduleVencimentoGasolina } = await import('./lib/gasolina-scheduler')
+    scheduleVencimentoGasolina()
 }

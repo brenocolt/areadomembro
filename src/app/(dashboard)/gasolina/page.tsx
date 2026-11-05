@@ -5,6 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useColaborador } from "@/hooks/use-supabase"
 import { podeGerirGasolina } from "@/lib/access-control"
 import { MeusCarros } from "./components/meus-carros"
+import { MinhasViagens } from "./components/minhas-viagens"
+import { VisaoGeral } from "./components/visao-geral"
 import { ChavePixCard } from "./components/chave-pix-card"
 import { GestaoPrecos } from "./components/gestao-precos"
 import { GestaoCarros } from "./components/gestao-carros"
@@ -28,13 +30,19 @@ export default function GasolinaPage() {
                 </p>
             </div>
 
-            <Tabs defaultValue="carros" className="w-full space-y-6">
+            <Tabs defaultValue="viagens" className="w-full space-y-6">
                 <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl flex-wrap h-auto">
+                    <TabsTrigger value="viagens" className={TRIGGER}>Viagens</TabsTrigger>
                     <TabsTrigger value="carros" className={TRIGGER}>Meus carros e Pix</TabsTrigger>
+                    {gestor && <TabsTrigger value="visao-geral" className={TRIGGER}>Visão geral</TabsTrigger>}
                     {gestor && <TabsTrigger value="precos" className={TRIGGER}>Preço do mês</TabsTrigger>}
                     {gestor && <TabsTrigger value="carros-membros" className={TRIGGER}>Carros dos membros</TabsTrigger>}
                     {gestor && <TabsTrigger value="centros" className={TRIGGER}>Centros de custo</TabsTrigger>}
                 </TabsList>
+
+                <TabsContent value="viagens" className="border-none p-0 outline-none">
+                    <MinhasViagens />
+                </TabsContent>
 
                 <TabsContent value="carros" className="space-y-6 border-none p-0 outline-none">
                     <ChavePixCard />
@@ -43,6 +51,9 @@ export default function GasolinaPage() {
 
                 {gestor && (
                     <>
+                        <TabsContent value="visao-geral" className="border-none p-0 outline-none">
+                            <VisaoGeral />
+                        </TabsContent>
                         <TabsContent value="precos" className="border-none p-0 outline-none">
                             <GestaoPrecos />
                         </TabsContent>

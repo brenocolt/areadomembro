@@ -8,33 +8,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { CARGO_FANTASMA } from './cargos'
 import { ProjetoAtivoDetalhe } from './pipj-projetos'
+import { MONDAY_API_TOKEN, mondayRequest } from './monday'
 
-const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN || ''
 const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID || ''
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-
-async function mondayRequest(query: string, variables?: Record<string, any>): Promise<any> {
-    const res: Response = await fetch('https://api.monday.com/v2', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': MONDAY_API_TOKEN,
-            'API-Version': '2024-10',
-        },
-        body: JSON.stringify(variables ? { query, variables } : { query }),
-    })
-
-    if (!res.ok) {
-        throw new Error(`Monday API error: ${await res.text()}`)
-    }
-
-    const json: any = await res.json()
-    if (json.errors) {
-        throw new Error(`Monday GraphQL errors: ${JSON.stringify(json.errors)}`)
-    }
-    return json.data
-}
 
 type MondayItemsPage = { cursor?: string | null; items?: any[] }
 
