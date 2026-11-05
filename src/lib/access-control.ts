@@ -59,7 +59,7 @@ function isNucleoOverlay(nucleo?: string | null): boolean {
 export const PAGINAS_UNIVERSAIS = [
     '/', '/profile', '/minhas-prioridades', '/performance', '/assistente-pessoal',
     '/wallet', '/pdi', '/formularios', '/milhas', '/punishments', '/pontuar-membros',
-    '/presenca',
+    '/presenca', '/gasolina',
 ]
 
 // Tático+ (de qualquer núcleo) OU qualquer cargo dos núcleos Gestão de
@@ -153,4 +153,13 @@ export function paginaPermitida(pathname: string, colaborador: AccessColaborador
     if (manual && manual.includes(pathname)) return true
 
     return false
+}
+
+// Reembolso de gasolina: abas de gestão (preço do mês, autonomia dos carros,
+// centros de custo) ficam com a Vice Presidência, que hoje cuida da planilha
+// e do formulário — mais Estratégico e ADMIN, que têm acesso a tudo.
+export function podeGerirGasolina(colaborador: AccessColaborador | null | undefined, role?: string | null): boolean {
+    return isAdmin(role)
+        || isEstrategicoOuAdmin(colaborador?.cargo_atual)
+        || isNucleoVicePresidencia(colaborador?.nucleo_atual)
 }
