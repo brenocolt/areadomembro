@@ -47,8 +47,8 @@ export function GestaoCarros() {
     async function salvar(id: string) {
         setSalvando(true)
         try {
-            await gasolinaApi(`/api/gasolina/veiculos/${id}`, { method: "PATCH", body: JSON.stringify({ autonomia_km_l: valor }) })
-            toast.success("Autonomia alterada.")
+            const r = await gasolinaApi<{ recalculadas: number }>(`/api/gasolina/veiculos/${id}`, { method: "PATCH", body: JSON.stringify({ autonomia_km_l: valor }) })
+            toast.success(`Autonomia alterada.${r.recalculadas ? ` ${r.recalculadas} viagem(ns) pendente(s) recalculada(s).` : ""}`)
             setEditando(null)
             carregar()
         } catch (e) {
