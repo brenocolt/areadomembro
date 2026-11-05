@@ -3,7 +3,7 @@
 // retorno de exigirLider em src/lib/pdi-server.ts.
 import { auth } from '@/auth'
 import { paginaPermitida, podeGerirGasolina } from '@/lib/access-control'
-import { calcularLitros, inicioDoMes } from '@/lib/gasolina'
+import { calcularLitros, formatarMes, inicioDoMes } from '@/lib/gasolina'
 
 type Resultado =
     | { ok: true, colaboradorId: string, gestor: boolean }
@@ -75,15 +75,17 @@ export async function precoDoMes(supabase: any, dataViagem: string): Promise<num
 }
 
 // Recalcula as viagens Pendentes afetadas por uma mudança de preço do mês
-// (filtro.mes = "AAAA-MM-01") ou de autonomia de um carro (filtro.veiculoId).
+// (filtro.mes = "AAAA-MM-01"), de autonomia de um carro (filtro.veiculoId) ou
+// uma lista específica (filtro.ids — usado antes de montar a prévia).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function recalcularPendentes(supabase: any, filtro: { mes?: string, veiculoId?: string }): Promise<number> {
+export async function recalcularPendentes(supabase: any, filtro: { mes?: string, veiculoId?: string, ids?: string[] }): Promise<number> {
     let query = supabase
         .from('gasolina_viagens')
         .select('id, distancia_km, data_viagem, autonomia_usada, litros, preco_litro, valor, veiculo:veiculo_id(autonomia_km_l)')
         .eq('status', 'Pendente')
         .eq('origem', 'app')
     if (filtro.veiculoId) query = query.eq('veiculo_id', filtro.veiculoId)
+    if (filtro.ids) query = query.in('id', filtro.ids.length ? filtro.ids : ['00000000-0000-0000-0000-000000000000'])
     if (filtro.mes) {
         const [a, m] = filtro.mes.split('-').map(Number)
         const fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10)
@@ -106,4 +108,101 @@ export async function recalcularPendentes(supabase: any, filtro: { mes?: string,
         alteradas++
     }
     return alteradas
+}
+
+// ---------------------------------------------------------------------------
+// Solicitação de reembolso: 1 por projeto/prospecção (mesma lógica da
+// planilha). Só entram viagens Pendentes cujo mês já tem preço definido; as
+// demais ficam de fora e continuam Pendentes.
+// ---------------------------------------------------------------------------
+
+export interface ViagemPreview {
+    id: string
+    data_viagem: string
+    origem_local: string
+    destino_local: string
+    paradas: string[]
+    distancia_km: number
+    litros: number | null
+    preco_litro: number | null
+    valor: number | null
+    veiculo: { modelo: string } | null
+}
+
+export interface PreviewSolicitacao {
+    incluidas: ViagemPreview[]
+    excluidas: (ViagemPreview & { motivo: string })[]
+    litros_total: number
+    valor_total: number
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function montarPreview(supabase: any, colaboradorId: string, centroId: string, projeto: string): Promise<PreviewSolicitacao> {
+    const campos = 'id, data_viagem, origem_local, destino_local, paradas, distancia_km, litros, preco_litro, valor, veiculo:veiculo_id(modelo)'
+    const buscar = async (): Promise<ViagemPreview[]> => {
+        const { data, error } = await supabase
+            .from('gasolina_viagens')
+            .select(campos)
+            .eq('colaborador_id', colaboradorId)
+            .eq('centro_custo_id', centroId)
+            .eq('projeto', projeto)
+            .eq('status', 'Pendente')
+            .order('data_viagem', { ascending: true })
+        if (error) throw new Error(error.message)
+        return data ?? []
+    }
+
+    // Garante valores atualizados (ex.: preço do mês lançado agora há pouco).
+    const antes = await buscar()
+    const alteradas = await recalcularPendentes(supabase, { ids: antes.map(v => v.id) })
+    const viagens = alteradas ? await buscar() : antes
+
+    const incluidas: ViagemPreview[] = []
+    const excluidas: (ViagemPreview & { motivo: string })[] = []
+    for (const v of viagens) {
+        if (v.valor != null) incluidas.push(v)
+        else if (v.litros == null) excluidas.push({ ...v, motivo: 'Carro sem autonomia válida' })
+        else excluidas.push({ ...v, motivo: `Aguardando o preço de ${formatarMes(inicioDoMes(v.data_viagem))}` })
+    }
+    const somar = (k: 'litros' | 'valor') => incluidas.reduce((s, v) => s + Number(v[k] ?? 0), 0)
+    return {
+        incluidas,
+        excluidas,
+        litros_total: Math.round(somar('litros') * 1000) / 1000,
+        valor_total: Math.round(somar('valor') * 100) / 100,
+    }
+}
+
+export const STATUS_SOLICITACAO = ['Solicitado', 'Aprovado', 'Lançado', 'Pago', 'Recusado'] as const
+export type StatusSolicitacao = typeof STATUS_SOLICITACAO[number]
+
+// Ordem do kanban: o status só avança (Recusado encerra a qualquer momento).
+const ORDEM: Record<StatusSolicitacao, number> = { 'Solicitado': 0, 'Aprovado': 1, 'Lançado': 2, 'Pago': 3, 'Recusado': 9 }
+
+// Aplica um novo status vindo do Monday/n8n. Pago -> viagens Reembolsado;
+// Recusado -> viagens voltam a Pendente (o membro pode corrigir e pedir de novo).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function aplicarStatusSolicitacao(supabase: any, solicitacao: { id: string, status: StatusSolicitacao }, novo: StatusSolicitacao, motivo?: string): Promise<boolean> {
+    if (solicitacao.status === novo) return false
+    if (solicitacao.status === 'Pago' || solicitacao.status === 'Recusado') return false
+    if (novo !== 'Recusado' && ORDEM[novo] < ORDEM[solicitacao.status]) return false
+
+    const agora = new Date().toISOString()
+    const { data: atualizada } = await supabase
+        .from('gasolina_solicitacoes')
+        .update({ status: novo, atualizado_em: agora, ...(novo === 'Recusado' ? { motivo_recusa: motivo || 'Recusado no Monday.' } : {}) })
+        .eq('id', solicitacao.id)
+        .eq('status', solicitacao.status)   // evita corrida entre o n8n e o sync
+        .select('id')
+        .maybeSingle()
+    if (!atualizada) return false
+
+    if (novo === 'Pago') {
+        await supabase.from('gasolina_viagens').update({ status: 'Reembolsado', atualizado_em: agora })
+            .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
+    } else if (novo === 'Recusado') {
+        await supabase.from('gasolina_viagens').update({ status: 'Pendente', solicitacao_id: null, atualizado_em: agora })
+            .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
+    }
+    return true
 }

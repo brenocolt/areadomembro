@@ -35,9 +35,9 @@ export async function mondayRequest(query: string, variables?: Record<string, an
     return json.data
 }
 
-// Opções de uma coluna dropdown do board de pagamentos (ex.: "Categorias
-// Consultoria / Assessoria" — a lista de projetos que o membro escolhe ao
-// lançar uma viagem de gasolina). Cache de 10 min por coluna: a lista muda
+// Opções de uma coluna dropdown ou status do board de pagamentos (ex.:
+// "Categorias Consultoria / Assessoria" — a lista de projetos que o membro
+// escolhe ao lançar uma viagem de gasolina). Cache de 10 min por coluna: a lista muda
 // pouco e a tela de viagens consulta a cada abertura.
 const cacheOpcoes = new Map<string, { em: number, opcoes: string[] }>()
 const CACHE_MS = 10 * 60 * 1000
@@ -65,15 +65,79 @@ export async function listarOpcoesDropdown(colunaId: string): Promise<string[]> 
     if (!settings) throw new Error(`Coluna ${colunaId} não encontrada no board ${MONDAY_PAGAMENTOS_BOARD_ID}.`)
 
     // settings_str do dropdown: {"labels":[{"id":1,"name":"AC ADVOGADOS"}, ...]}
-    // (opções desativadas vêm marcadas em "deactivated_labels").
+    // (opções desativadas vêm marcadas em "deactivated_labels"); do status:
+    // {"labels":{"0":"Working on it","1":"Done", ...}}.
     const parsed = JSON.parse(settings)
-    const desativadas = new Set<number>(Array.isArray(parsed.deactivated_labels) ? parsed.deactivated_labels : [])
-    const labels: { id: number, name: string }[] = Array.isArray(parsed.labels) ? parsed.labels : []
-    const opcoes = labels
-        .filter(l => l?.name && !desativadas.has(l.id))
-        .map(l => l.name.trim())
+    let nomes: string[]
+    if (Array.isArray(parsed.labels)) {
+        const desativadas = new Set<number>(Array.isArray(parsed.deactivated_labels) ? parsed.deactivated_labels : [])
+        nomes = (parsed.labels as { id: number, name: string }[])
+            .filter(l => l?.name && !desativadas.has(l.id))
+            .map(l => l.name)
+    } else {
+        nomes = Object.values((parsed.labels ?? {}) as Record<string, string>)
+    }
+    const opcoes = nomes
+        .map(n => (n ?? '').trim())
+        .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
     cacheOpcoes.set(colunaId, { em: Date.now(), opcoes })
     return opcoes
+}
+
+// Comparação de rótulos do Monday sem acento/caixa ("Prospecção" = "PROSPECCAO").
+export function normalizarRotulo(texto: string): string {
+    return (texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
+}
+
+// Rótulo exato da coluna que corresponde a `desejado` (ou null).
+export async function encontrarOpcao(colunaId: string, desejado: string): Promise<string | null> {
+    const alvo = normalizarRotulo(desejado)
+    return (await listarOpcoesDropdown(colunaId)).find(o => normalizarRotulo(o) === alvo) ?? null
+}
+
+// Cria um item no board de pagamentos com todas as colunas de uma vez (o
+// webhook do n8n dispara na criação e precisa receber tudo preenchido).
+export async function criarItemPagamento(nome: string, colunas: Record<string, unknown>, criarRotulos: boolean): Promise<string> {
+    if (!MONDAY_PAGAMENTOS_API_TOKEN) throw new Error('MONDAY_PAGAMENTOS_API_TOKEN não configurado.')
+    const data = await mondayRequest(
+        `mutation($board: ID!, $nome: String!, $colunas: JSON!, $criar: Boolean) {
+            create_item(board_id: $board, item_name: $nome, column_values: $colunas, create_labels_if_missing: $criar) { id }
+        }`,
+        { board: MONDAY_PAGAMENTOS_BOARD_ID, nome, colunas: JSON.stringify(colunas), criar: criarRotulos },
+        MONDAY_PAGAMENTOS_API_TOKEN
+    )
+    const id = data?.create_item?.id
+    if (!id) throw new Error('O Monday não devolveu o ID do card criado.')
+    return String(id)
+}
+
+// Comentário (update) no item — usado para registrar o extrato das viagens.
+export async function comentarItem(itemId: string, texto: string): Promise<void> {
+    await mondayRequest(
+        `mutation($item: ID!, $texto: String!) { create_update(item_id: $item, body: $texto) { id } }`,
+        { item: itemId, texto },
+        MONDAY_PAGAMENTOS_API_TOKEN
+    )
+}
+
+// Texto atual de uma coluna (ex.: status do kanban) para vários itens. Itens
+// excluídos do Monday simplesmente não aparecem no resultado.
+export async function lerColunaDosItens(itemIds: string[], colunaId: string): Promise<Map<string, string>> {
+    const resultado = new Map<string, string>()
+    if (!/^[a-z0-9_]+$/.test(colunaId)) throw new Error(`ID de coluna inválido: ${colunaId}`)
+    for (let i = 0; i < itemIds.length; i += 50) {
+        const lote = itemIds.slice(i, i + 50).filter(id => /^\d+$/.test(id))
+        if (!lote.length) continue
+        const data = await mondayRequest(
+            `{ items(ids: [${lote.join(',')}]) { id column_values(ids: ["${colunaId}"]) { text } } }`,
+            undefined,
+            MONDAY_PAGAMENTOS_API_TOKEN
+        )
+        for (const item of data?.items ?? []) {
+            resultado.set(String(item.id), item.column_values?.[0]?.text ?? '')
+        }
+    }
+    return resultado
 }

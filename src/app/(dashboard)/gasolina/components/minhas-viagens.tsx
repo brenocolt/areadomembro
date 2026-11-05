@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, Route, Trash2 } from "lucide-react"
+import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, Route, Send, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,10 +13,12 @@ import {
 import { gasolinaApi } from "./api"
 import { StatusViagemBadge } from "./status-viagem"
 import { ViagemDialog } from "./viagem-dialog"
+import { SolicitarDialog } from "./solicitar-dialog"
 
 type ViagemLista = GasolinaViagem & { veiculo?: { modelo: string } | null, centro?: { nome: string } | null }
 
 interface ResumoProjeto {
+    centroId: string
     projeto: string
     centro: string
     valorPendente: number
@@ -25,7 +27,7 @@ interface ResumoProjeto {
     litrosTotal: number
 }
 
-export function MinhasViagens() {
+export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     const [viagens, setViagens] = useState<ViagemLista[]>([])
     const [veiculos, setVeiculos] = useState<GasolinaVeiculo[]>([])
     const [centros, setCentros] = useState<GasolinaCentroCusto[]>([])
@@ -33,6 +35,7 @@ export function MinhasViagens() {
     const [dialogAberto, setDialogAberto] = useState(false)
     const [editando, setEditando] = useState<GasolinaViagem | null>(null)
     const [excluindo, setExcluindo] = useState<string | null>(null)
+    const [solicitando, setSolicitando] = useState<{ centroId: string, centroNome: string, projeto: string } | null>(null)
 
     const carregar = useCallback(async () => {
         try {
@@ -58,7 +61,7 @@ export function MinhasViagens() {
         const mapa = new Map<string, ResumoProjeto>()
         for (const v of viagens) {
             const chave = `${v.centro_custo_id}|${v.projeto}`
-            const r = mapa.get(chave) ?? { projeto: v.projeto, centro: v.centro?.nome ?? "", valorPendente: 0, litrosPendentes: 0, aguardandoPreco: 0, litrosTotal: 0 }
+            const r = mapa.get(chave) ?? { centroId: v.centro_custo_id ?? "", projeto: v.projeto, centro: v.centro?.nome ?? "", valorPendente: 0, litrosPendentes: 0, aguardandoPreco: 0, litrosTotal: 0 }
             r.litrosTotal += Number(v.litros ?? 0)
             if (v.status === "Pendente") {
                 r.litrosPendentes += Number(v.litros ?? 0)
@@ -133,6 +136,12 @@ export function MinhasViagens() {
                                                 <Clock className="h-3 w-3" /> {r.aguardandoPreco} viagem(ns) aguardando o preço do mês
                                             </p>
                                         )}
+                                        {r.valorPendente > 0 && r.centroId && (
+                                            <Button size="sm" className="mt-2 w-full bg-amber-500 hover:bg-amber-600 text-white"
+                                                onClick={() => setSolicitando({ centroId: r.centroId, centroNome: r.centro, projeto: r.projeto })}>
+                                                <Send className="h-4 w-4" /> Solicitar reembolso
+                                            </Button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -172,6 +181,8 @@ export function MinhasViagens() {
 
             <ViagemDialog open={dialogAberto} onOpenChange={setDialogAberto} viagem={editando}
                 veiculos={veiculos} centros={centros} onSalva={carregar} />
+            <SolicitarDialog alvo={solicitando} onOpenChange={o => { if (!o) setSolicitando(null) }}
+                onSolicitado={() => { carregar(); onSolicitado?.() }} />
         </div>
     )
 }

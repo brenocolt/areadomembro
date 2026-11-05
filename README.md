@@ -109,3 +109,27 @@ cards de reembolso) no board **Processos de Pagamento** do Monday.
   `MONDAY_API_TOKEN`, cuja conta pode não enxergar esse board — o Monday
   responde como se o board não existisse.
 - `MONDAY_PAGAMENTOS_BOARD_ID` (opcional): padrão `9011987674`.
+- `GASOLINA_INTEGRACAO_TOKEN`: senha (texto longo e aleatório) que a automação
+  do n8n envia para consultar os pedidos feitos pelo app.
+
+### Solicitação de reembolso e automação do n8n
+
+O botão "Solicitar reembolso" cria o card no board já preenchido (tipo
+REEMBOLSO, centro de custo, projeto, categoria Gasolina, valor, Pix, e-mail) e
+comenta nele o extrato das viagens. O título do card termina com
+"(Área do Membro)". A automação "AUTOMAÇÃO PAGAMENTO VP" desvia esses cards
+(IF logo após "PIPJ?", antes de "CENTRO DE CUSTO") e chama, em vez de ler a
+planilha:
+
+```
+POST https://areadomembro.produtivajunior.com.br/api/gasolina/integracao/validar
+Authorization: Bearer <GASOLINA_INTEGRACAO_TOKEN>
+{ "monday_item_id": "<id do card>", "valor": "<coluna VALOR>" }
+```
+
+- `{ "origem": "planilha" }` → card não veio do app: segue o fluxo antigo.
+- `{ "origem": "app", "aprovado": true }` → mudar o status para APROVADO.
+- `{ "origem": "app", "aprovado": false, "motivo": "..." }` → RECUSADO e avisar o membro.
+
+O app acompanha o status do card a cada 10 minutos (APROVADO → LANÇADO → PAGO;
+RECUSADO devolve as viagens para pendentes).

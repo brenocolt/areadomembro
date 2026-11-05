@@ -5,6 +5,9 @@
 import { createServerSupabaseClient } from './supabase-server'
 import { dataMaisAntigaPermitida } from './gasolina'
 import { isSchemaDesatualizado } from './db-compat'
+import { aplicarStatusSolicitacao, type StatusSolicitacao } from './gasolina-server'
+import { COLUNAS_PAGAMENTO, statusDoKanban } from './gasolina-monday'
+import { lerColunaDosItens, MONDAY_PAGAMENTOS_API_TOKEN } from './monday'
 
 const HORA_UTC = 3    // 3h UTC = meia-noite em Brasília: vira o dia e vence
 const MINUTO_UTC = 5
@@ -48,9 +51,54 @@ async function rodar() {
     }
 }
 
+// Acompanha no app o kanban do Monday (Aprovado -> Lançado -> Pago, ou
+// Recusado) das solicitações em aberto.
+export async function sincronizarSolicitacoes(): Promise<number> {
+    if (!MONDAY_PAGAMENTOS_API_TOKEN) return 0
+    const supabase = createServerSupabaseClient()
+    const { data: abertas, error } = await supabase
+        .from('gasolina_solicitacoes')
+        .select('id, status, monday_item_id')
+        .in('status', ['Solicitado', 'Aprovado', 'Lançado'])
+        .not('monday_item_id', 'is', null)
+    if (error) {
+        if (isSchemaDesatualizado(error)) return 0
+        throw new Error(error.message)
+    }
+    if (!abertas?.length) return 0
+
+    const statusMonday = await lerColunaDosItens(abertas.map(s => s.monday_item_id as string), COLUNAS_PAGAMENTO.status)
+    let alteradas = 0
+    for (const s of abertas) {
+        const texto = statusMonday.get(String(s.monday_item_id))
+        // Card que não voltou (excluído, ou token sem acesso ao board): não
+        // dá para distinguir os dois casos, então não mexe — só registra.
+        if (texto === undefined) {
+            console.warn(`[gasolina] Card ${s.monday_item_id} (solicitação ${s.id}) não encontrado no Monday.`)
+            continue
+        }
+        const novo = statusDoKanban(texto)
+        if (!novo) continue
+        if (await aplicarStatusSolicitacao(supabase, s as { id: string, status: StatusSolicitacao }, novo)) alteradas++
+    }
+    return alteradas
+}
+
+async function rodarSincronizacao() {
+    try {
+        const alteradas = await sincronizarSolicitacoes()
+        if (alteradas > 0) console.log(`[gasolina] ${alteradas} solicitação(ões) atualizada(s) pelo Monday.`)
+    } catch (err) {
+        console.error('[gasolina] Falha ao sincronizar solicitações com o Monday:', err)
+    }
+}
+
 export function scheduleVencimentoGasolina() {
     if (agendado) return
     agendado = true
+
+    rodarSincronizacao()
+    setInterval(rodarSincronizacao, 10 * 60 * 1000)
 
     rodar()
     setTimeout(function agendarProximo() {
