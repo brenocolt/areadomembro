@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Fuel } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useColaborador } from "@/hooks/use-supabase"
@@ -7,6 +8,7 @@ import { podeGerirGasolina } from "@/lib/access-control"
 import { MeusCarros } from "./components/meus-carros"
 import { MinhasViagens } from "./components/minhas-viagens"
 import { VisaoGeral } from "./components/visao-geral"
+import { Solicitacoes } from "./components/solicitacoes"
 import { ChavePixCard } from "./components/chave-pix-card"
 import { GestaoPrecos } from "./components/gestao-precos"
 import { GestaoCarros } from "./components/gestao-carros"
@@ -17,6 +19,8 @@ const TRIGGER = "rounded-lg data-[state=active]:bg-white dark:data-[state=active
 export default function GasolinaPage() {
     const { colaborador, role } = useColaborador()
     const gestor = podeGerirGasolina(colaborador, role)
+    // Recarrega a aba Solicitações quando um pedido sai da aba Viagens.
+    const [versaoSolicitacoes, setVersaoSolicitacoes] = useState(0)
 
     return (
         <div className="space-y-6">
@@ -33,6 +37,7 @@ export default function GasolinaPage() {
             <Tabs defaultValue="viagens" className="w-full space-y-6">
                 <TabsList className="bg-slate-100 dark:bg-slate-800/50 p-1 rounded-xl flex-wrap h-auto">
                     <TabsTrigger value="viagens" className={TRIGGER}>Viagens</TabsTrigger>
+                    <TabsTrigger value="solicitacoes" className={TRIGGER}>Solicitações</TabsTrigger>
                     <TabsTrigger value="carros" className={TRIGGER}>Meus carros e Pix</TabsTrigger>
                     {gestor && <TabsTrigger value="visao-geral" className={TRIGGER}>Visão geral</TabsTrigger>}
                     {gestor && <TabsTrigger value="precos" className={TRIGGER}>Preço do mês</TabsTrigger>}
@@ -41,7 +46,11 @@ export default function GasolinaPage() {
                 </TabsList>
 
                 <TabsContent value="viagens" className="border-none p-0 outline-none">
-                    <MinhasViagens />
+                    <MinhasViagens onSolicitado={() => setVersaoSolicitacoes(v => v + 1)} />
+                </TabsContent>
+
+                <TabsContent value="solicitacoes" className="border-none p-0 outline-none">
+                    <Solicitacoes versao={versaoSolicitacoes} />
                 </TabsContent>
 
                 <TabsContent value="carros" className="space-y-6 border-none p-0 outline-none">
@@ -52,7 +61,10 @@ export default function GasolinaPage() {
                 {gestor && (
                     <>
                         <TabsContent value="visao-geral" className="border-none p-0 outline-none">
-                            <VisaoGeral />
+                            <div className="space-y-6">
+                                <Solicitacoes todos versao={versaoSolicitacoes} />
+                                <VisaoGeral />
+                            </div>
                         </TabsContent>
                         <TabsContent value="precos" className="border-none p-0 outline-none">
                             <GestaoPrecos />

@@ -1,0 +1,124 @@
+"use client"
+
+import { useCallback, useEffect, useState } from "react"
+import { Check, ChevronDown, ChevronUp, Loader2, XCircle } from "lucide-react"
+import { toast } from "sonner"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatarData, formatarNumero, formatarReais } from "@/lib/gasolina"
+import { gasolinaApi } from "./api"
+
+type Status = "Solicitado" | "Aprovado" | "Lançado" | "Pago" | "Recusado"
+
+interface Solicitacao {
+    id: string
+    projeto: string
+    qtd_viagens: number
+    litros_total: number
+    valor_total: number
+    status: Status
+    motivo_recusa: string | null
+    criado_em: string
+    atualizado_em: string
+    centro?: { nome: string } | null
+    colaborador?: { nome: string } | null
+    viagens?: { id: string, data_viagem: string, origem_local: string, destino_local: string, distancia_km: number, litros: number | null, valor: number | null }[]
+}
+
+const ETAPAS: Status[] = ["Solicitado", "Aprovado", "Lançado", "Pago"]
+
+// Acompanhamento no estilo do kanban do Monday. `todos` = visão da VP.
+export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, versao?: number }) {
+    const [lista, setLista] = useState<Solicitacao[]>([])
+    const [carregando, setCarregando] = useState(true)
+    const [aberta, setAberta] = useState<string | null>(null)
+
+    const carregar = useCallback(async () => {
+        try {
+            const r = await gasolinaApi<{ solicitacoes: Solicitacao[] }>(`/api/gasolina/solicitacoes${todos ? "?todos=1" : ""}`)
+            setLista(r.solicitacoes)
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setCarregando(false)
+        }
+    }, [todos])
+
+    useEffect(() => { carregar() }, [carregar, versao])
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg">{todos ? "Solicitações de todos os membros" : "Minhas solicitações"}</CardTitle>
+                <CardDescription>
+                    O andamento acompanha o Processos de Pagamento: Solicitado → Aprovado → Lançado (pela terceirizada no banco) → Pago.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                {carregando ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                ) : lista.length === 0 ? (
+                    <p className="text-sm text-slate-500">Nenhuma solicitação ainda.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {lista.map(s => (
+                            <div key={s.id} className="rounded-xl border border-slate-200 dark:border-white/10 p-4 space-y-3">
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                        <p className="font-semibold text-slate-900 dark:text-white">
+                                            {todos && s.colaborador?.nome ? `${s.colaborador.nome} · ` : ""}{s.projeto}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                            {s.centro?.nome ?? ""} · pedido em {formatarData(s.criado_em)} · {s.qtd_viagens} viagem(ns), {formatarNumero(s.litros_total, 2)} L
+                                        </p>
+                                    </div>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">{formatarReais(s.valor_total)}</p>
+                                </div>
+
+                                {s.status === "Recusado" ? (
+                                    <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
+                                        <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                        <span><b>Recusado.</b> {s.motivo_recusa || "Sem motivo informado."} As viagens voltaram para pendentes.</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        {ETAPAS.map((etapa, i) => {
+                                            const atual = ETAPAS.indexOf(s.status)
+                                            const feita = i <= atual
+                                            return (
+                                                <div key={etapa} className="flex flex-1 items-center gap-1 sm:gap-2 min-w-0">
+                                                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${feita ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-500 dark:bg-white/10"}`}>
+                                                        {feita ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                                                    </span>
+                                                    <span className={`text-xs truncate ${i === atual ? "font-semibold text-slate-900 dark:text-white" : "text-slate-500"}`}>{etapa}</span>
+                                                    {i < ETAPAS.length - 1 && <span className={`hidden sm:block h-px flex-1 ${i < atual ? "bg-emerald-500" : "bg-slate-200 dark:bg-white/10"}`} />}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+
+                                {!!s.viagens?.length && (
+                                    <button type="button" className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
+                                        onClick={() => setAberta(a => a === s.id ? null : s.id)}>
+                                        {aberta === s.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                        {aberta === s.id ? "Esconder viagens" : "Ver viagens"}
+                                    </button>
+                                )}
+                                {aberta === s.id && (
+                                    <ul className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
+                                        {s.viagens!.map(v => (
+                                            <li key={v.id} className="flex justify-between gap-3 py-2">
+                                                <span>{formatarData(v.data_viagem)} · {v.origem_local} → {v.destino_local} <span className="text-xs text-slate-500">({formatarNumero(v.distancia_km, 1)} km)</span></span>
+                                                <span className="whitespace-nowrap">{formatarReais(v.valor)}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}
