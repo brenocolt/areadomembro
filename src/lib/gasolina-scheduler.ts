@@ -53,14 +53,17 @@ async function rodar() {
 
 // Acompanha no app o kanban do Monday (Aprovado -> Lançado -> Pago, ou
 // Recusado) das solicitações em aberto.
-export async function sincronizarSolicitacoes(): Promise<number> {
+// filtro.colaboradorId: só as solicitações daquele membro (botão "Atualizar").
+export async function sincronizarSolicitacoes(filtro: { colaboradorId?: string } = {}): Promise<number> {
     if (!MONDAY_PAGAMENTOS_API_TOKEN) return 0
     const supabase = createServerSupabaseClient()
-    const { data: abertas, error } = await supabase
+    let query = supabase
         .from('gasolina_solicitacoes')
         .select('id, status, monday_item_id')
         .in('status', ['Solicitado', 'Aprovado', 'Lançado'])
         .not('monday_item_id', 'is', null)
+    if (filtro.colaboradorId) query = query.eq('colaborador_id', filtro.colaboradorId)
+    const { data: abertas, error } = await query
     if (error) {
         if (isSchemaDesatualizado(error)) return 0
         throw new Error(error.message)
@@ -98,7 +101,9 @@ export function scheduleVencimentoGasolina() {
     agendado = true
 
     rodarSincronizacao()
-    setInterval(rodarSincronizacao, 10 * 60 * 1000)
+    // A cada 2 min: Lançado/Pago são movidos à mão no Monday e o membro
+    // acompanha pelo app. É uma consulta ao Monday por rodada (lotes de 50).
+    setInterval(rodarSincronizacao, 2 * 60 * 1000)
 
     rodar()
     setTimeout(function agendarProximo() {

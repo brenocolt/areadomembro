@@ -131,5 +131,5 @@ Authorization: Bearer <GASOLINA_INTEGRACAO_TOKEN>
 - `{ "origem": "app", "aprovado": true }` → mudar o status para APROVADO.
 - `{ "origem": "app", "aprovado": false, "motivo": "..." }` → RECUSADO e avisar o membro.
 
-O app acompanha o status do card a cada 10 minutos (APROVADO → LANÇADO → PAGO;
+O app marca "Aprovado" na hora em que responde aprovado ao n8n e acompanha o status do card a cada 2 minutos (ou no botão "Atualizar" da aba Solicitações) (APROVADO → LANÇADO → PAGO;
 RECUSADO devolve as viagens para pendentes).
