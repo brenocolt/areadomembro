@@ -91,10 +91,14 @@ export function GestaoCarros() {
                                         <span className="block text-xs text-slate-500">{[v.ano, v.combustivel].filter(Boolean).join(" · ")}</span>
                                     </TableCell>
                                     <TableCell>
-                                        <a href={v.foto_painel_url} target="_blank" rel="noreferrer">
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={v.foto_painel_url} alt="Painel" className="h-12 w-16 rounded object-cover bg-slate-100" />
-                                        </a>
+                                        {v.foto_painel_url ? (
+                                            <a href={v.foto_painel_url} target="_blank" rel="noreferrer">
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={v.foto_painel_url} alt="Painel" className="h-12 w-16 rounded object-cover bg-slate-100" />
+                                            </a>
+                                        ) : (
+                                            <span className="text-xs text-slate-500">Sem foto (planilha)</span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         {editando === v.id ? (
