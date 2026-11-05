@@ -9,6 +9,7 @@ import { MeusCarros } from "./components/meus-carros"
 import { MinhasViagens } from "./components/minhas-viagens"
 import { VisaoGeral } from "./components/visao-geral"
 import { Solicitacoes } from "./components/solicitacoes"
+import { ImportarPlanilha } from "./components/importar-planilha"
 import { ChavePixCard } from "./components/chave-pix-card"
 import { GestaoPrecos } from "./components/gestao-precos"
 import { GestaoCarros } from "./components/gestao-carros"
@@ -43,6 +44,7 @@ export default function GasolinaPage() {
                     {gestor && <TabsTrigger value="precos" className={TRIGGER}>Preço do mês</TabsTrigger>}
                     {gestor && <TabsTrigger value="carros-membros" className={TRIGGER}>Carros dos membros</TabsTrigger>}
                     {gestor && <TabsTrigger value="centros" className={TRIGGER}>Centros de custo</TabsTrigger>}
+                    {gestor && <TabsTrigger value="importar" className={TRIGGER}>Importar planilha</TabsTrigger>}
                 </TabsList>
 
                 <TabsContent value="viagens" className="border-none p-0 outline-none">
@@ -74,6 +76,9 @@ export default function GasolinaPage() {
                         </TabsContent>
                         <TabsContent value="centros" className="border-none p-0 outline-none">
                             <GestaoCentrosCusto />
+                        </TabsContent>
+                        <TabsContent value="importar" className="border-none p-0 outline-none">
+                            <ImportarPlanilha />
                         </TabsContent>
                     </>
                 )}

@@ -133,3 +133,12 @@ Authorization: Bearer <GASOLINA_INTEGRACAO_TOKEN>
 
 O app marca "Aprovado" na hora em que responde aprovado ao n8n e acompanha o status do card a cada 2 minutos (ou no botão "Atualizar" da aba Solicitações) (APROVADO → LANÇADO → PAGO;
 RECUSADO devolve as viagens para pendentes).
+
+### Importação da planilha antiga (uma vez)
+
+Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da
+planilha "REEMBOLSO GASOLINA". O arquivo é lido no navegador; a API
+(`/api/gasolina/importacao`) primeiro simula e mostra o relatório, e só grava ao
+confirmar. Entram as viagens desde 01/01/2026 de quem tem cadastro (aba casada
+pelo nome; a VP pode corrigir na tela), os carros (sem foto) e os preços de mês
+ainda não lançados. Quem já foi importado é pulado — pode rodar de novo.

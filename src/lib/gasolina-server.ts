@@ -45,8 +45,8 @@ export async function exigirGestorGasolina(supabase: any): Promise<Resultado> {
 
 // ---------------------------------------------------------------------------
 // Cálculo das viagens (mesma conta da planilha): litros = km ÷ autonomia do
-// carro; valor = litros × preço do mês da viagem. Só viagens Pendentes do app
-// são (re)calculadas — histórico importado da planilha e viagens já em
+// carro; valor = litros × preço do mês da viagem. Só viagens Pendentes são
+// (re)calculadas — histórico (Reembolsado/Vencido) e viagens já em
 // solicitação mantêm o valor que foi pedido/pago.
 // ---------------------------------------------------------------------------
 
@@ -77,13 +77,14 @@ export async function precoDoMes(supabase: any, dataViagem: string): Promise<num
 // Recalcula as viagens Pendentes afetadas por uma mudança de preço do mês
 // (filtro.mes = "AAAA-MM-01"), de autonomia de um carro (filtro.veiculoId) ou
 // uma lista específica (filtro.ids — usado antes de montar a prévia).
+// Vale também para Pendentes importadas da planilha: sem carro vinculado, elas
+// mantêm os litros da planilha e só ganham preço/valor.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function recalcularPendentes(supabase: any, filtro: { mes?: string, veiculoId?: string, ids?: string[] }): Promise<number> {
     let query = supabase
         .from('gasolina_viagens')
         .select('id, distancia_km, data_viagem, autonomia_usada, litros, preco_litro, valor, veiculo:veiculo_id(autonomia_km_l)')
         .eq('status', 'Pendente')
-        .eq('origem', 'app')
     if (filtro.veiculoId) query = query.eq('veiculo_id', filtro.veiculoId)
     if (filtro.ids) query = query.in('id', filtro.ids.length ? filtro.ids : ['00000000-0000-0000-0000-000000000000'])
     if (filtro.mes) {
@@ -100,7 +101,15 @@ export async function recalcularPendentes(supabase: any, filtro: { mes?: string,
         const mes = inicioDoMes(v.data_viagem)
         if (!precos.has(mes)) precos.set(mes, await precoDoMes(supabase, v.data_viagem))
         const autonomia = v.veiculo?.autonomia_km_l != null ? Number(v.veiculo.autonomia_km_l) : null
-        const novo = calcularViagem(Number(v.distancia_km), autonomia, precos.get(mes) ?? null)
+        const preco = precos.get(mes) ?? null
+        const novo = autonomia || v.litros == null
+            ? calcularViagem(Number(v.distancia_km), autonomia, preco)
+            : {
+                autonomia_usada: v.autonomia_usada == null ? null : Number(v.autonomia_usada),
+                litros: Number(v.litros),
+                preco_litro: preco,
+                valor: preco ? Math.round(Number(v.litros) * preco * 100) / 100 : null,
+            }
         const mudou = (['autonomia_usada', 'litros', 'preco_litro', 'valor'] as const)
             .some(k => (v[k] == null ? null : Number(v[k])) !== novo[k])
         if (!mudou) continue

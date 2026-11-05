@@ -70,10 +70,16 @@ export function MeusCarros() {
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {veiculos.map(v => (
                             <div key={v.id} className="rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
-                                <a href={v.foto_painel_url} target="_blank" rel="noreferrer" title="Ver foto do painel">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={v.foto_painel_url} alt={`Painel do ${v.modelo}`} className="h-36 w-full object-cover bg-slate-100" />
-                                </a>
+                                {v.foto_painel_url ? (
+                                    <a href={v.foto_painel_url} target="_blank" rel="noreferrer" title="Ver foto do painel">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={v.foto_painel_url} alt={`Painel do ${v.modelo}`} className="h-36 w-full object-cover bg-slate-100" />
+                                    </a>
+                                ) : (
+                                    <div className="flex h-36 w-full items-center justify-center bg-slate-100 dark:bg-white/5 px-4 text-center text-xs text-slate-500">
+                                        Sem foto do painel — carro importado da planilha
+                                    </div>
+                                )}
                                 <div className="p-4 space-y-1">
                                     <div className="flex items-start justify-between gap-2">
                                         <p className="font-semibold text-slate-900 dark:text-white">{v.modelo}</p>
