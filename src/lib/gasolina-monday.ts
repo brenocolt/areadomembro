@@ -17,6 +17,9 @@ export const COLUNAS_PAGAMENTO = {
     status: 'color_mkqq2agk',        // Status (kanban)
 } as const
 
+// Não mudar sem ajustar o IF "Pedido da Área do Membro?" na automação do n8n.
+export const MARCA_APP = '(Área do Membro)'
+
 interface DadosCard {
     solicitacaoId: string
     membro: { nome: string, email: string }
@@ -71,8 +74,10 @@ export async function criarCardReembolso(d: DadosCard): Promise<string> {
     const nomeExistente = await encontrarOpcao(COLUNAS_PAGAMENTO.nome, d.membro.nome)
     colunas[COLUNAS_PAGAMENTO.nome] = { labels: [nomeExistente ?? d.membro.nome] }
 
+    // A marca MARCA_APP no título é o que a automação do n8n usa para desviar
+    // o card para /api/gasolina/integracao/validar em vez da planilha.
     const itemId = await criarItemPagamento(
-        `Reembolso Gasolina — ${nomeExistente ?? d.membro.nome}`,
+        `Reembolso Gasolina — ${nomeExistente ?? d.membro.nome} ${MARCA_APP}`,
         colunas,
         !nomeExistente,
     )

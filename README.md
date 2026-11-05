@@ -116,8 +116,10 @@ cards de reembolso) no board **Processos de Pagamento** do Monday.
 
 O botão "Solicitar reembolso" cria o card no board já preenchido (tipo
 REEMBOLSO, centro de custo, projeto, categoria Gasolina, valor, Pix, e-mail) e
-comenta nele o extrato das viagens. A automação "AUTOMAÇÃO PAGAMENTO VP" deve,
-no ramo de gasolina, chamar antes de ler a planilha:
+comenta nele o extrato das viagens. O título do card termina com
+"(Área do Membro)". A automação "AUTOMAÇÃO PAGAMENTO VP" desvia esses cards
+(IF logo após "PIPJ?", antes de "CENTRO DE CUSTO") e chama, em vez de ler a
+planilha:
 
 ```
 POST https://areadomembro.produtivajunior.com.br/api/gasolina/integracao/validar
