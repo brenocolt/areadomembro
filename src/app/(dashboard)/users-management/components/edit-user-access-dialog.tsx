@@ -33,6 +33,7 @@ const ALL_PAGES = [
     { label: "PDI", path: "/pdi" },
     { label: "Formulários", path: "/formularios" },
     { label: "Minhas Milhas", path: "/milhas" },
+    { label: "Reembolso de Gasolina", path: "/gasolina" },
     { label: "Punições", path: "/punishments" },
     { label: "Gestão de PDI", path: "/pdi-management" },
     { label: "Gestão de Formulários", path: "/forms-management" },

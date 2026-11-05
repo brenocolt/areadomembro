@@ -42,10 +42,18 @@ export async function listarOpcoesDropdown(colunaId: string): Promise<string[]> 
     if (emCache && Date.now() - emCache.em < CACHE_MS) return emCache.opcoes
     if (!MONDAY_API_TOKEN) throw new Error('MONDAY_API_TOKEN não configurado.')
 
+    // Valores direto na query (mesmo estilo de monday-sync.ts), sem variáveis
+    // GraphQL: o tipo exato do argumento `ids` de columns varia entre versões
+    // da API e uma variável com tipo diferente derruba a consulta inteira.
+    if (!/^[a-z0-9_]+$/.test(colunaId) || !/^\d+$/.test(MONDAY_PAGAMENTOS_BOARD_ID)) {
+        throw new Error(`ID de coluna/board inválido: ${colunaId} / ${MONDAY_PAGAMENTOS_BOARD_ID}`)
+    }
     const data = await mondayRequest(
-        `query($board: [ID!], $coluna: [String]) { boards(ids: $board) { columns(ids: $coluna) { settings_str } } }`,
-        { board: [MONDAY_PAGAMENTOS_BOARD_ID], coluna: [colunaId] }
+        `{ boards(ids: [${MONDAY_PAGAMENTOS_BOARD_ID}]) { columns(ids: ["${colunaId}"]) { settings_str } } }`
     )
+    if (!data?.boards?.length) {
+        throw new Error(`Board ${MONDAY_PAGAMENTOS_BOARD_ID} não encontrado — o token do Monday tem acesso a ele?`)
+    }
     const settings = data?.boards?.[0]?.columns?.[0]?.settings_str
     if (!settings) throw new Error(`Coluna ${colunaId} não encontrada no board ${MONDAY_PAGAMENTOS_BOARD_ID}.`)
 

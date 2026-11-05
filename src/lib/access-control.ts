@@ -59,7 +59,15 @@ function isNucleoOverlay(nucleo?: string | null): boolean {
 export const PAGINAS_UNIVERSAIS = [
     '/', '/profile', '/minhas-prioridades', '/performance', '/assistente-pessoal',
     '/wallet', '/pdi', '/formularios', '/milhas', '/punishments', '/pontuar-membros',
-    '/presenca', '/gasolina',
+    '/presenca',
+]
+
+// Reembolso de gasolina: em implantação, oculto por enquanto para todos
+// exceto Estratégico (e ADMIN, que vê tudo). Quem mais precisar testar
+// recebe a página como exceção manual (paginas_permitidas). Para liberar a
+// todos depois, basta mover '/gasolina' para PAGINAS_UNIVERSAIS.
+export const PAGINAS_ESTRATEGICO = [
+    '/gasolina',
 ]
 
 // Tático+ (de qualquer núcleo) OU qualquer cargo dos núcleos Gestão de
@@ -105,6 +113,7 @@ export function getPaginasPadrao(cargo?: string | null, nucleo?: string | null):
     if (isEstrategicoOuAdmin(cargo)) {
         PAGINAS_NUCLEO_GESTAO_DE_PESSOAS.forEach(p => paginas.add(p))
         PAGINAS_NUCLEO_VICE_PRESIDENCIA.forEach(p => paginas.add(p))
+        PAGINAS_ESTRATEGICO.forEach(p => paginas.add(p))
     }
     if (getUsersManagementTier(cargo, nucleo) > 0) {
         paginas.add('/users-management')
