@@ -20,6 +20,7 @@ import {
     Briefcase,
     Target,
     QrCode,
+    Fuel,
 } from "lucide-react"
 
 import {
@@ -52,6 +53,7 @@ const memberItems = [
     { title: "PDI", url: "/pdi", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
     { title: "Minhas Milhas", url: "/milhas", icon: Ticket },
+    { title: "Reembolso de Gasolina", url: "/gasolina", icon: Fuel },
     { title: "Punições", url: "/punishments", icon: AlertTriangle },
     { title: "Presença em Reuniões", url: "/presenca", icon: QrCode },
 ]

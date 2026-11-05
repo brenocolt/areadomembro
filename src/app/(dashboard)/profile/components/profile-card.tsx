@@ -12,6 +12,7 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { changePasswordLocal } from "@/lib/actions"
 import { toast } from "sonner"
+import { validarChavePix } from "@/lib/gasolina"
 
 export function ProfileCard() {
     const { colaborador, loading: loadingColab, colaboradorId } = useColaborador()
@@ -26,7 +27,7 @@ export function ProfileCard() {
     const fotoInputRef = useRef<HTMLInputElement>(null)
     const [formData, setFormData] = useState({
         nome: "", telefone: "", emailPessoal: "", endereco: "",
-        hobby: "", chocolate: "", serieFilme: ""
+        hobby: "", chocolate: "", serieFilme: "", chavePix: ""
     })
 
     useEffect(() => {
@@ -38,7 +39,8 @@ export function ProfileCard() {
                 endereco: colaborador.endereco || "",
                 hobby: colaborador.hobby || "",
                 chocolate: colaborador.chocolate_favorito || "",
-                serieFilme: colaborador.serie_filme_favorito || ""
+                serieFilme: colaborador.serie_filme_favorito || "",
+                chavePix: colaborador.chave_pix || ""
             })
             setFotoUrl(colaborador.foto || "")
         }
@@ -80,6 +82,20 @@ export function ProfileCard() {
     }
 
     const handleSave = async () => {
+        // Chave Pix do reembolso de gasolina (colaboradores.chave_pix, migração
+        // 20261105_gasolina.sql). Só entra no update se a coluna já existe —
+        // antes da migração, citar a coluna derrubaria o update inteiro.
+        const temColunaPix = !!colaborador && 'chave_pix' in colaborador
+        let chavePix: string | null = null
+        if (temColunaPix && formData.chavePix.trim()) {
+            const validacao = validarChavePix(formData.chavePix)
+            if (!validacao.ok) {
+                toast.error(validacao.error)
+                return
+            }
+            chavePix = validacao.chave
+        }
+
         setIsLoading(true)
         await supabase
             .from('colaboradores')
@@ -91,6 +107,7 @@ export function ProfileCard() {
                 hobby: formData.hobby,
                 chocolate_favorito: formData.chocolate,
                 serie_filme_favorito: formData.serieFilme || null,
+                ...(temColunaPix ? { chave_pix: chavePix } : {}),
             })
             .eq('id', colaboradorId)
         setIsLoading(false)
@@ -191,6 +208,12 @@ export function ProfileCard() {
                                     <Label htmlFor="endereco">Endereço</Label>
                                     <Input id="endereco" value={formData.endereco} onChange={(e) => setFormData({ ...formData, endereco: e.target.value })} />
                                 </div>
+                                {colaborador && 'chave_pix' in colaborador && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="chavePix">Chave Pix (reembolso de gasolina)</Label>
+                                        <Input id="chavePix" value={formData.chavePix} placeholder="CPF, CNPJ, e-mail, celular (+55...) ou chave aleatória" onChange={(e) => setFormData({ ...formData, chavePix: e.target.value })} />
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-3 gap-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="hobby">Hobby</Label>

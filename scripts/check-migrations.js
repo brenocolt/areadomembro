@@ -32,6 +32,12 @@ const MIGRACOES = [
             ['formulario_perguntas', 'permite_nao_avaliar'],
         ],
     },
+    {
+        arquivo: 'supabase/migrations/20261105_gasolina.sql',
+        descricao: 'Reembolso de gasolina (carros, preços, centros de custo, viagens, solicitações, chave Pix)',
+        tabelas: ['gasolina_veiculos', 'gasolina_precos', 'gasolina_centros_custo', 'gasolina_viagens', 'gasolina_solicitacoes'],
+        colunas: [['colaboradores', 'chave_pix']],
+    },
 ];
 
 async function main() {
