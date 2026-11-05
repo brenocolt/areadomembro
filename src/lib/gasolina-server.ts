@@ -2,7 +2,7 @@
 // Supabase, então é aqui que se decide quem pode o quê). Mesmo formato de
 // retorno de exigirLider em src/lib/pdi-server.ts.
 import { auth } from '@/auth'
-import { podeGerirGasolina } from '@/lib/access-control'
+import { paginaPermitida, podeGerirGasolina } from '@/lib/access-control'
 import { calcularLitros, inicioDoMes } from '@/lib/gasolina'
 
 type Resultado =
@@ -20,11 +20,16 @@ export async function exigirMembroGasolina(supabase: any): Promise<Resultado> {
 
     const { data: colaborador } = await supabase
         .from('colaboradores')
-        .select('cargo_atual, nucleo_atual, status')
+        .select('cargo_atual, nucleo_atual, status, paginas_permitidas')
         .eq('id', colaboradorId)
         .single()
     if (!colaborador || colaborador.status !== 'Ativo') {
         return { ok: false, status: 403, error: 'Acesso restrito a membros ativos.' }
+    }
+    // Mesma regra do menu/RouteGuard (access-control.ts): enquanto a página
+    // estiver restrita, as rotas também ficam.
+    if (!paginaPermitida('/gasolina', colaborador, role)) {
+        return { ok: false, status: 403, error: 'O reembolso de gasolina ainda não está liberado para você.' }
     }
     return { ok: true, colaboradorId, gestor: podeGerirGasolina(colaborador, role) }
 }

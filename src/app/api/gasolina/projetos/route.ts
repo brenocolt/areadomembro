@@ -22,6 +22,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ projetos: await listarOpcoesDropdown(centro.monday_coluna_projeto) })
     } catch (err) {
         console.error('[gasolina] Falha ao buscar projetos no Monday:', err)
-        return NextResponse.json({ error: 'Não foi possível carregar a lista de projetos do Monday. Tente de novo em instantes.' }, { status: 502 })
+        // O motivo vai junto para a VP conseguir diagnosticar (token sem acesso
+        // ao board, coluna errada no centro de custo...). Não contém segredo:
+        // mensagens de mondayRequest/listarOpcoesDropdown não incluem o token.
+        const motivo = err instanceof Error ? err.message.slice(0, 300) : String(err)
+        return NextResponse.json({ error: `Não foi possível carregar a lista de projetos do Monday. Motivo: ${motivo}` }, { status: 502 })
     }
 }
