@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import {
     type GasolinaCentroCusto, type GasolinaVeiculo, type GasolinaViagem,
 } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
+import { ProjetoBusca } from "./projeto-busca"
 
 interface Props {
     open: boolean
@@ -34,7 +35,6 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
     const [data, setData] = useState("")
     const [projetos, setProjetos] = useState<string[]>([])
     const [carregandoProjetos, setCarregandoProjetos] = useState(false)
-    const [buscaProjeto, setBuscaProjeto] = useState("")
     const [salvando, setSalvando] = useState(false)
 
     const centro = centros.find(c => c.id === centroId)
@@ -51,7 +51,6 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
         setParadas(viagem?.paradas ?? [])
         setKm(viagem ? String(viagem.distancia_km).replace(".", ",") : "")
         setData(viagem?.data_viagem ?? hoje)
-        setBuscaProjeto("")
     }, [open, viagem, centros, veiculos, hoje])
 
     // Lista de projetos do Monday para o centro escolhido.
@@ -65,13 +64,6 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
             .finally(() => { if (!cancelado) setCarregandoProjetos(false) })
         return () => { cancelado = true }
     }, [open, centro])
-
-    const projetosFiltrados = useMemo(() => {
-        const termo = buscaProjeto.trim().toLowerCase()
-        const lista = termo ? projetos.filter(p => p.toLowerCase().includes(termo)) : projetos
-        // Garante que o projeto já escolhido continue aparecendo no Select.
-        return projeto && !lista.includes(projeto) && projetos.includes(projeto) ? [projeto, ...lista] : lista
-    }, [projetos, buscaProjeto, projeto])
 
     const veiculo = veiculos.find(v => v.id === veiculoId)
     const kmNumero = lerNumero(km)
@@ -134,17 +126,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                                 <p className="text-sm text-slate-500 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Carregando projetos do Monday...</p>
                             ) : (
                                 <>
-                                    {projetos.length > 8 && (
-                                        <Input placeholder="Buscar projeto" value={buscaProjeto} onChange={e => setBuscaProjeto(e.target.value)} />
-                                    )}
-                                    <Select value={projeto} onValueChange={setProjeto}>
-                                        <SelectTrigger><SelectValue placeholder="Escolha o projeto" /></SelectTrigger>
-                                        <SelectContent className="max-h-72">
-                                            {projetosFiltrados.length === 0
-                                                ? <div className="px-2 py-1.5 text-sm text-slate-500">Nenhum projeto encontrado.</div>
-                                                : projetosFiltrados.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                    <ProjetoBusca opcoes={projetos} valor={projeto} onChange={setProjeto} />
                                     <p className="text-xs text-slate-500">Lista do Monday. Se o projeto não estiver aqui, peça à VP para cadastrá-lo.</p>
                                 </>
                             )}
