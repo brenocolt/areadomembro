@@ -73,5 +73,8 @@ export async function POST(req: NextRequest) {
         return recusar(`O valor do card no Monday (R$ ${valorCard.toFixed(2)}) não confere com o da solicitação (R$ ${Number(solicitacao.valor_total).toFixed(2)}).`)
     }
 
+    // O n8n move o card para APROVADO logo em seguida; já reflete no app
+    // para o membro não esperar a próxima sincronização (o sync só confirma).
+    await aplicarStatusSolicitacao(supabase, solicitacao, 'Aprovado')
     return NextResponse.json({ origem: 'app', aprovado: true })
 }

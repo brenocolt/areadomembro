@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, ChevronDown, ChevronUp, Loader2, XCircle } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, Loader2, RefreshCw, XCircle } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatarData, formatarNumero, formatarReais } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
@@ -31,6 +32,7 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
     const [lista, setLista] = useState<Solicitacao[]>([])
     const [carregando, setCarregando] = useState(true)
     const [aberta, setAberta] = useState<string | null>(null)
+    const [atualizando, setAtualizando] = useState(false)
 
     const carregar = useCallback(async () => {
         try {
@@ -45,13 +47,35 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
 
     useEffect(() => { carregar() }, [carregar, versao])
 
+    // Confere agora no Monday, sem esperar a sincronização automática.
+    async function atualizar() {
+        setAtualizando(true)
+        try {
+            const r = await gasolinaApi<{ atualizadas: number, aguarde?: boolean }>(
+                `/api/gasolina/solicitacoes/sincronizar${todos ? "?todos=1" : ""}`, { method: "POST" })
+            await carregar()
+            if (r.aguarde) toast.info("Acabou de ser atualizado. Tente de novo em alguns segundos.")
+            else toast.success(r.atualizadas ? `${r.atualizadas} solicitação(ões) com status novo.` : "Tudo em dia com o Monday.")
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setAtualizando(false)
+        }
+    }
+
     return (
         <Card>
-            <CardHeader>
-                <CardTitle className="text-lg">{todos ? "Solicitações de todos os membros" : "Minhas solicitações"}</CardTitle>
-                <CardDescription>
-                    O andamento acompanha o Processos de Pagamento: Solicitado → Aprovado → Lançado (pela terceirizada no banco) → Pago.
-                </CardDescription>
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                    <CardTitle className="text-lg">{todos ? "Solicitações de todos os membros" : "Minhas solicitações"}</CardTitle>
+                    <CardDescription className="mt-1">
+                        O andamento acompanha o Processos de Pagamento: Solicitado → Aprovado → Lançado (pela terceirizada no banco) → Pago.
+                        Atualiza sozinho a cada 2 minutos.
+                    </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={atualizar} disabled={atualizando} className="shrink-0">
+                    <RefreshCw className={`h-4 w-4 ${atualizando ? "animate-spin" : ""}`} /> Atualizar
+                </Button>
             </CardHeader>
             <CardContent>
                 {carregando ? (
