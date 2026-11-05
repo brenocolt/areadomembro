@@ -6,13 +6,18 @@ export const MONDAY_API_TOKEN = process.env.MONDAY_API_TOKEN || ''
 // Board "Processos de Pagamento" — onde caem as solicitações de reembolso.
 export const MONDAY_PAGAMENTOS_BOARD_ID = process.env.MONDAY_PAGAMENTOS_BOARD_ID || '9011987674'
 
+// Token próprio para o board de pagamentos: o dono de MONDAY_API_TOKEN (usado
+// na sincronização de projetos) não participa desse board, e o Monday trata
+// board sem acesso como inexistente. Sem a variável, cai no token geral.
+export const MONDAY_PAGAMENTOS_API_TOKEN = process.env.MONDAY_PAGAMENTOS_API_TOKEN || MONDAY_API_TOKEN
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function mondayRequest(query: string, variables?: Record<string, any>): Promise<any> {
+export async function mondayRequest(query: string, variables?: Record<string, any>, token = MONDAY_API_TOKEN): Promise<any> {
     const res: Response = await fetch('https://api.monday.com/v2', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': MONDAY_API_TOKEN,
+            'Authorization': token,
             'API-Version': '2024-10',
         },
         body: JSON.stringify(variables ? { query, variables } : { query }),
@@ -40,7 +45,7 @@ const CACHE_MS = 10 * 60 * 1000
 export async function listarOpcoesDropdown(colunaId: string): Promise<string[]> {
     const emCache = cacheOpcoes.get(colunaId)
     if (emCache && Date.now() - emCache.em < CACHE_MS) return emCache.opcoes
-    if (!MONDAY_API_TOKEN) throw new Error('MONDAY_API_TOKEN não configurado.')
+    if (!MONDAY_PAGAMENTOS_API_TOKEN) throw new Error('MONDAY_PAGAMENTOS_API_TOKEN não configurado.')
 
     // Valores direto na query (mesmo estilo de monday-sync.ts), sem variáveis
     // GraphQL: o tipo exato do argumento `ids` de columns varia entre versões
@@ -49,10 +54,12 @@ export async function listarOpcoesDropdown(colunaId: string): Promise<string[]> 
         throw new Error(`ID de coluna/board inválido: ${colunaId} / ${MONDAY_PAGAMENTOS_BOARD_ID}`)
     }
     const data = await mondayRequest(
-        `{ boards(ids: [${MONDAY_PAGAMENTOS_BOARD_ID}]) { columns(ids: ["${colunaId}"]) { settings_str } } }`
+        `{ boards(ids: [${MONDAY_PAGAMENTOS_BOARD_ID}]) { columns(ids: ["${colunaId}"]) { settings_str } } }`,
+        undefined,
+        MONDAY_PAGAMENTOS_API_TOKEN
     )
     if (!data?.boards?.length) {
-        throw new Error(`Board ${MONDAY_PAGAMENTOS_BOARD_ID} não encontrado — o token do Monday tem acesso a ele?`)
+        throw new Error(`Board ${MONDAY_PAGAMENTOS_BOARD_ID} não encontrado — o token do Monday (MONDAY_PAGAMENTOS_API_TOKEN) tem acesso a ele?`)
     }
     const settings = data?.boards?.[0]?.columns?.[0]?.settings_str
     if (!settings) throw new Error(`Coluna ${colunaId} não encontrada no board ${MONDAY_PAGAMENTOS_BOARD_ID}.`)

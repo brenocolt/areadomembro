@@ -97,3 +97,15 @@ Configuração:
 4. Google Agenda automático: mesma configuração da seção "Google Agenda" (conta de serviço
    com delegação). Sem ela, o repasse é confirmado do mesmo jeito e a tela mostra o botão
    "Adicionar ao Google Agenda", que abre o Google Agenda já com os convidados preenchidos.
+
+## Reembolso de gasolina (Monday)
+
+A página `/gasolina` lê a lista de projetos (e, nas próximas fases, cria os
+cards de reembolso) no board **Processos de Pagamento** do Monday.
+
+- `MONDAY_PAGAMENTOS_API_TOKEN`: token pessoal do Monday de uma conta que
+  participa do board Processos de Pagamento com permissão de edição (gerado
+  em foto de perfil → Developers → My access tokens). Sem ela, usa
+  `MONDAY_API_TOKEN`, cuja conta pode não enxergar esse board — o Monday
+  responde como se o board não existisse.
+- `MONDAY_PAGAMENTOS_BOARD_ID` (opcional): padrão `9011987674`.
