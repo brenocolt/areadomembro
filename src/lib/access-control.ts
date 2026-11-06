@@ -59,16 +59,13 @@ function isNucleoOverlay(nucleo?: string | null): boolean {
 export const PAGINAS_UNIVERSAIS = [
     '/', '/profile', '/minhas-prioridades', '/performance', '/assistente-pessoal',
     '/wallet', '/pdi', '/formularios', '/milhas', '/punishments', '/pontuar-membros',
-    '/presenca',
+    '/presenca', '/gasolina',
 ]
 
-// Reembolso de gasolina: em implantação, oculto por enquanto para todos
-// exceto Estratégico (e ADMIN, que vê tudo). Quem mais precisar testar
-// recebe a página como exceção manual (paginas_permitidas). Para liberar a
-// todos depois, basta mover '/gasolina' para PAGINAS_UNIVERSAIS.
-export const PAGINAS_ESTRATEGICO = [
-    '/gasolina',
-]
+// Páginas só do Estratégico (e ADMIN). Vazia hoje — o reembolso de gasolina
+// passou por aqui durante a implantação e foi liberado a todos em 06/11/2026
+// (as abas de gestão continuam só com a VP: ver podeGerirGasolina).
+export const PAGINAS_ESTRATEGICO: string[] = []
 
 // Tático+ (de qualquer núcleo) OU qualquer cargo dos núcleos Gestão de
 // Pessoas / Vice Presidência.

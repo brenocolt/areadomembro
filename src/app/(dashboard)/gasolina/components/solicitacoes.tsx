@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { Check, ChevronDown, ChevronUp, Loader2, RefreshCw, XCircle } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, Loader2, RefreshCw, RotateCcw, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,7 +22,7 @@ interface Solicitacao {
     atualizado_em: string
     centro?: { nome: string } | null
     colaborador?: { nome: string } | null
-    viagens?: { id: string, data_viagem: string, origem_local: string, destino_local: string, distancia_km: number, litros: number | null, valor: number | null }[]
+    viagens?: { id: string, data_viagem: string, origem_local: string, destino_local: string, distancia_km: number, litros: number | null, valor: number | null, status: string }[]
 }
 
 const ETAPAS: Status[] = ["Solicitado", "Aprovado", "Lançado", "Pago"]
@@ -33,6 +33,7 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
     const [carregando, setCarregando] = useState(true)
     const [aberta, setAberta] = useState<string | null>(null)
     const [atualizando, setAtualizando] = useState(false)
+    const [retomando, setRetomando] = useState<string | null>(null)
 
     const carregar = useCallback(async () => {
         try {
@@ -60,6 +61,21 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
             toast.error((e as Error).message)
         } finally {
             setAtualizando(false)
+        }
+    }
+
+    async function retomar(id: string) {
+        setRetomando(id)
+        try {
+            const r = await gasolinaApi<{ retomadas: number, vencidas: number }>(`/api/gasolina/solicitacoes/${id}/retomar`, { method: "POST" })
+            toast.success(r.vencidas
+                ? `${r.retomadas} viagem(ns) voltaram para pendentes; ${r.vencidas} já tinham passado do prazo de 2 meses e ficaram vencidas.`
+                : "As viagens voltaram para pendentes na aba Viagens. Corrija o que precisar e solicite de novo.")
+            await carregar()
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setRetomando(null)
         }
     }
 
@@ -98,12 +114,27 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
                                     <p className="text-lg font-bold text-slate-900 dark:text-white">{formatarReais(s.valor_total)}</p>
                                 </div>
 
-                                {s.status === "Recusado" ? (
-                                    <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
-                                        <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                                        <span><b>Recusado.</b> {s.motivo_recusa || "Sem motivo informado."} As viagens voltaram para pendentes.</span>
-                                    </div>
-                                ) : (
+                                {s.status === "Recusado" ? (() => {
+                                    const aRetomar = (s.viagens ?? []).filter(v => v.status === "Em solicitação").length
+                                    return (
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg bg-red-50 dark:bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
+                                            <span className="flex items-start gap-2 flex-1">
+                                                <XCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                                                <span>
+                                                    <b>Recusado.</b> {s.motivo_recusa || "Sem motivo informado."}{" "}
+                                                    {aRetomar ? "Retome as viagens para corrigir e solicitar de novo." : "As viagens já voltaram para pendentes."}
+                                                </span>
+                                            </span>
+                                            {aRetomar > 0 && !todos && (
+                                                <Button size="sm" variant="outline" className="shrink-0 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:text-red-200"
+                                                    onClick={() => retomar(s.id)} disabled={retomando === s.id}>
+                                                    {retomando === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                                                    Retomar viagens
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )
+                                })() : (
                                     <div className="flex items-center gap-1 sm:gap-2">
                                         {ETAPAS.map((etapa, i) => {
                                             const atual = ETAPAS.indexOf(s.status)

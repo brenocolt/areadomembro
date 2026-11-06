@@ -8,6 +8,13 @@ const CORES: Record<StatusViagem, string> = {
     "Vencido": "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400",
 }
 
-export function StatusViagemBadge({ status }: { status: StatusViagem }) {
-    return <Badge variant="secondary" className={`border-none font-semibold ${CORES[status] ?? ""}`}>{status}</Badge>
+const COR_RECUSADA = "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
+
+// `recusada`: viagem de solicitação recusada ainda não retomada (ver viagemRecusada).
+export function StatusViagemBadge({ status, recusada = false }: { status: StatusViagem, recusada?: boolean }) {
+    return (
+        <Badge variant="secondary" className={`border-none font-semibold ${recusada ? COR_RECUSADA : CORES[status] ?? ""}`}>
+            {recusada ? "Recusada" : status}
+        </Badge>
+    )
 }

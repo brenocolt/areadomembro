@@ -1,13 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, Route, Send, Trash2 } from "lucide-react"
+import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, RotateCcw, Route, Send, Trash2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-    diasAte, formatarData, formatarMes, formatarNumero, formatarReais, inicioDoMes, prazoDaViagem,
+    diasAte, formatarData, formatarMes, formatarNumero, formatarReais, inicioDoMes, prazoDaViagem, viagemRecusada,
     type GasolinaCentroCusto, type GasolinaVeiculo, type GasolinaViagem,
 } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
@@ -36,6 +36,7 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     const [editando, setEditando] = useState<GasolinaViagem | null>(null)
     const [excluindo, setExcluindo] = useState<string | null>(null)
     const [solicitando, setSolicitando] = useState<{ centroId: string, centroNome: string, projeto: string } | null>(null)
+    const [retomando, setRetomando] = useState<string | null>(null)
 
     const carregar = useCallback(async () => {
         try {
@@ -75,6 +76,34 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
 
     const totalPendente = resumo.reduce((s, r) => s + r.valorPendente, 0)
 
+    // Solicitações recusadas com viagens ainda não retomadas.
+    const recusadas = useMemo(() => {
+        const mapa = new Map<string, { id: string, projeto: string, motivo: string | null, qtd: number }>()
+        for (const v of viagens) {
+            if (!viagemRecusada(v) || !v.solicitacao) continue
+            const r = mapa.get(v.solicitacao.id) ?? { id: v.solicitacao.id, projeto: v.projeto, motivo: v.solicitacao.motivo_recusa, qtd: 0 }
+            r.qtd++
+            mapa.set(r.id, r)
+        }
+        return [...mapa.values()]
+    }, [viagens])
+
+    async function retomar(id: string) {
+        setRetomando(id)
+        try {
+            const r = await gasolinaApi<{ retomadas: number, vencidas: number }>(`/api/gasolina/solicitacoes/${id}/retomar`, { method: "POST" })
+            toast.success(r.vencidas
+                ? `${r.retomadas} viagem(ns) voltaram para pendentes; ${r.vencidas} já tinham passado do prazo de 2 meses e ficaram vencidas.`
+                : "As viagens voltaram para pendentes. Corrija o que precisar e solicite de novo.")
+            await carregar()
+            onSolicitado?.()
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setRetomando(null)
+        }
+    }
+
     function abrirNova() {
         if (veiculos.length === 0) {
             toast.error('Cadastre um carro na aba "Meus carros e Pix" antes de lançar viagens.')
@@ -102,6 +131,21 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
 
     return (
         <div className="space-y-6">
+            {recusadas.map(r => (
+                <div key={r.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+                    <XCircle className="h-5 w-5 shrink-0 hidden sm:block" />
+                    <div className="flex-1">
+                        <p><b>Solicitação recusada — {r.projeto}</b> ({r.qtd} viagem{r.qtd === 1 ? "" : "s"})</p>
+                        <p>Motivo: {r.motivo || "não informado."}</p>
+                    </div>
+                    <Button size="sm" variant="outline" className="shrink-0 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:text-red-200"
+                        onClick={() => retomar(r.id)} disabled={retomando === r.id}>
+                        {retomando === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                        Retomar viagens
+                    </Button>
+                </div>
+            ))}
+
             <Card>
                 <CardHeader className="flex flex-row items-start justify-between gap-4">
                     <div>
@@ -213,7 +257,12 @@ function LinhaViagem({ v, excluindo, onEditar, onExcluir }: { v: ViagemLista, ex
                 )}
             </TableCell>
             <TableCell>
-                <StatusViagemBadge status={v.status} />
+                <StatusViagemBadge status={v.status} recusada={viagemRecusada(v)} />
+                {viagemRecusada(v) && v.solicitacao?.motivo_recusa && (
+                    <span className="block text-xs mt-1 text-red-600 dark:text-red-400 max-w-[180px]" title={v.solicitacao.motivo_recusa}>
+                        {v.solicitacao.motivo_recusa.length > 60 ? `${v.solicitacao.motivo_recusa.slice(0, 60)}…` : v.solicitacao.motivo_recusa}
+                    </span>
+                )}
                 {dias !== null && (
                     <span className={`flex items-center gap-1 text-xs mt-1 ${dias <= 7 ? "text-red-600" : "text-slate-500"}`}>
                         {dias <= 7 && <AlertCircle className="h-3 w-3" />}
