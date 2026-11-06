@@ -199,6 +199,7 @@ function LinhaViagem({ v, excluindo, onEditar, onExcluir }: { v: ViagemLista, ex
             <TableCell className="hidden md:table-cell text-sm">
                 <span className="flex items-center gap-1"><MapPin className="h-3 w-3 shrink-0 text-slate-400" />{v.origem_local} → {v.destino_local}</span>
                 {v.paradas?.length > 0 && <span className="block text-xs text-slate-500">Paradas: {v.paradas.join(", ")}</span>}
+                {v.rota?.ida_e_volta && <span className="block text-xs text-slate-500">Ida e volta</span>}
             </TableCell>
             <TableCell className="hidden sm:table-cell text-sm whitespace-nowrap">
                 {formatarNumero(v.distancia_km, 1)} km

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { STATUS_VIAGEM, formatarData, formatarNumero, formatarReais, type GasolinaViagem } from "@/lib/gasolina"
+import { STATUS_VIAGEM, formatarData, formatarNumero, formatarReais, kmDivergente, type GasolinaViagem } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 import { StatusViagemBadge } from "./status-viagem"
 
@@ -103,6 +103,12 @@ export function VisaoGeral() {
                                         <TableCell className="hidden sm:table-cell text-sm whitespace-nowrap">
                                             {formatarNumero(v.distancia_km, 1)} km
                                             <span className="block text-xs text-slate-500">{v.litros != null ? `${formatarNumero(v.litros, 2)} L` : "—"}</span>
+                                            {v.rota && (
+                                                <span className={`block text-xs ${kmDivergente(v) ? "text-amber-600 dark:text-amber-400 font-medium" : "text-slate-500"}`}
+                                                    title={kmDivergente(v) ? "Km informados bem diferentes da rota do Google Maps — vale conferir." : "Rota calculada pelo Google Maps"}>
+                                                    Maps: {formatarNumero(v.rota.distancia_km, 1)} km{v.rota.ida_e_volta ? " (ida e volta)" : ""}
+                                                </span>
+                                            )}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">{v.valor != null ? formatarReais(v.valor) : <span className="text-xs text-slate-500">sem preço</span>}</TableCell>
                                         <TableCell><StatusViagemBadge status={v.status} /></TableCell>

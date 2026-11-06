@@ -1,5 +1,6 @@
 import { listarOpcoesDropdown } from '@/lib/monday'
 import { dataMaisAntigaPermitida, formatarData, hojeBrasil, lerNumero } from '@/lib/gasolina'
+import { calcularRota, mapsAtivo, type RotaCalculada } from '@/lib/google-maps'
 
 type Ok = {
     ok: true
@@ -12,6 +13,7 @@ type Ok = {
         paradas: string[]
         distancia_km: number
         data_viagem: string
+        rota: RotaCalculada | null
     }
     autonomia: number
 }
@@ -32,6 +34,7 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
     const data = texto(body.data_viagem, 10)
     const paradas = (Array.isArray(body.paradas) ? body.paradas : [])
         .map(p => texto(p, 200)).filter(Boolean).slice(0, 10)
+    const idaEVolta = body.ida_e_volta === true
 
     if (!centroId) return erro('Escolha o centro de custo.')
     if (!veiculoId) return erro('Escolha o carro.')
@@ -67,6 +70,17 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
         }
     }
 
+    // Rota pelo Google Maps (quando ligado): calculada aqui, não no navegador,
+    // para a VP poder comparar com os km informados. Falha do Google não
+    // impede salvar — os km informados continuam valendo.
+    let rota: RotaCalculada | null = null
+    if (mapsAtivo()) {
+        rota = await calcularRota(origem, paradas, destino, idaEVolta).catch(err => {
+            console.error('[gasolina] Rota não calculada ao salvar a viagem:', err)
+            return null
+        })
+    }
+
     return {
         ok: true,
         viagem: {
@@ -78,6 +92,7 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
             paradas,
             distancia_km: distancia,
             data_viagem: data,
+            rota,
         },
         autonomia: Number(veiculo.autonomia_km_l),
     }
