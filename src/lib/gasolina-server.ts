@@ -3,7 +3,7 @@
 // retorno de exigirLider em src/lib/pdi-server.ts.
 import { auth } from '@/auth'
 import { paginaPermitida, podeGerirGasolina } from '@/lib/access-control'
-import { calcularLitros, formatarMes, inicioDoMes } from '@/lib/gasolina'
+import { calcularLitros, dataMaisAntigaPermitida, formatarMes, inicioDoMes } from '@/lib/gasolina'
 
 type Resultado =
     | { ok: true, colaboradorId: string, gestor: boolean }
@@ -188,8 +188,10 @@ export type StatusSolicitacao = typeof STATUS_SOLICITACAO[number]
 // Ordem do kanban: o status só avança (Recusado encerra a qualquer momento).
 const ORDEM: Record<StatusSolicitacao, number> = { 'Solicitado': 0, 'Aprovado': 1, 'Lançado': 2, 'Pago': 3, 'Recusado': 9 }
 
-// Aplica um novo status vindo do Monday/n8n. Pago -> viagens Reembolsado;
-// Recusado -> viagens voltam a Pendente (o membro pode corrigir e pedir de novo).
+// Aplica um novo status vindo do Monday/n8n. Pago -> viagens Reembolsado.
+// Recusado -> as viagens continuam vinculadas à solicitação (o app mostra
+// "Recusada" com o motivo) até o membro clicar em "Retomar", que as devolve
+// a Pendente para corrigir e pedir de novo (retomarSolicitacao).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function aplicarStatusSolicitacao(supabase: any, solicitacao: { id: string, status: StatusSolicitacao }, novo: StatusSolicitacao, motivo?: string): Promise<boolean> {
     if (solicitacao.status === novo) return false
@@ -209,9 +211,24 @@ export async function aplicarStatusSolicitacao(supabase: any, solicitacao: { id:
     if (novo === 'Pago') {
         await supabase.from('gasolina_viagens').update({ status: 'Reembolsado', atualizado_em: agora })
             .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
-    } else if (novo === 'Recusado') {
-        await supabase.from('gasolina_viagens').update({ status: 'Pendente', solicitacao_id: null, atualizado_em: agora })
-            .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
     }
     return true
+}
+
+// "Retomar" uma solicitação recusada: as viagens voltam a Pendente (sem
+// vínculo), prontas para editar e solicitar de novo. As que já passaram do
+// prazo de 2 meses voltam como Vencido — mesma regra do job diário.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function retomarSolicitacao(supabase: any, solicitacaoId: string): Promise<{ retomadas: number, vencidas: number }> {
+    const agora = new Date().toISOString()
+    const limite = dataMaisAntigaPermitida()
+    const { data: vencidas } = await supabase.from('gasolina_viagens')
+        .update({ status: 'Vencido', solicitacao_id: null, atualizado_em: agora })
+        .eq('solicitacao_id', solicitacaoId).eq('status', 'Em solicitação').lt('data_viagem', limite)
+        .select('id')
+    const { data: retomadas } = await supabase.from('gasolina_viagens')
+        .update({ status: 'Pendente', solicitacao_id: null, atualizado_em: agora })
+        .eq('solicitacao_id', solicitacaoId).eq('status', 'Em solicitação')
+        .select('id')
+    return { retomadas: retomadas?.length ?? 0, vencidas: vencidas?.length ?? 0 }
 }

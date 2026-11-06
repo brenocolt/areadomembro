@@ -134,6 +134,11 @@ Authorization: Bearer <GASOLINA_INTEGRACAO_TOKEN>
 O app marca "Aprovado" na hora em que responde aprovado ao n8n e acompanha o status do card a cada 2 minutos (ou no botão "Atualizar" da aba Solicitações) (APROVADO → LANÇADO → PAGO;
 RECUSADO devolve as viagens para pendentes).
 
+Recusa: as viagens continuam vinculadas à solicitação recusada e aparecem
+como "Recusada" (com o motivo) até o membro clicar em "Retomar viagens"
+(`POST /api/gasolina/solicitacoes/[id]/retomar`) — aí voltam a Pendente para
+corrigir e solicitar de novo; as que passaram do prazo de 2 meses viram Vencido.
+
 ### Importação da planilha antiga (uma vez)
 
 Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da

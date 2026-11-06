@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { STATUS_VIAGEM, formatarData, formatarNumero, formatarReais, kmDivergente, type GasolinaViagem } from "@/lib/gasolina"
+import { STATUS_VIAGEM, formatarData, formatarNumero, formatarReais, kmDivergente, viagemRecusada, type GasolinaViagem } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 import { StatusViagemBadge } from "./status-viagem"
 
@@ -111,7 +111,7 @@ export function VisaoGeral() {
                                             )}
                                         </TableCell>
                                         <TableCell className="whitespace-nowrap">{v.valor != null ? formatarReais(v.valor) : <span className="text-xs text-slate-500">sem preço</span>}</TableCell>
-                                        <TableCell><StatusViagemBadge status={v.status} /></TableCell>
+                                        <TableCell><StatusViagemBadge status={v.status} recusada={viagemRecusada(v)} /></TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

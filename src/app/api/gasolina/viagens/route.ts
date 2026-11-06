@@ -4,7 +4,7 @@ import { calcularViagem, exigirMembroGasolina, precoDoMes } from '@/lib/gasolina
 import { STATUS_VIAGEM } from '@/lib/gasolina'
 import { lerViagem } from './validar'
 
-const CAMPOS = '*, veiculo:veiculo_id(modelo), centro:centro_custo_id(nome)'
+const CAMPOS = '*, veiculo:veiculo_id(modelo), centro:centro_custo_id(nome), solicitacao:solicitacao_id(id, status, motivo_recusa)'
 
 // GET: viagens do membro. ?todos=1 (só VP): de todos os membros, com filtros
 // opcionais ?colaborador=, ?status=, ?mes=AAAA-MM.

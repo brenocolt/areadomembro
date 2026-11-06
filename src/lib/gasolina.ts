@@ -147,6 +147,13 @@ export interface GasolinaViagem {
     origem: 'app' | 'planilha'
     rota: RotaViagem | null
     criado_em: string
+    solicitacao?: { id: string, status: string, motivo_recusa: string | null } | null
+}
+
+// Viagem de uma solicitação recusada que o membro ainda não retomou: no banco
+// continua "Em solicitação" (vinculada), na tela aparece como "Recusada".
+export function viagemRecusada(v: Pick<GasolinaViagem, 'status' | 'solicitacao'>): boolean {
+    return v.status === 'Em solicitação' && v.solicitacao?.status === 'Recusado'
 }
 
 // Rota calculada pelo Google Maps ao salvar (fase 5). Os km que valem para o
