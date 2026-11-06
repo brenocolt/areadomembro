@@ -19,11 +19,11 @@ const SITUACAO: Record<SituacaoAba, { texto: string, cor: string }> = {
     nao_encontrado: { texto: "Sem cadastro — fica de fora", cor: "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400" },
     nao_importar: { texto: "Não importar", cor: "bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-slate-400" },
     ja_importado: { texto: "Já importado", cor: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300" },
-    sem_viagens: { texto: "Sem viagens desde 01/01/2026", cor: "bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-500" },
+    sem_viagens: { texto: "Sem viagens com data", cor: "bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-500" },
 }
 
-// Fase 4: traz para o app as viagens da planilha antiga (desde 01/01/2026),
-// só de quem tem cadastro. Primeiro simula (relatório), depois grava.
+// Fase 4: traz para o app as viagens da planilha antiga (todas as datas, só
+// abas visíveis, sem carros), só de quem tem cadastro. Simula, depois grava.
 export function ImportarPlanilha() {
     const [planilha, setPlanilha] = useState<PlanilhaGasolina | null>(null)
     const [relatorio, setRelatorio] = useState<RelatorioImportacao | null>(null)
@@ -54,7 +54,7 @@ export function ImportarPlanilha() {
         const leitor = new FileReader()
         leitor.onload = evt => {
             try {
-                const dados = lerPlanilhaGasolina(XLSX.read(evt.target?.result, { type: "array" }))
+                const dados = lerPlanilhaGasolina(XLSX.read(evt.target?.result, { type: "array" }), { dataCorte: null, incluirOcultas: false })
                 if (!dados.abas.length) { toast.error("Não encontrei abas de membros nesse arquivo."); return }
                 setPlanilha(dados)
                 simular(dados)
@@ -108,7 +108,7 @@ export function ImportarPlanilha() {
             <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-emerald-600" /> Importar a planilha antiga</CardTitle>
                 <CardDescription>
-                    Traz as viagens desde 01/01/2026 da planilha &quot;REEMBOLSO GASOLINA&quot;, só de quem tem cadastro na Área do Membro.
+                    Traz as viagens da planilha &quot;REEMBOLSO GASOLINA&quot; (todas as datas, só abas visíveis), só de quem tem cadastro na Área do Membro. Carros e autonomia não são importados.
                     Primeiro aparece uma simulação; nada é gravado até você clicar em &quot;Importar&quot;. Pode rodar de novo: quem já foi importado é pulado.
                 </CardDescription>
             </CardHeader>
@@ -123,8 +123,7 @@ export function ImportarPlanilha() {
                 {concluido && (
                     <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-4 text-sm space-y-1">
                         <p className="font-semibold flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Importação concluída</p>
-                        <p>{concluido.totais.viagens} viagens de {concluido.totais.membros} membros, {concluido.totais.carros} carros e {concluido.precos_novos} preços de mês.</p>
-                        <p className="text-slate-500">Os carros importados ficam sem foto do painel — os membros podem cadastrar de novo com foto quando quiserem.</p>
+                        <p>{concluido.totais.viagens} viagens de {concluido.totais.membros} membros e {concluido.precos_novos} preços de mês.</p>
                     </div>
                 )}
 
@@ -132,9 +131,9 @@ export function ImportarPlanilha() {
                     <div className="space-y-4">
                         <div className="rounded-xl bg-slate-50 dark:bg-white/5 p-4 text-sm space-y-1">
                             <p className="font-semibold">Simulação</p>
-                            <p>Vão entrar <b>{relatorio.totais.viagens} viagens</b> de <b>{relatorio.totais.membros} membros</b>, {relatorio.totais.carros} carros e {relatorio.precos_novos} preços de mês que ainda não estavam lançados.</p>
+                            <p>Vão entrar <b>{relatorio.totais.viagens} viagens</b> de <b>{relatorio.totais.membros} membros</b> e {relatorio.precos_novos} preços de mês que ainda não estavam lançados.</p>
                             {resumo.fora.length > 0 && <p>{resumo.fora.length} aba(s) com viagens ficam de fora (sem cadastro ou sem membro escolhido) — veja na tabela.</p>}
-                            {resumo.semData > 0 && <p>{resumo.semData} viagem(ns) sem data na planilha não entram (não dá para saber o ano).</p>}
+                            {resumo.semData > 0 && <p>{resumo.semData} viagem(ns) sem data (ou com data digitada errado, ex.: ano &quot;0225&quot;) não entram.</p>}
                             {relatorio.aviso_monday && <p className="text-amber-700 flex items-start gap-1"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> {relatorio.aviso_monday}</p>}
                             {resumo.projetos.length > 0 && (
                                 <p className="text-amber-700 flex items-start gap-1">
@@ -191,9 +190,9 @@ export function ImportarPlanilha() {
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell text-xs text-slate-500">
                                             {[
-                                                a.carros_novos.length ? `Carros novos: ${a.carros_novos.join(", ")}` : "",
-                                                a.sem_data ? `${a.sem_data} sem data` : "",
+                                                a.sem_data ? `${a.sem_data} sem data válida` : "",
                                                 a.sem_litros ? `${a.sem_litros} sem litros` : "",
+                                                a.sem_preco ? `${a.sem_preco} sem preço do mês` : "",
                                                 a.projetos_fora_do_monday.length ? `Projeto fora do Monday: ${a.projetos_fora_do_monday.join(", ")}` : "",
                                             ].filter(Boolean).join(" · ")}
                                         </TableCell>

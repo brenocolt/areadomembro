@@ -6,7 +6,12 @@
 // e "STATUS"), porque as abas antigas têm outro layout (sem MÊS/PREÇO/VALOR).
 import * as XLSX from 'xlsx'
 
-export const DATA_CORTE_IMPORTACAO = '2026-01-01'
+// Regras combinadas com a VP (06/11): todas as datas e só abas visíveis (as
+// ocultas são de membros desligados).
+export interface OpcoesLeitura {
+    dataCorte?: string | null      // AAAA-MM-DD; null = todas as datas
+    incluirOcultas?: boolean
+}
 
 export interface CarroPlanilha {
     nome: string
@@ -30,8 +35,8 @@ export interface AbaPlanilha {
     nome: string
     oculta: boolean
     carros: CarroPlanilha[]
-    viagens: ViagemPlanilha[]           // só data >= DATA_CORTE_IMPORTACAO
-    sem_data: number                    // linhas com km mas sem data válida (qualquer ano)
+    viagens: ViagemPlanilha[]           // só data >= dataCorte (quando houver corte)
+    sem_data: number                    // linhas com km mas sem data válida (vazia, ou digitada errado, ex.: ano 0225)
     anteriores_ao_corte: number
 }
 
@@ -70,6 +75,13 @@ function dataISO(v: unknown): string | null {
     return null
 }
 
+// A planilha começou em 2023; ano antes disso ou no futuro é erro de digitação
+// (ex.: "0225"). Essas viagens ficam de fora e entram no relatório como sem data.
+function dataPlausivel(data: string): boolean {
+    const hoje = new Date().toISOString().slice(0, 10)
+    return data >= '2023-01-01' && data <= hoje
+}
+
 type Linha = unknown[]
 
 function acharColunas(cabecalho: Linha, nomes: Record<string, string[]>): Record<string, number> {
@@ -95,7 +107,7 @@ const CABECALHO_VIAGENS = {
     status: ['STATUS'],
 }
 
-function lerAba(nome: string, oculta: boolean, linhas: Linha[]): AbaPlanilha | null {
+function lerAba(nome: string, oculta: boolean, linhas: Linha[], dataCorte: string | null): AbaPlanilha | null {
     const iCab = linhas.findIndex(l => {
         const t = l.map(normalizarTexto)
         return t.includes('LOCAL DE SAIDA') && t.includes('STATUS')
@@ -127,8 +139,8 @@ function lerAba(nome: string, oculta: boolean, linhas: Linha[]): AbaPlanilha | n
         const km = numero(l[col.km])
         if (km === null || km <= 0) continue
         const data = dataISO(l[col.data])
-        if (!data) { semData++; continue }
-        if (data < DATA_CORTE_IMPORTACAO) { anteriores++; continue }
+        if (!data || !dataPlausivel(data)) { semData++; continue }
+        if (dataCorte && data < dataCorte) { anteriores++; continue }
         viagens.push({
             linha: i + 1,
             origem: String(l[col.origem] ?? '').trim(),
@@ -145,7 +157,9 @@ function lerAba(nome: string, oculta: boolean, linhas: Linha[]): AbaPlanilha | n
     return { nome, oculta, carros, viagens, sem_data: semData, anteriores_ao_corte: anteriores }
 }
 
-export function lerPlanilhaGasolina(workbook: XLSX.WorkBook): PlanilhaGasolina {
+export function lerPlanilhaGasolina(workbook: XLSX.WorkBook, opcoes: OpcoesLeitura = {}): PlanilhaGasolina {
+    const dataCorte = opcoes.dataCorte ?? null
+    const incluirOcultas = opcoes.incluirOcultas ?? false
     const abas: AbaPlanilha[] = []
     const precos: { mes: string, preco_litro: number }[] = []
     const ocultas = new Set(
@@ -167,7 +181,8 @@ export function lerPlanilhaGasolina(workbook: XLSX.WorkBook): PlanilhaGasolina {
             continue
         }
         if (n.startsWith('EXEMPLO')) continue
-        const aba = lerAba(nome, ocultas.has(nome), linhas)
+        if (ocultas.has(nome) && !incluirOcultas) continue
+        const aba = lerAba(nome, ocultas.has(nome), linhas, dataCorte)
         if (aba) abas.push(aba)
     }
     return { precos, abas }
