@@ -145,7 +145,25 @@ export interface GasolinaViagem {
     status: StatusViagem
     solicitacao_id: string | null
     origem: 'app' | 'planilha'
+    rota: RotaViagem | null
     criado_em: string
+}
+
+// Rota calculada pelo Google Maps ao salvar (fase 5). Os km que valem para o
+// reembolso são sempre os de distancia_km; a rota serve de conferência.
+export interface RotaViagem {
+    distancia_km: number
+    duracao_min: number
+    pontos: string[]
+    ida_e_volta: boolean
+    calculado_em: string
+}
+
+// Km informados bem diferentes da rota do Maps (mais de 15% e de 3 km).
+export function kmDivergente(viagem: { distancia_km: number, rota: RotaViagem | null }): boolean {
+    if (!viagem.rota) return false
+    const diferenca = Math.abs(Number(viagem.distancia_km) - viagem.rota.distancia_km)
+    return diferenca > 3 && diferenca > viagem.rota.distancia_km * 0.15
 }
 
 // Prazo da planilha: a viagem pode ser reembolsada até 2 meses depois do dia

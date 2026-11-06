@@ -1,18 +1,20 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2, Map as MapaIcon, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
     calcularLitros, dataMaisAntigaPermitida, formatarNumero, hojeBrasil, lerNumero,
-    type GasolinaCentroCusto, type GasolinaVeiculo, type GasolinaViagem,
+    type GasolinaCentroCusto, type GasolinaVeiculo, type GasolinaViagem, type RotaViagem,
 } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
+import { EnderecoInput } from "./endereco-input"
 import { ProjetoBusca } from "./projeto-busca"
 
 interface Props {
@@ -36,6 +38,10 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
     const [projetos, setProjetos] = useState<string[]>([])
     const [carregandoProjetos, setCarregandoProjetos] = useState(false)
     const [salvando, setSalvando] = useState(false)
+    const [idaEVolta, setIdaEVolta] = useState(false)
+    const [mapsAtivo, setMapsAtivo] = useState(false)
+    const [rota, setRota] = useState<RotaViagem | null>(null)
+    const [calculando, setCalculando] = useState(false)
 
     const centro = centros.find(c => c.id === centroId)
     const hoje = hojeBrasil()
@@ -51,7 +57,35 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
         setParadas(viagem?.paradas ?? [])
         setKm(viagem ? String(viagem.distancia_km).replace(".", ",") : "")
         setData(viagem?.data_viagem ?? hoje)
+        setIdaEVolta(viagem?.rota?.ida_e_volta ?? false)
+        setRota(viagem?.rota ?? null)
     }, [open, viagem, centros, veiculos, hoje])
+
+    // Google Maps ligado no servidor? (sem chave, o formulário fica como antes)
+    useEffect(() => {
+        if (!open) return
+        gasolinaApi<{ ativo: boolean }>("/api/gasolina/mapas").then(r => setMapsAtivo(r.ativo)).catch(() => setMapsAtivo(false))
+    }, [open])
+
+    // A rota mostrada só vale para o trajeto exato em que foi calculada.
+    const pontosAtuais = [origem, ...paradas, destino, ...(idaEVolta ? [origem] : [])].map(p => p.trim()).filter(Boolean)
+    const rotaValida = rota && JSON.stringify(rota.pontos) === JSON.stringify(pontosAtuais) ? rota : null
+
+    async function calcularKm() {
+        setCalculando(true)
+        try {
+            const r = await gasolinaApi<{ rota: RotaViagem }>("/api/gasolina/mapas/rota", {
+                method: "POST",
+                body: JSON.stringify({ origem, destino, paradas: paradas.filter(p => p.trim()), ida_e_volta: idaEVolta }),
+            })
+            setRota(r.rota)
+            setKm(String(r.rota.distancia_km).replace(".", ","))
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setCalculando(false)
+        }
+    }
 
     // Lista de projetos do Monday para o centro escolhido.
     useEffect(() => {
@@ -83,6 +117,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                     paradas: paradas.filter(p => p.trim()),
                     distancia_km: km,
                     data_viagem: data,
+                    ida_e_volta: idaEVolta,
                 }),
             })
             toast.success(viagem ? "Viagem atualizada." : "Viagem lançada!")
@@ -151,11 +186,11 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                     <div className="grid sm:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label htmlFor="origem">Local de saída *</Label>
-                            <Input id="origem" value={origem} onChange={e => setOrigem(e.target.value)} placeholder="Ex.: UFRN" />
+                            <EnderecoInput id="origem" value={origem} onChange={setOrigem} placeholder="Ex.: UFRN" sugerir={mapsAtivo} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="destino">Local de chegada *</Label>
-                            <Input id="destino" value={destino} onChange={e => setDestino(e.target.value)} placeholder="Ex.: Cliente X" />
+                            <EnderecoInput id="destino" value={destino} onChange={setDestino} placeholder="Ex.: Cliente X" sugerir={mapsAtivo} />
                         </div>
                     </div>
 
@@ -163,19 +198,44 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                         <Label>Paradas (caronas)</Label>
                         {paradas.map((p, i) => (
                             <div key={i} className="flex gap-2">
-                                <Input value={p} onChange={e => setParadas(ps => ps.map((x, j) => j === i ? e.target.value : x))} placeholder={`Parada ${i + 1}`} />
+                                <div className="flex-1">
+                                    <EnderecoInput value={p} onChange={v => setParadas(ps => ps.map((x, j) => j === i ? v : x))} placeholder={`Parada ${i + 1}`} sugerir={mapsAtivo} />
+                                </div>
                                 <Button variant="ghost" size="icon" className="shrink-0" title="Remover parada"
                                     onClick={() => setParadas(ps => ps.filter((_, j) => j !== i))}>
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
                             </div>
                         ))}
-                        {paradas.length < 10 && (
+                        {paradas.length < (idaEVolta ? 9 : 10) && (
                             <Button variant="outline" size="sm" onClick={() => setParadas(ps => [...ps, ""])}>
                                 <Plus className="h-4 w-4" /> Adicionar parada
                             </Button>
                         )}
                     </div>
+
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Checkbox checked={idaEVolta} onCheckedChange={v => setIdaEVolta(v === true)} />
+                        Ida e volta (voltei ao local de saída)
+                    </label>
+
+                    {mapsAtivo && (
+                        <div className="rounded-md border border-dashed p-3 space-y-1.5">
+                            <Button variant="outline" size="sm" onClick={calcularKm} disabled={calculando || !origem.trim() || !destino.trim()}>
+                                {calculando ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapaIcon className="h-4 w-4" />}
+                                Calcular km pelo Google Maps
+                            </Button>
+                            {rotaValida ? (
+                                <p className="text-xs text-slate-600 dark:text-slate-300">
+                                    Rota de carro: <span className="font-semibold">{formatarNumero(rotaValida.distancia_km, 1)} km</span>
+                                    {rotaValida.duracao_min > 0 && <> (cerca de {rotaValida.duracao_min} min)</>}
+                                    {lerNumero(km) !== rotaValida.distancia_km && <> · você informou outro valor — tudo bem se o caminho foi diferente.</>}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-slate-500">Preencha saída, paradas e chegada e clique para preencher os km automaticamente. Você ainda pode ajustar o valor.</p>
+                            )}
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -188,7 +248,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                         </div>
                     </div>
                     <p className="text-xs text-slate-500">
-                        Some todos os trechos (com as paradas). Viagens podem ser lançadas até 2 meses depois da data.
+                        {mapsAtivo ? "Confira se os km batem com o trajeto feito." : <>Some todos os trechos (com as paradas{idaEVolta ? " e a volta" : ""}).</>} Viagens podem ser lançadas até 2 meses depois da data.
                         {litrosPrevia !== null && <> Estimativa: <span className="font-semibold">{formatarNumero(litrosPrevia, 2)} L</span>.</>}
                     </p>
                 </div>

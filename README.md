@@ -144,3 +144,18 @@ cadastro (aba casada pelo nome; a VP pode corrigir na tela), sem carros nem
 autonomia (litros da planilha), e os preços de mês ainda não lançados. Viagens
 sem data ou com data digitada errado ficam de fora. Quem já foi importado é
 pulado — pode rodar de novo.
+
+### Google Maps no lançamento de viagens (opcional)
+
+Com a variável `GOOGLE_MAPS_API_KEY` configurada no servidor (Coolify, runtime),
+o formulário de viagem passa a sugerir endereços enquanto o membro digita
+(Places API New — Autocomplete) e ganha o botão "Calcular km pelo Google Maps"
+(Routes API — Compute Routes, com paradas e opção ida e volta). Ao salvar, o
+servidor guarda a rota em `gasolina_viagens.rota` para conferência; os km que
+valem para o reembolso continuam sendo os informados, e a Visão geral destaca
+os que fogem muito da rota. Sem a variável, nada muda.
+
+A chave fica só no servidor (as chamadas passam por `/api/gasolina/mapas/*`).
+No Google Cloud: ativar "Places API (New)" e "Routes API", restringir a chave a
+essas duas APIs e definir cotas diárias (ex.: 300 por dia em cada) para não
+sair da faixa gratuita (10.000 usos/mês por API).
