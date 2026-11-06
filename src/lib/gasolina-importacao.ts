@@ -4,14 +4,16 @@
 // e grava, para o relatório mostrar exatamente o que vai acontecer.
 //
 // Regras (decididas com a VP):
-// - só viagens com data a partir de 01/01/2026 (o corte já vem do leitor);
+// - todas as datas e só abas visíveis (filtrado no leitor); sem data fica de fora;
+// - sem carros/autonomia por enquanto: a viagem entra sem carro vinculado, com
+//   os litros da planilha (autonomia_usada = km ÷ litros);
 // - só membros cadastrados na Área do Membro — aba sem cadastro fica de fora;
 // - litros/preço/valor como na planilha (valor = litros × preço do mês, porque
 //   a coluna VALOR da planilha zera tudo o que não está Pendente);
 // - status mantido; Pendente com mais de 2 meses entra como Vencido;
 // - membro que já tem viagens importadas é pulado (reimportar é seguro).
-// - gravação em lotes por membro; carros e preços são reaproveitados se já
-//   existirem, então rodar de novo depois de uma falha não duplica nada.
+// - gravação em lotes por membro; preços são reaproveitados se já existirem,
+//   então rodar de novo depois de uma falha não duplica nada.
 import { dataMaisAntigaPermitida, inicioDoMes, type GasolinaCentroCusto } from './gasolina'
 import { normalizarTexto, type AbaPlanilha, type PlanilhaGasolina } from './gasolina-planilha'
 import { listarOpcoesDropdown } from './monday'
@@ -25,7 +27,6 @@ export interface RelatorioAba {
     colaborador: { id: string, nome: string } | null
     candidatos: { id: string, nome: string }[]
     viagens: { Pendente: number, Reembolsado: number, Vencido: number }
-    carros_novos: string[]
     sem_data: number
     sem_litros: number
     sem_preco: number
@@ -38,7 +39,7 @@ export interface RelatorioImportacao {
     abas: RelatorioAba[]
     colaboradores: { id: string, nome: string }[]
     aviso_monday: string | null
-    totais: { membros: number, viagens: number, carros: number }
+    totais: { membros: number, viagens: number }
 }
 
 type Colab = { id: string, nome: string }
@@ -115,7 +116,7 @@ export async function processarImportacao(supabase: any, planilha: PlanilhaGasol
 
     const limite = dataMaisAntigaPermitida()
     const relatorio: RelatorioAba[] = []
-    let totalViagens = 0, totalCarros = 0, totalMembros = 0
+    let totalViagens = 0, totalMembros = 0
 
     for (const aba of planilha.abas) {
         const { colaborador: sugerido, candidatos } = casarColaborador(aba.nome, colaboradores)
@@ -125,7 +126,7 @@ export async function processarImportacao(supabase: any, planilha: PlanilhaGasol
         const r: RelatorioAba = {
             aba: aba.nome, oculta: aba.oculta, situacao: 'importar', colaborador: escolhido,
             candidatos: candidatos.slice(0, 10), viagens: { Pendente: 0, Reembolsado: 0, Vencido: 0 },
-            carros_novos: [], sem_data: aba.sem_data, sem_litros: 0, sem_preco: 0, projetos_fora_do_monday: [],
+            sem_data: aba.sem_data, sem_litros: 0, sem_preco: 0, projetos_fora_do_monday: [],
         }
         relatorio.push(r)
 
@@ -145,7 +146,6 @@ export async function processarImportacao(supabase: any, planilha: PlanilhaGasol
         importados.add(escolhido.id)   // mesma pessoa em duas abas: só a primeira entra
         totalMembros++
         totalViagens += resultado.viagens.Pendente + resultado.viagens.Reembolsado + resultado.viagens.Vencido
-        totalCarros += resultado.carros_novos.length
     }
 
     return {
@@ -154,7 +154,7 @@ export async function processarImportacao(supabase: any, planilha: PlanilhaGasol
         abas: relatorio,
         colaboradores,
         aviso_monday: avisoMonday,
-        totais: { membros: totalMembros, viagens: totalViagens, carros: totalCarros },
+        totais: { membros: totalMembros, viagens: totalViagens },
     }
 }
 
@@ -162,33 +162,7 @@ async function importarAba(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supabase: any, aba: AbaPlanilha, colaboradorId: string,
     ctx: { gravar: boolean, limite: string, precos: Map<string, number>, projetosMonday: Map<string, string>, centroProspeccao: string, centroProjetos: string },
-): Promise<Pick<RelatorioAba, 'viagens' | 'carros_novos' | 'sem_litros' | 'sem_preco' | 'projetos_fora_do_monday'>> {
-    // Carros: reaproveita o carro ativo de mesmo nome; senão cria (sem foto).
-    const { data: existentes } = await supabase.from('gasolina_veiculos')
-        .select('id, modelo, autonomia_km_l').eq('colaborador_id', colaboradorId).eq('ativo', true)
-    const carros = new Map<string, { id: string | null, autonomia: number }>()
-    for (const v of existentes ?? []) carros.set(normalizarTexto(v.modelo), { id: v.id, autonomia: Number(v.autonomia_km_l) })
-    const carrosNovos: string[] = []
-    for (const c of aba.carros) {
-        const chave = normalizarTexto(c.nome)
-        if (carros.has(chave)) continue
-        carrosNovos.push(c.nome)
-        let id: string | null = null
-        if (ctx.gravar) {
-            const { data, error } = await supabase.from('gasolina_veiculos').insert({
-                colaborador_id: colaboradorId,
-                modelo: c.nome.slice(0, 80),
-                combustivel: 'Não informado',
-                autonomia_informada: c.autonomia,
-                autonomia_km_l: c.autonomia,
-                foto_painel_url: '',
-            }).select('id').single()
-            if (error) throw new Error(`Erro ao gravar carro "${c.nome}" (${aba.nome}): ${error.message}`)
-            id = data.id
-        }
-        carros.set(chave, { id, autonomia: c.autonomia })
-    }
-
+): Promise<Pick<RelatorioAba, 'viagens' | 'sem_litros' | 'sem_preco' | 'projetos_fora_do_monday'>> {
     const viagens = { Pendente: 0, Reembolsado: 0, Vencido: 0 }
     const foraDoMonday = new Set<string>()
     let semLitros = 0, semPreco = 0
@@ -196,9 +170,8 @@ async function importarAba(
 
     for (const v of aba.viagens) {
         const data = v.data as string
-        const carro = carros.get(normalizarTexto(v.carro))
         const km = v.distancia_km as number
-        const litros = v.litros ?? (carro?.autonomia ? Math.round((km / carro.autonomia) * 1000) / 1000 : null)
+        const litros = v.litros
         const preco = ctx.precos.get(inicioDoMes(data)) ?? v.preco_litro
         const status = statusDaPlanilha(v.status, data, ctx.limite)
         if (litros == null) semLitros++
@@ -212,7 +185,7 @@ async function importarAba(
 
         linhas.push({
             colaborador_id: colaboradorId,
-            veiculo_id: carro?.id ?? null,
+            veiculo_id: null,
             centro_custo_id: prospeccao ? ctx.centroProspeccao : ctx.centroProjetos,
             projeto: prospeccao ? 'PROSPECÇÃO' : (projetoMonday ?? motivo),
             projeto_original: v.motivo || null,
@@ -220,7 +193,7 @@ async function importarAba(
             destino_local: vazio(v.destino, '—'),
             distancia_km: km,
             data_viagem: data,
-            autonomia_usada: carro?.autonomia ?? (litros ? Math.round((km / litros) * 100) / 100 : null),
+            autonomia_usada: litros ? Math.round((km / litros) * 100) / 100 : null,
             litros,
             preco_litro: preco,
             valor: litros != null && preco != null ? Math.round(litros * preco * 100) / 100 : null,
@@ -237,5 +210,5 @@ async function importarAba(
         if (error) throw new Error(`Erro ao gravar viagens de ${aba.nome}: ${error.message}`)
     }
 
-    return { viagens, carros_novos: carrosNovos, sem_litros: semLitros, sem_preco: semPreco, projetos_fora_do_monday: [...foraDoMonday] }
+    return { viagens, sem_litros: semLitros, sem_preco: semPreco, projetos_fora_do_monday: [...foraDoMonday] }
 }
