@@ -135,7 +135,7 @@ export interface ViagemPreview {
     litros: number | null
     preco_litro: number | null
     valor: number | null
-    veiculo: { modelo: string } | null
+    veiculo: { modelo: string, invalidado_em?: string | null } | null
 }
 
 export interface PreviewSolicitacao {
@@ -147,7 +147,7 @@ export interface PreviewSolicitacao {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function montarPreview(supabase: any, colaboradorId: string, centroId: string, projeto: string): Promise<PreviewSolicitacao> {
-    const campos = 'id, data_viagem, origem_local, destino_local, paradas, distancia_km, litros, preco_litro, valor, veiculo:veiculo_id(modelo)'
+    const campos = 'id, data_viagem, origem_local, destino_local, paradas, distancia_km, litros, preco_litro, valor, veiculo:veiculo_id(modelo, invalidado_em)'
     const buscar = async (): Promise<ViagemPreview[]> => {
         const { data, error } = await supabase
             .from('gasolina_viagens')
@@ -169,7 +169,8 @@ export async function montarPreview(supabase: any, colaboradorId: string, centro
     const incluidas: ViagemPreview[] = []
     const excluidas: (ViagemPreview & { motivo: string })[] = []
     for (const v of viagens) {
-        if (v.valor != null) incluidas.push(v)
+        if (v.veiculo?.invalidado_em) excluidas.push({ ...v, motivo: 'Carro invalidado pela VP' })
+        else if (v.valor != null) incluidas.push(v)
         else if (v.litros == null) excluidas.push({ ...v, motivo: 'Carro sem autonomia válida' })
         else excluidas.push({ ...v, motivo: `Aguardando o preço de ${formatarMes(inicioDoMes(v.data_viagem))}` })
     }

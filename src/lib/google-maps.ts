@@ -80,6 +80,7 @@ export interface RotaCalculada {
     pontos: string[]      // saída, paradas, chegada (e a saída de novo, se ida e volta)
     ida_e_volta: boolean
     calculado_em: string
+    km_google?: boolean   // os km da viagem são os desta rota (campo travado no formulário)
 }
 
 // Mesma rota pedida de novo (prévia no formulário e depois ao salvar) não

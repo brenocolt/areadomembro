@@ -75,6 +75,8 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     }, [viagens])
 
     const totalPendente = resumo.reduce((s, r) => s + r.valorPendente, 0)
+    // Carros invalidados pela VP não aparecem para escolha.
+    const veiculosAtivos = useMemo(() => veiculos.filter(v => v.ativo), [veiculos])
 
     // Solicitações recusadas com viagens ainda não retomadas.
     const recusadas = useMemo(() => {
@@ -105,7 +107,7 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     }
 
     function abrirNova() {
-        if (veiculos.length === 0) {
+        if (veiculosAtivos.length === 0) {
             toast.error('Cadastre um carro na aba "Meus carros e Pix" antes de lançar viagens.')
             return
         }
@@ -224,7 +226,7 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
             </Card>
 
             <ViagemDialog open={dialogAberto} onOpenChange={setDialogAberto} viagem={editando}
-                veiculos={veiculos} centros={centros} onSalva={carregar} />
+                veiculos={veiculosAtivos} centros={centros} onSalva={carregar} />
             <SolicitarDialog alvo={solicitando} onOpenChange={o => { if (!o) setSolicitando(null) }}
                 onSolicitado={() => { carregar(); onSolicitado?.() }} />
         </div>

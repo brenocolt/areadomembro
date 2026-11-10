@@ -7,11 +7,14 @@ import { lerViagem } from '../validar'
 // de solicitada, o valor já foi para o Monday).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function viagemPendenteDoMembro(supabase: any, id: string, colaboradorId: string) {
-    const { data } = await supabase.from('gasolina_viagens').select('id, status')
+    const { data } = await supabase.from('gasolina_viagens').select('id, status, rota, veiculo:veiculo_id(invalidado_em)')
         .eq('id', id).eq('colaborador_id', colaboradorId).maybeSingle()
     if (!data) return { ok: false as const, status: 404, error: 'Viagem não encontrada.' }
     if (data.status !== 'Pendente') return { ok: false as const, status: 409, error: `Só dá para mudar viagens pendentes (esta está "${data.status}").` }
-    return { ok: true as const }
+    if (data.veiculo?.invalidado_em) {
+        return { ok: false as const, status: 409, error: 'Esta viagem usa um carro invalidado pela VP e não pode ser alterada. Fale com a Vice-Presidência.' }
+    }
+    return { ok: true as const, rota: data.rota ?? null }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const pode = await viagemPendenteDoMembro(supabase, id, acesso.colaboradorId)
     if (!pode.ok) return NextResponse.json({ error: pode.error }, { status: pode.status })
 
-    const lido = await lerViagem(supabase, acesso.colaboradorId, await req.json().catch(() => ({})))
+    const lido = await lerViagem(supabase, acesso.colaboradorId, await req.json().catch(() => ({})), pode.rota)
     if (!lido.ok) return NextResponse.json({ error: lido.error }, { status: lido.status })
 
     const calculo = calcularViagem(lido.viagem.distancia_km, lido.autonomia, await precoDoMes(supabase, lido.viagem.data_viagem))

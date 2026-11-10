@@ -17,6 +17,9 @@ export interface GasolinaVeiculo {
     autonomia_alterada_em: string | null
     ativo: boolean
     criado_em: string
+    // Invalidado pela VP (tentativa de fraude): não pode ser usado em viagens.
+    invalidado_em?: string | null
+    motivo_invalidacao?: string | null
 }
 
 export interface GasolinaPreco {
@@ -161,6 +164,7 @@ export function viagemRecusada(v: Pick<GasolinaViagem, 'status' | 'solicitacao'>
 export interface RotaViagem {
     distancia_km: number
     duracao_min: number
+    km_google?: boolean         // os km da viagem vieram do cálculo do Google (campo travado)
     pontos: string[]
     ida_e_volta: boolean
     calculado_em: string

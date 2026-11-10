@@ -1,6 +1,7 @@
 import { listarOpcoesDropdown } from '@/lib/monday'
 import { dataMaisAntigaPermitida, formatarData, hojeBrasil, lerNumero } from '@/lib/gasolina'
-import { calcularRota, mapsAtivo, type RotaCalculada } from '@/lib/google-maps'
+import { calcularRota, mapsAtivo, pontosDaRota, type RotaCalculada } from '@/lib/google-maps'
+import type { RotaViagem } from '@/lib/gasolina'
 
 type Ok = {
     ok: true
@@ -21,8 +22,11 @@ type Ok = {
 // Valida o corpo de criação/edição de uma viagem: carro precisa ser do
 // membro e estar ativo; projeto precisa existir na lista do Monday (ou ser o
 // rótulo fixo do centro); data dentro do prazo de 2 meses e não futura.
+// Km travados: depois que o membro calcula pelo Google, os km da viagem são
+// sempre os da rota calculada aqui no servidor (não dá para alterar pelo
+// navegador). Numa edição, a trava continua enquanto o trajeto for o mesmo.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function lerViagem(supabase: any, colaboradorId: string, body: Record<string, unknown>): Promise<Ok | { ok: false, status: number, error: string }> {
+export async function lerViagem(supabase: any, colaboradorId: string, body: Record<string, unknown>, rotaAnterior: RotaViagem | null = null): Promise<Ok | { ok: false, status: number, error: string }> {
     const texto = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : '')
     const erro = (error: string, status = 400) => ({ ok: false as const, status, error })
 
@@ -73,12 +77,22 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
     // Rota pelo Google Maps (quando ligado): calculada aqui, não no navegador,
     // para a VP poder comparar com os km informados. Falha do Google não
     // impede salvar — os km informados continuam valendo.
+    const mesmoTrajeto = !!rotaAnterior?.km_google
+        && JSON.stringify(rotaAnterior.pontos) === JSON.stringify(pontosDaRota(origem, paradas, destino, idaEVolta))
+    const kmGoogle = body.km_google === true || mesmoTrajeto
+
     let rota: RotaCalculada | null = null
     if (mapsAtivo()) {
         rota = await calcularRota(origem, paradas, destino, idaEVolta).catch(err => {
             console.error('[gasolina] Rota não calculada ao salvar a viagem:', err)
             return null
         })
+    }
+    let km = distancia
+    if (kmGoogle) {
+        if (!rota) return erro('Não foi possível confirmar a distância no Google Maps agora. Tente salvar de novo em instantes.', 502)
+        km = rota.distancia_km
+        rota = { ...rota, km_google: true }
     }
 
     return {
@@ -90,7 +104,7 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
             origem_local: origem,
             destino_local: destino,
             paradas,
-            distancia_km: distancia,
+            distancia_km: km,
             data_viagem: data,
             rota,
         },

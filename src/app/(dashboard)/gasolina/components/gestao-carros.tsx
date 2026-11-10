@@ -1,11 +1,12 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Loader2, Pencil, Save, X } from "lucide-react"
+import { Ban, Loader2, Pencil, RotateCcw, Save, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatarNumero, type GasolinaVeiculo } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
@@ -13,6 +14,62 @@ import { gasolinaApi } from "./api"
 type VeiculoGestao = GasolinaVeiculo & {
     colaborador?: { nome: string } | null
     alterado_por?: { nome: string } | null
+}
+
+// Invalidar (tentativa de fraude) / reativar o carro de um membro.
+function SituacaoCarro({ v, onMudou }: { v: VeiculoGestao, onMudou: () => void }) {
+    const [aberto, setAberto] = useState(false)
+    const [motivo, setMotivo] = useState("")
+    const [enviando, setEnviando] = useState(false)
+
+    async function enviar(reativar: boolean) {
+        setEnviando(true)
+        try {
+            await gasolinaApi(`/api/gasolina/veiculos/${v.id}/invalidar`, reativar
+                ? { method: "DELETE" }
+                : { method: "POST", body: JSON.stringify({ motivo }) })
+            toast.success(reativar ? "Carro reativado." : "Carro invalidado. O membro vai ver o motivo.")
+            setAberto(false)
+            setMotivo("")
+            onMudou()
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setEnviando(false)
+        }
+    }
+
+    if (v.invalidado_em) {
+        return (
+            <div className="space-y-1 max-w-[220px]">
+                <span className="inline-block rounded-full bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300 px-2 py-0.5 text-xs font-semibold">Invalidado</span>
+                <p className="text-xs text-slate-500">{v.motivo_invalidacao}</p>
+                <Button size="sm" variant="outline" className="h-7" onClick={() => enviar(true)} disabled={enviando}>
+                    {enviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Reativar
+                </Button>
+            </div>
+        )
+    }
+    if (!aberto) {
+        return (
+            <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700" onClick={() => setAberto(true)}>
+                <Ban className="h-3.5 w-3.5" /> Invalidar
+            </Button>
+        )
+    }
+    return (
+        <div className="space-y-2 min-w-[220px]">
+            <Textarea id={`motivo-${v.id}`} value={motivo} onChange={e => setMotivo(e.target.value)} rows={2} maxLength={500}
+                placeholder="Motivo (o membro vai ver). Ex.: foto do painel adulterada." />
+            <div className="flex gap-1">
+                <Button size="sm" className="h-7 bg-red-600 hover:bg-red-700 text-white" onClick={() => enviar(false)} disabled={enviando || motivo.trim().length < 5}>
+                    {enviando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Confirmar invalidação
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7" onClick={() => { setAberto(false); setMotivo("") }}>Cancelar</Button>
+            </div>
+            <p className="text-xs text-slate-500">O carro deixa de valer para novas viagens, e as pendentes feitas com ele ficam fora das solicitações.</p>
+        </div>
+    )
 }
 
 // VP confere a foto do painel e corrige a autonomia quando necessário.
@@ -64,6 +121,7 @@ export function GestaoCarros() {
                 <CardTitle className="text-lg">Carros dos membros</CardTitle>
                 <CardDescription>
                     Confira a foto do painel e corrija a autonomia se ela não bater. A correção vale para as viagens ainda pendentes.
+                    Em caso de tentativa de fraude, invalide o carro: ele deixa de poder ser usado e o membro vê o motivo.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -80,6 +138,7 @@ export function GestaoCarros() {
                                 <TableHead>Carro</TableHead>
                                 <TableHead>Foto</TableHead>
                                 <TableHead>Autonomia</TableHead>
+                                <TableHead>Situação</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -115,10 +174,10 @@ export function GestaoCarros() {
                                         ) : (
                                             <div className="flex items-center gap-1">
                                                 <span className="font-semibold">{formatarNumero(v.autonomia_km_l, 1)} km/L</span>
-                                                <Button size="icon" variant="ghost" className="h-8 w-8" title="Alterar autonomia"
+                                                {!v.invalidado_em && <Button size="icon" variant="ghost" className="h-8 w-8" title="Alterar autonomia"
                                                     onClick={() => { setEditando(v.id); setValor(String(v.autonomia_km_l).replace(".", ",")) }}>
                                                     <Pencil className="h-4 w-4" />
-                                                </Button>
+                                                </Button>}
                                             </div>
                                         )}
                                         {v.autonomia_alterada_em && (
@@ -127,6 +186,7 @@ export function GestaoCarros() {
                                             </span>
                                         )}
                                     </TableCell>
+                                    <TableCell><SituacaoCarro v={v} onMudou={carregar} /></TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
