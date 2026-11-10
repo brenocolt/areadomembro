@@ -42,6 +42,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
     const [mapsAtivo, setMapsAtivo] = useState(false)
     const [rota, setRota] = useState<RotaViagem | null>(null)
     const [calculando, setCalculando] = useState(false)
+    const [kmDoGoogle, setKmDoGoogle] = useState(false)   // km vieram do cálculo do Google -> campo travado
 
     const centro = centros.find(c => c.id === centroId)
     const hoje = hojeBrasil()
@@ -59,6 +60,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
         setData(viagem?.data_viagem ?? hoje)
         setIdaEVolta(viagem?.rota?.ida_e_volta ?? false)
         setRota(viagem?.rota ?? null)
+        setKmDoGoogle(viagem?.rota?.km_google ?? false)
     }, [open, viagem, centros, veiculos, hoje])
 
     // Google Maps ligado no servidor? (sem chave, o formulário fica como antes)
@@ -70,6 +72,9 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
     // A rota mostrada só vale para o trajeto exato em que foi calculada.
     const pontosAtuais = [origem, ...paradas, destino, ...(idaEVolta ? [origem] : [])].map(p => p.trim()).filter(Boolean)
     const rotaValida = rota && JSON.stringify(rota.pontos) === JSON.stringify(pontosAtuais) ? rota : null
+    // Depois do cálculo pelo Google os km ficam travados (o servidor confere de novo
+    // ao salvar). Mudou saída, parada, chegada ou ida e volta: destrava.
+    const kmTravado = kmDoGoogle && !!rotaValida
 
     async function calcularKm() {
         setCalculando(true)
@@ -80,6 +85,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
             })
             setRota(r.rota)
             setKm(String(r.rota.distancia_km).replace(".", ","))
+            setKmDoGoogle(true)
         } catch (e) {
             toast.error((e as Error).message)
         } finally {
@@ -118,6 +124,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                     distancia_km: km,
                     data_viagem: data,
                     ida_e_volta: idaEVolta,
+                    km_google: kmTravado,
                 }),
             })
             toast.success(viagem ? "Viagem atualizada." : "Viagem lançada!")
@@ -229,10 +236,10 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                                 <p className="text-xs text-slate-600 dark:text-slate-300">
                                     Rota de carro: <span className="font-semibold">{formatarNumero(rotaValida.distancia_km, 1)} km</span>
                                     {rotaValida.duracao_min > 0 && <> (cerca de {rotaValida.duracao_min} min)</>}
-                                    {lerNumero(km) !== rotaValida.distancia_km && <> · você informou outro valor — tudo bem se o caminho foi diferente.</>}
+                                    {kmTravado && <> · distância travada. Para mudar, altere os endereços, as paradas ou a ida e volta.</>}
                                 </p>
                             ) : (
-                                <p className="text-xs text-slate-500">Preencha saída, paradas e chegada e clique para preencher os km automaticamente. Você ainda pode ajustar o valor.</p>
+                                <p className="text-xs text-slate-500">Preencha saída, paradas e chegada e clique para preencher os km automaticamente. Depois do cálculo, a distância não pode mais ser alterada.</p>
                             )}
                         </div>
                     )}
@@ -240,7 +247,8 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <Label htmlFor="km">Distância total (km) *</Label>
-                            <Input id="km" inputMode="decimal" value={km} onChange={e => setKm(e.target.value)} placeholder="Ex.: 14,2" />
+                            <Input id="km" inputMode="decimal" value={km} onChange={e => setKm(e.target.value)} placeholder="Ex.: 14,2"
+                                disabled={kmTravado} title={kmTravado ? "Calculada pelo Google Maps — não pode ser alterada" : undefined} />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="data">Data *</Label>

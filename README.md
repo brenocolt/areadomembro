@@ -139,6 +139,17 @@ como "Recusada" (com o motivo) até o membro clicar em "Retomar viagens"
 (`POST /api/gasolina/solicitacoes/[id]/retomar`) — aí voltam a Pendente para
 corrigir e solicitar de novo; as que passaram do prazo de 2 meses viram Vencido.
 
+Km travados: depois de "Calcular km pelo Google Maps", a distância não pode
+mais ser alterada (o servidor recalcula a rota ao salvar e grava os km dela,
+`rota.km_google`). Antes do cálculo, o membro pode digitar. Mudar o trajeto
+destrava.
+
+Carro invalidado (migração `20261110_gasolina_invalidar_carro.sql`): a VP
+invalida o carro de um membro em caso de tentativa de fraude, com motivo
+(`/api/gasolina/veiculos/[id]/invalidar`, POST invalida, DELETE reativa). O
+carro não serve para novas viagens, as pendentes feitas com ele ficam fora
+das solicitações e não podem ser editadas; o membro vê o motivo.
+
 ### Importação da planilha antiga (uma vez)
 
 Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da

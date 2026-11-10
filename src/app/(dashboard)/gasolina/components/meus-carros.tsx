@@ -69,7 +69,14 @@ export function MeusCarros() {
                 ) : (
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {veiculos.map(v => (
-                            <div key={v.id} className="rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden">
+                            <div key={v.id} className={`rounded-xl border overflow-hidden ${v.invalidado_em ? "border-red-300 dark:border-red-500/40 opacity-90" : "border-slate-200 dark:border-white/10"}`}>
+                                {v.invalidado_em && (
+                                    <div className="bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                                        <p className="font-semibold">Carro invalidado pela VP</p>
+                                        <p>{v.motivo_invalidacao || "Sem motivo informado."}</p>
+                                        <p className="text-xs mt-1">Não pode ser usado em viagens. Dúvidas: fale com a Vice-Presidência.</p>
+                                    </div>
+                                )}
                                 {v.foto_painel_url ? (
                                     <a href={v.foto_painel_url} target="_blank" rel="noreferrer" title="Ver foto do painel">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -83,16 +90,18 @@ export function MeusCarros() {
                                 <div className="p-4 space-y-1">
                                     <div className="flex items-start justify-between gap-2">
                                         <p className="font-semibold text-slate-900 dark:text-white">{v.modelo}</p>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-red-500 hover:text-red-600"
-                                            onClick={() => excluir(v)}
-                                            disabled={excluindo === v.id}
-                                            title="Excluir carro"
-                                        >
-                                            {excluindo === v.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                        </Button>
+                                        {!v.invalidado_em && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-red-500 hover:text-red-600"
+                                                onClick={() => excluir(v)}
+                                                disabled={excluindo === v.id}
+                                                title="Excluir carro"
+                                            >
+                                                {excluindo === v.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                            </Button>
+                                        )}
                                     </div>
                                     <p className="text-sm text-slate-500">{[v.ano, v.combustivel].filter(Boolean).join(" · ")}</p>
                                     <p className="text-sm">

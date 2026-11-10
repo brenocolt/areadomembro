@@ -38,6 +38,16 @@ const MIGRACOES = [
         tabelas: ['gasolina_veiculos', 'gasolina_precos', 'gasolina_centros_custo', 'gasolina_viagens', 'gasolina_solicitacoes'],
         colunas: [['colaboradores', 'chave_pix']],
     },
+    {
+        arquivo: 'supabase/migrations/20261110_gasolina_invalidar_carro.sql',
+        descricao: 'Reembolso de gasolina: VP invalida carro (fraude)',
+        tabelas: [],
+        colunas: [
+            ['gasolina_veiculos', 'invalidado_em'],
+            ['gasolina_veiculos', 'invalidado_por'],
+            ['gasolina_veiculos', 'motivo_invalidacao'],
+        ],
+    },
 ];
 
 async function main() {

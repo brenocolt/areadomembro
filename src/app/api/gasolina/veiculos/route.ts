@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { exigirMembroGasolina } from '@/lib/gasolina-server'
 import { COMBUSTIVEIS, lerNumero } from '@/lib/gasolina'
 
-// GET: carros ativos do membro. ?todos=1 (só VP): carros de todos os membros.
+// GET: carros do membro (ativos e invalidados). ?todos=1 (só VP): de todos os membros.
 export async function GET(req: NextRequest) {
     const supabase = createServerSupabaseClient()
     const acesso = await exigirMembroGasolina(supabase)
@@ -19,7 +19,8 @@ export async function GET(req: NextRequest) {
         .select(todos
             ? '*, colaborador:colaborador_id(nome), alterado_por:autonomia_alterada_por(nome)'
             : '*')
-        .eq('ativo', true)
+        // Ativos e os invalidados pela VP (aparecem com o motivo, sem poder ser usados).
+        .or('ativo.eq.true,invalidado_em.not.is.null')
         .order('criado_em', { ascending: true })
     if (!todos) query = query.eq('colaborador_id', acesso.colaboradorId)
 
