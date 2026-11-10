@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, RotateCcw, Route, Send, Trash2, XCircle } from "lucide-react"
+import { AlertCircle, Clock, Loader2, MapPin, Pencil, Plus, RotateCcw, Route, Send, Trash2, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,13 @@ import { gasolinaApi } from "./api"
 import { StatusViagemBadge } from "./status-viagem"
 import { ViagemDialog } from "./viagem-dialog"
 import { SolicitarDialog } from "./solicitar-dialog"
+
+// Avisos de recusa que o membro fechou (só neste navegador; as viagens
+// continuam "Recusada" e podem ser retomadas pela aba Solicitações).
+const CHAVE_AVISOS_OCULTOS = "gasolina:avisos-recusa-ocultos"
+function lerAvisosOcultos(): string[] {
+    try { return JSON.parse(localStorage.getItem(CHAVE_AVISOS_OCULTOS) ?? "[]") } catch { return [] }
+}
 
 type ViagemLista = GasolinaViagem & { veiculo?: { modelo: string } | null, centro?: { nome: string } | null }
 
@@ -37,6 +44,13 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     const [excluindo, setExcluindo] = useState<string | null>(null)
     const [solicitando, setSolicitando] = useState<{ centroId: string, centroNome: string, projeto: string } | null>(null)
     const [retomando, setRetomando] = useState<string | null>(null)
+    const [avisosOcultos, setAvisosOcultos] = useState<string[]>(() => (typeof window === "undefined" ? [] : lerAvisosOcultos()))
+
+    function fecharAviso(id: string) {
+        const novos = [...new Set([...avisosOcultos, id])].slice(-200)
+        setAvisosOcultos(novos)
+        try { localStorage.setItem(CHAVE_AVISOS_OCULTOS, JSON.stringify(novos)) } catch { /* sem armazenamento: só some até recarregar */ }
+    }
 
     const carregar = useCallback(async () => {
         try {
@@ -133,7 +147,7 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
 
     return (
         <div className="space-y-6">
-            {recusadas.map(r => (
+            {recusadas.filter(r => !avisosOcultos.includes(r.id)).map(r => (
                 <div key={r.id} className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
                     <XCircle className="h-5 w-5 shrink-0 hidden sm:block" />
                     <div className="flex-1">
@@ -144,6 +158,10 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
                         onClick={() => retomar(r.id)} disabled={retomando === r.id}>
                         {retomando === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                         Retomar viagens
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 self-end sm:self-auto text-red-700 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-500/20"
+                        onClick={() => fecharAviso(r.id)} title="Excluir aviso" aria-label="Excluir aviso">
+                        <X className="h-4 w-4" />
                     </Button>
                 </div>
             ))}
