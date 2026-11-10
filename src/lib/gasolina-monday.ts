@@ -3,7 +3,7 @@
 // preenche — a automação "AUTOMAÇÃO PAGAMENTO VP" (n8n) lê o card pelo título
 // das colunas (ver o nó "// NORMALIZAÇÃO + PRESERVA ORIGINAL").
 import { comentarItem, criarItemPagamento, encontrarOpcao, normalizarRotulo } from './monday'
-import { formatarData, formatarNumero, formatarReais, type MondayColunaValor } from './gasolina'
+import { formatarData, formatarNumero, formatarReais, melhorCaminhoKm, type MondayColunaValor } from './gasolina'
 import type { ViagemPreview } from './gasolina-server'
 
 export const COLUNAS_PAGAMENTO = {
@@ -86,7 +86,9 @@ export async function criarCardReembolso(d: DadosCard): Promise<string> {
     try {
         const linhas = d.viagens.map(v => {
             const trajeto = [v.origem_local, ...(v.paradas ?? []), v.destino_local].join(' → ')
-            return `• ${formatarData(v.data_viagem)} — ${trajeto} — ${formatarNumero(v.distancia_km, 1)} km, ${formatarNumero(v.litros, 2)} L × R$ ${formatarNumero(v.preco_litro, 2)} = ${formatarReais(v.valor)}${v.veiculo?.modelo ? ` (${v.veiculo.modelo})` : ''}`
+            const melhor = melhorCaminhoKm(v.rota)
+            const km = `${formatarNumero(v.distancia_km, 1)} km${melhor != null ? ` (melhor caminho: ${formatarNumero(melhor, 1)} km)` : ''}`
+            return `• ${formatarData(v.data_viagem)} — ${trajeto} — ${km}, ${formatarNumero(v.litros, 2)} L × R$ ${formatarNumero(v.preco_litro, 2)} = ${formatarReais(v.valor)}${v.veiculo?.modelo ? ` (${v.veiculo.modelo})` : ''}`
         })
         await comentarItem(itemId, [
             `<b>Solicitado pela Área do Membro</b> (ref. ${d.solicitacaoId})`,

@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronUp, Loader2, RefreshCw, RotateCcw, XCircle }
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatarData, formatarNumero, formatarReais } from "@/lib/gasolina"
+import { formatarData, formatarNumero, formatarReais, melhorCaminhoKm, type RotaViagem } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 
 type Status = "Solicitado" | "Aprovado" | "Lançado" | "Pago" | "Recusado"
@@ -22,7 +22,7 @@ interface Solicitacao {
     atualizado_em: string
     centro?: { nome: string } | null
     colaborador?: { nome: string } | null
-    viagens?: { id: string, data_viagem: string, origem_local: string, destino_local: string, distancia_km: number, litros: number | null, valor: number | null, status: string }[]
+    viagens?: { id: string, data_viagem: string, origem_local: string, destino_local: string, distancia_km: number, litros: number | null, valor: number | null, status: string, rota?: RotaViagem | null }[]
 }
 
 const ETAPAS: Status[] = ["Solicitado", "Aprovado", "Lançado", "Pago"]
@@ -163,7 +163,7 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
                                     <ul className="divide-y divide-slate-100 dark:divide-white/5 text-sm">
                                         {s.viagens!.map(v => (
                                             <li key={v.id} className="flex justify-between gap-3 py-2">
-                                                <span>{formatarData(v.data_viagem)} · {v.origem_local} → {v.destino_local} <span className="text-xs text-slate-500">({formatarNumero(v.distancia_km, 1)} km)</span></span>
+                                                <span>{formatarData(v.data_viagem)} · {v.origem_local} → {v.destino_local} <span className="text-xs text-slate-500">({formatarNumero(v.distancia_km, 1)} km{melhorCaminhoKm(v.rota) != null ? ` · melhor caminho ${formatarNumero(melhorCaminhoKm(v.rota), 1)} km` : ""})</span></span>
                                                 <span className="whitespace-nowrap">{formatarReais(v.valor)}</span>
                                             </li>
                                         ))}

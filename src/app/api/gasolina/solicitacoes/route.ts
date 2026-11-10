@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { exigirMembroGasolina, montarPreview } from '@/lib/gasolina-server'
 import { criarCardReembolso } from '@/lib/gasolina-monday'
 
-const CAMPOS = '*, centro:centro_custo_id(nome), viagens:gasolina_viagens(id, data_viagem, origem_local, destino_local, distancia_km, litros, valor, status)'
+const CAMPOS = '*, centro:centro_custo_id(nome), viagens:gasolina_viagens(id, data_viagem, origem_local, destino_local, distancia_km, litros, valor, status, rota)'
 
 // GET: solicitações do membro. ?todos=1 (só VP): de todos.
 export async function GET(req: NextRequest) {

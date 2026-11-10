@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, Clock, KeyRound, Loader2, Send } from "luc
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { formatarData, formatarNumero, formatarReais } from "@/lib/gasolina"
+import { formatarData, formatarNumero, formatarReais, melhorCaminhoKm, type RotaViagem } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 
 interface ViagemPreview {
@@ -17,6 +17,7 @@ interface ViagemPreview {
     distancia_km: number
     litros: number | null
     valor: number | null
+    rota?: RotaViagem | null
     motivo?: string
 }
 
@@ -114,7 +115,10 @@ export function SolicitarDialog({ alvo, onOpenChange, onSolicitado }: Props) {
                                         <li key={v.id} className="flex items-start justify-between gap-3 p-3 text-sm">
                                             <span>
                                                 <span className="font-medium">{formatarData(v.data_viagem)}</span> · {trajeto(v)}
-                                                <span className="block text-xs text-slate-500">{formatarNumero(v.distancia_km, 1)} km · {formatarNumero(v.litros, 2)} L</span>
+                                                <span className="block text-xs text-slate-500">
+                                                    {formatarNumero(v.distancia_km, 1)} km · {formatarNumero(v.litros, 2)} L
+                                                    {melhorCaminhoKm(v.rota) != null && <> · melhor caminho {formatarNumero(melhorCaminhoKm(v.rota), 1)} km</>}
+                                                </span>
                                             </span>
                                             <span className="font-semibold whitespace-nowrap">{formatarReais(v.valor)}</span>
                                         </li>

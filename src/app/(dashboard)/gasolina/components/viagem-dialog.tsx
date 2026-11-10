@@ -16,6 +16,7 @@ import {
 import { gasolinaApi } from "./api"
 import { EnderecoInput } from "./endereco-input"
 import { ProjetoBusca } from "./projeto-busca"
+import { RotaOpcoes } from "./rota-opcoes"
 
 interface Props {
     open: boolean
@@ -71,6 +72,14 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
     const pontosAtuais = [origem, ...paradas, destino, ...(idaEVolta ? [origem] : [])].map(p => p.trim()).filter(Boolean)
     const rotaValida = rota && JSON.stringify(rota.pontos) === JSON.stringify(pontosAtuais) ? rota : null
 
+    // O membro marca qual caminho fez; os km passam a ser os dessa rota.
+    function escolherRota(i: number) {
+        if (!rota?.opcoes?.[i]) return
+        const o = rota.opcoes[i]
+        setRota({ ...rota, escolhida: i, distancia_km: o.distancia_km, duracao_min: o.duracao_min })
+        setKm(String(o.distancia_km).replace(".", ","))
+    }
+
     async function calcularKm() {
         setCalculando(true)
         try {
@@ -118,6 +127,7 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                     distancia_km: km,
                     data_viagem: data,
                     ida_e_volta: idaEVolta,
+                    rota_escolhida: rotaValida?.escolhida ?? 0,
                 }),
             })
             toast.success(viagem ? "Viagem atualizada." : "Viagem lançada!")
@@ -226,13 +236,15 @@ export function ViagemDialog({ open, onOpenChange, viagem, veiculos, centros, on
                                 Calcular km pelo Google Maps
                             </Button>
                             {rotaValida ? (
-                                <p className="text-xs text-slate-600 dark:text-slate-300">
-                                    Rota de carro: <span className="font-semibold">{formatarNumero(rotaValida.distancia_km, 1)} km</span>
-                                    {rotaValida.duracao_min > 0 && <> (cerca de {rotaValida.duracao_min} min)</>}
-                                    {lerNumero(km) !== rotaValida.distancia_km && <> · você informou outro valor — tudo bem se o caminho foi diferente.</>}
-                                </p>
+                                <div className="space-y-1.5 pt-1">
+                                    <p className="text-xs font-medium text-slate-700 dark:text-slate-200">Qual caminho você fez?</p>
+                                    <RotaOpcoes rota={rotaValida} onEscolher={escolherRota} />
+                                    {lerNumero(km) !== rotaValida.distancia_km && (
+                                        <p className="text-xs text-slate-500">Você informou outro valor de km. Tudo bem se o caminho foi diferente dessas opções.</p>
+                                    )}
+                                </div>
                             ) : (
-                                <p className="text-xs text-slate-500">Preencha saída, paradas e chegada e clique para preencher os km automaticamente. Você ainda pode ajustar o valor.</p>
+                                <p className="text-xs text-slate-500">Preencha saída, paradas e chegada e clique para ver as opções de caminho e preencher os km. Você ainda pode ajustar o valor.</p>
                             )}
                         </div>
                     )}

@@ -75,7 +75,8 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
     // impede salvar — os km informados continuam valendo.
     let rota: RotaCalculada | null = null
     if (mapsAtivo()) {
-        rota = await calcularRota(origem, paradas, destino, idaEVolta).catch(err => {
+        const escolhida = typeof body.rota_escolhida === 'number' ? body.rota_escolhida : 0
+        rota = await calcularRota(origem, paradas, destino, idaEVolta, escolhida, true).catch(err => {
             console.error('[gasolina] Rota não calculada ao salvar a viagem:', err)
             return null
         })

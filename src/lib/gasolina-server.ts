@@ -3,7 +3,7 @@
 // retorno de exigirLider em src/lib/pdi-server.ts.
 import { auth } from '@/auth'
 import { paginaPermitida, podeGerirGasolina } from '@/lib/access-control'
-import { calcularLitros, dataMaisAntigaPermitida, formatarMes, inicioDoMes } from '@/lib/gasolina'
+import { calcularLitros, dataMaisAntigaPermitida, formatarMes, inicioDoMes, type RotaViagem } from '@/lib/gasolina'
 
 type Resultado =
     | { ok: true, colaboradorId: string, gestor: boolean }
@@ -136,6 +136,7 @@ export interface ViagemPreview {
     preco_litro: number | null
     valor: number | null
     veiculo: { modelo: string } | null
+    rota: RotaViagem | null
 }
 
 export interface PreviewSolicitacao {
@@ -147,7 +148,7 @@ export interface PreviewSolicitacao {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function montarPreview(supabase: any, colaboradorId: string, centroId: string, projeto: string): Promise<PreviewSolicitacao> {
-    const campos = 'id, data_viagem, origem_local, destino_local, paradas, distancia_km, litros, preco_litro, valor, veiculo:veiculo_id(modelo)'
+    const campos = 'id, data_viagem, origem_local, destino_local, paradas, distancia_km, litros, preco_litro, valor, rota, veiculo:veiculo_id(modelo)'
     const buscar = async (): Promise<ViagemPreview[]> => {
         const { data, error } = await supabase
             .from('gasolina_viagens')

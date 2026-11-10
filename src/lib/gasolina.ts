@@ -159,11 +159,20 @@ export function viagemRecusada(v: Pick<GasolinaViagem, 'status' | 'solicitacao'>
 // Rota calculada pelo Google Maps ao salvar (fase 5). Os km que valem para o
 // reembolso são sempre os de distancia_km; a rota serve de conferência.
 export interface RotaViagem {
-    distancia_km: number
+    distancia_km: number        // rota escolhida pelo membro
     duracao_min: number
+    melhor_km?: number          // menor distância entre as opções do Google (rotas salvas antes de 10/11 não têm)
+    escolhida?: number
+    opcoes?: { distancia_km: number, duracao_min: number, descricao: string, polyline?: string }[]
     pontos: string[]
     ida_e_volta: boolean
     calculado_em: string
+}
+
+// "Melhor caminho": a menor distância que o Google encontrou para o trajeto.
+export function melhorCaminhoKm(rota: RotaViagem | null | undefined): number | null {
+    if (!rota) return null
+    return rota.melhor_km ?? rota.distancia_km
 }
 
 // Km informados bem diferentes da rota do Maps (mais de 15% e de 3 km).
