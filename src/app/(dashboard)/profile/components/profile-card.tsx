@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase"
 import { changePasswordLocal } from "@/lib/actions"
 import { toast } from "sonner"
 import { validarChavePix } from "@/lib/gasolina"
+import { ehHeic, prepararImagemParaEnvio } from "@/lib/heic"
 
 export function ProfileCard() {
     const { colaborador, loading: loadingColab, colaboradorId } = useColaborador()
@@ -53,17 +54,18 @@ export function ProfileCard() {
     const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         if (!file) return
-        if (!file.type.startsWith('image/')) {
+        if (!file.type.startsWith('image/') && !ehHeic(file)) {
             toast.error("Selecione um arquivo de imagem.")
             return
         }
 
-        const preview = URL.createObjectURL(file)
-        setFotoUrl(preview)
         setUploadingFoto(true)
         try {
-            const fileName = `${colaboradorId}_${Date.now()}_${file.name}`
-            const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file, { upsert: true })
+            // Fotos de iPhone (HEIC) viram JPEG para abrirem em qualquer navegador.
+            const arquivo = await prepararImagemParaEnvio(file)
+            setFotoUrl(URL.createObjectURL(arquivo))
+            const fileName = `${colaboradorId}_${Date.now()}_${arquivo.name}`
+            const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, arquivo, { upsert: true })
             if (uploadError) throw uploadError
 
             const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)

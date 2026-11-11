@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatarNumero, type GasolinaVeiculo } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 import { VerArquivo } from "@/components/ver-arquivo"
+import { FotoSegura } from "@/components/foto-segura"
 
 type VeiculoGestao = GasolinaVeiculo & {
     colaborador?: { nome: string } | null
@@ -180,8 +181,7 @@ export function GestaoCarros() {
                                     <TableCell>
                                         {v.foto_painel_url ? (
                                             <VerArquivo url={v.foto_painel_url} titulo="Foto do painel">
-                                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                <img src={v.foto_painel_url} alt="Painel" className="h-12 w-16 rounded object-cover bg-slate-100" />
+                                                <FotoSegura src={v.foto_painel_url} alt="Painel" className="h-12 w-16 rounded object-cover bg-slate-100" />
                                             </VerArquivo>
                                         ) : (
                                             <span className="text-xs text-slate-500">Sem foto (planilha)</span>

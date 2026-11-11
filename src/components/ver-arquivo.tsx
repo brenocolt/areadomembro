@@ -4,6 +4,7 @@ import { useState, type MouseEvent, type ReactNode } from "react"
 import { Download, FileWarning } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { FotoSegura } from "@/components/foto-segura"
 
 type TipoArquivo = "imagem" | "pdf" | "desconhecido"
 
@@ -66,12 +67,11 @@ export function VerArquivo({
                         {tipo === "pdf" ? (
                             <iframe src={url} title={titulo} className="w-full h-[75vh] bg-white" />
                         ) : !falhou ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <FotoSegura
                                 src={url}
                                 alt={titulo}
                                 className="max-h-[75vh] w-auto max-w-full object-contain"
-                                onError={() => setFalhou(true)}
+                                onFalha={() => setFalhou(true)}
                             />
                         ) : (
                             <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-slate-500">
