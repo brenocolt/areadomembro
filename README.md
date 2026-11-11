@@ -150,6 +150,18 @@ invalida o carro de um membro em caso de tentativa de fraude, com motivo
 carro não serve para novas viagens, as pendentes feitas com ele ficam fora
 das solicitações e não podem ser editadas; o membro vê o motivo.
 
+### Avisos ao membro a cada status (e-mail + WhatsApp)
+
+A cada mudança de status de uma solicitação (Solicitado, Aprovado, Lançado,
+Pago, Recusado — inclusive recusa manual no Monday), o app monta as mensagens
+(`src/lib/gasolina-avisos.ts`) e faz POST na URL `GASOLINA_AVISOS_WEBHOOK_URL`
+(padrão: `https://n8n.produtivajunior.com.br/webhook/avisos-reembolso-gasolina`,
+gatilho "Aviso do app" da automação "AUTOMAÇÃO PAGAMENTO VP"; `-` desliga), com
+`Authorization: Bearer GASOLINA_INTEGRACAO_TOKEN`. Corpo: `status`, `membro`
+(`nome`, `email`, `whatsapp` com 55), `assunto_email`, `mensagem_email` (HTML) e
+`mensagem_whatsapp`. O WhatsApp usa o
+telefone do cadastro do membro.
+
 ### Importação da planilha antiga (uma vez)
 
 Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da

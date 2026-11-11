@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { exigirMembroGasolina, montarPreview } from '@/lib/gasolina-server'
 import { criarCardReembolso } from '@/lib/gasolina-monday'
+import { avisarMembro } from '@/lib/gasolina-avisos'
 
 const CAMPOS = '*, centro:centro_custo_id(nome), viagens:gasolina_viagens(id, data_viagem, origem_local, destino_local, distancia_km, litros, valor, status)'
 
@@ -115,6 +116,8 @@ export async function POST(req: NextRequest) {
         .update({ monday_item_id: itemId, atualizado_em: new Date().toISOString() })
         .eq('id', solicitacao.id)
     if (erroItem) console.error(`[gasolina] Card ${itemId} criado, mas falhou ao gravar na solicitação ${solicitacao.id}:`, erroItem)
+
+    await avisarMembro(supabase, solicitacao.id, 'Solicitado')
 
     return NextResponse.json({ solicitacao_id: solicitacao.id, monday_item_id: itemId, valor_total: preview.valor_total })
 }
