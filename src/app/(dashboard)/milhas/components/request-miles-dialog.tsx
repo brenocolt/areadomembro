@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Plane, Star, Users, Megaphone, Share2, Medal, FileText, UserPlus, ThumbsUp, Award, Loader2, PlusCircle, Upload } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
+import { prepararImagemParaEnvio } from "@/lib/heic"
 
 const ACTIVITY_GROUPS = [
     {
@@ -65,11 +66,13 @@ export function RequestMilesDialog() {
             let comprovante_url = null;
 
             // Upload the file to Supabase storage
-            const fileExt = file.name.split('.').pop()
+            // Fotos de iPhone (HEIC) viram JPEG para abrirem em qualquer navegador.
+            const arquivo = await prepararImagemParaEnvio(file)
+            const fileExt = arquivo.name.split('.').pop()
             const fileName = `${colaboradorId}-${Date.now()}.${fileExt}`
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from('comprovantes')
-                .upload(fileName, file)
+                .upload(fileName, arquivo)
 
             if (uploadError) throw uploadError;
 

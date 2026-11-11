@@ -12,6 +12,7 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
 import { VerArquivo } from "@/components/ver-arquivo"
+import { prepararImagemParaEnvio } from "@/lib/heic"
 
 const ICON_MAP: Record<string, any> = { 'coffee': Coffee, 'car': Car, 'graduation-cap': GraduationCap, 'shopping-bag': ShoppingBag }
 const VALOR_MAXIMO_SAQUE = 300
@@ -240,9 +241,18 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
                                 className="hidden"
                                 disabled={uploadingFile}
                                 onChange={async (e) => {
-                                    const file = e.target.files?.[0]
-                                    if (!file) return
+                                    const original = e.target.files?.[0]
+                                    if (!original) return
                                     setUploadingFile(true)
+                                    // Fotos de iPhone (HEIC) viram JPEG para abrirem em qualquer navegador.
+                                    let file: File
+                                    try {
+                                        file = await prepararImagemParaEnvio(original)
+                                    } catch {
+                                        setMsg({ text: 'Não foi possível ler essa foto. Tente enviar em JPG ou PNG.', type: 'error' })
+                                        setUploadingFile(false)
+                                        return
+                                    }
                                     const ext = file.name.split('.').pop()
                                     const path = `comprovantes/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
                                     const { error } = await supabase.storage.from('pdi-anexos').upload(path, file)

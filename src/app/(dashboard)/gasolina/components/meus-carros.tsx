@@ -14,6 +14,8 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { COMBUSTIVEIS, formatarNumero, type GasolinaVeiculo } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
 import { VerArquivo } from "@/components/ver-arquivo"
+import { FotoSegura } from "@/components/foto-segura"
+import { ehHeic, prepararImagemParaEnvio } from "@/lib/heic"
 
 export function MeusCarros() {
     const [veiculos, setVeiculos] = useState<GasolinaVeiculo[]>([])
@@ -86,8 +88,7 @@ export function MeusCarros() {
                                 )}
                                 {v.foto_painel_url ? (
                                     <VerArquivo url={v.foto_painel_url} titulo="Foto do painel" className="block w-full">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={v.foto_painel_url} alt={`Painel do ${v.modelo}`} className="h-36 w-full object-cover bg-slate-100" />
+                                        <FotoSegura src={v.foto_painel_url} alt={`Painel do ${v.modelo}`} className="h-36 w-full object-cover bg-slate-100" />
                                     </VerArquivo>
                                 ) : (
                                     <div className="flex h-36 w-full items-center justify-center bg-slate-100 dark:bg-white/5 px-4 text-center text-xs text-slate-500">
@@ -147,15 +148,17 @@ function NovoCarroDialog({ onCriado }: { onCriado: (v: GasolinaVeiculo) => void 
 
     async function salvar() {
         if (!foto) { toast.error("Anexe a foto do painel mostrando a autonomia."); return }
-        if (!foto.type.startsWith("image/")) { toast.error("A foto precisa ser uma imagem."); return }
+        if (!foto.type.startsWith("image/") && !ehHeic(foto)) { toast.error("A foto precisa ser uma imagem."); return }
         if (foto.size > 10 * 1024 * 1024) { toast.error("A foto pode ter no máximo 10 MB."); return }
 
         setSalvando(true)
         try {
             // Upload direto ao bucket público, mesmo padrão do comprovante de milhas.
-            const ext = foto.name.split(".").pop() || "jpg"
+            // Fotos de iPhone (HEIC) viram JPEG para abrirem em qualquer navegador.
+            const arquivo = await prepararImagemParaEnvio(foto)
+            const ext = arquivo.name.split(".").pop() || "jpg"
             const caminho = `${colaboradorId}/${Date.now()}.${ext}`
-            const { error: uploadError } = await supabase.storage.from("gasolina-paineis").upload(caminho, foto)
+            const { error: uploadError } = await supabase.storage.from("gasolina-paineis").upload(caminho, arquivo)
             if (uploadError) throw new Error("Erro ao enviar a foto: " + uploadError.message)
             const { data: url } = supabase.storage.from("gasolina-paineis").getPublicUrl(caminho)
 

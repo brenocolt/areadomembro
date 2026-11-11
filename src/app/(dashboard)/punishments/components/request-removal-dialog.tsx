@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { ShieldCheck, Upload, Loader2, Star, Users, Handshake, Flame, Building2, Briefcase, ThumbsUp, HeartHandshake, FileText, CalendarCheck, HandshakeIcon, PenTool, LineChart, Award, Sparkles } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
+import { prepararImagemParaEnvio } from "@/lib/heic"
 
 const ICON_MAP: Record<string, any> = {
     'Curso com certificado': Star,
@@ -127,11 +128,13 @@ export function RequestRemovalDialog() {
             let comprovante_url = null;
 
             // Upload the file to Supabase storage
-            const fileExt = file.name.split('.').pop()
+            // Fotos de iPhone (HEIC) viram JPEG para abrirem em qualquer navegador.
+            const arquivo = await prepararImagemParaEnvio(file)
+            const fileExt = arquivo.name.split('.').pop()
             const fileName = `remocao-${colaboradorId}-${Date.now()}.${fileExt}`
             const { data: uploadData, error: uploadError } = await supabase.storage
                 .from('comprovantes')
-                .upload(fileName, file)
+                .upload(fileName, arquivo)
 
             if (uploadError) throw uploadError;
 
