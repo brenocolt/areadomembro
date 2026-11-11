@@ -1,8 +1,8 @@
 // Avisos ao membro (e-mail + WhatsApp) a cada mudança de status de uma
 // solicitação de reembolso de gasolina. O app monta as mensagens e "toca" um
-// webhook do n8n (automação "AVISOS REEMBOLSO GASOLINA"), que envia pelo
-// Gmail e pelo Evolution. Sem GASOLINA_AVISOS_WEBHOOK_URL configurada, nada
-// é enviado (e nada quebra).
+// webhook do n8n (gatilho "Aviso do app" na automação "AUTOMAÇÃO PAGAMENTO
+// VP"), que envia pelo Gmail e pelo Evolution. A URL pode ser trocada por
+// GASOLINA_AVISOS_WEBHOOK_URL; com ela vazia ("-"), nada é enviado.
 import { formatarReais } from './gasolina'
 
 export type StatusAviso = 'Solicitado' | 'Aprovado' | 'Lançado' | 'Pago' | 'Recusado'
@@ -25,6 +25,9 @@ export interface DadosAviso {
     mensagem_email: string      // HTML
     mensagem_whatsapp: string
 }
+
+// Mesmo n8n do saque PIPJ (src/app/api/pipj/saque/route.ts).
+const URL_PADRAO = 'https://n8n.produtivajunior.com.br/webhook/avisos-reembolso-gasolina'
 
 const ACOMPANHE = 'Acompanhe na Área do Membro → Reembolso de Gasolina → aba Solicitações.'
 
@@ -104,8 +107,8 @@ export async function dadosDoAviso(supabase: any, solicitacaoId: string, status:
 // impedir a mudança de status (só fica registrado no log do servidor).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function avisarMembro(supabase: any, solicitacaoId: string, status: StatusAviso): Promise<void> {
-    const url = process.env.GASOLINA_AVISOS_WEBHOOK_URL
-    if (!url) return
+    const url = process.env.GASOLINA_AVISOS_WEBHOOK_URL || URL_PADRAO
+    if (url === '-') return
     try {
         const aviso = await dadosDoAviso(supabase, solicitacaoId, status)
         if (!aviso) return
