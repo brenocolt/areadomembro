@@ -19,16 +19,19 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Apenas a Vice Presidência pode ver as viagens de todos.' }, { status: 403 })
     }
 
-    let query = supabase
-        .from('gasolina_viagens')
-        .select(todos ? `${CAMPOS}, colaborador:colaborador_id(nome)` : CAMPOS)
-        .order('data_viagem', { ascending: false })
-        .order('criado_em', { ascending: false })
-        .limit(2000)
+    // O Supabase devolve no máximo 1.000 linhas por consulta: busca em páginas
+    // (até 10.000 viagens) para a Visão geral não cortar o total.
+    const POR_PAGINA = 1000
+    const montar = (de: number) => {
+        let query = supabase
+            .from('gasolina_viagens')
+            .select(todos ? `${CAMPOS}, colaborador:colaborador_id(nome)` : CAMPOS)
+            .order('data_viagem', { ascending: false })
+            .order('criado_em', { ascending: false })
+            .order('id', { ascending: true })
+            .range(de, de + POR_PAGINA - 1)
 
-    if (!todos) {
-        query = query.eq('colaborador_id', acesso.colaboradorId)
-    } else {
+        if (!todos) return query.eq('colaborador_id', acesso.colaboradorId)
         const colaborador = params.get('colaborador')
         const status = params.get('status')
         const mes = params.get('mes')
@@ -38,11 +41,17 @@ export async function GET(req: NextRequest) {
             const [a, m] = mes.split('-').map(Number)
             query = query.gte('data_viagem', `${mes}-01`).lte('data_viagem', new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10))
         }
+        return query
     }
 
-    const { data, error } = await query
-    if (error) return NextResponse.json({ error: 'Erro ao buscar as viagens.' }, { status: 500 })
-    return NextResponse.json({ viagens: data ?? [] })
+    const viagens: unknown[] = []
+    for (let de = 0; de < 10 * POR_PAGINA; de += POR_PAGINA) {
+        const { data, error } = await montar(de)
+        if (error) return NextResponse.json({ error: 'Erro ao buscar as viagens.' }, { status: 500 })
+        viagens.push(...(data ?? []))
+        if (!data || data.length < POR_PAGINA) break
+    }
+    return NextResponse.json({ viagens })
 }
 
 // POST: membro lança uma viagem. Litros e valor são calculados aqui (nunca

@@ -22,6 +22,8 @@ export default function GasolinaPage() {
     const gestor = podeGerirGasolina(colaborador, role)
     // Recarrega a aba Solicitações quando um pedido sai da aba Viagens.
     const [versaoSolicitacoes, setVersaoSolicitacoes] = useState(0)
+    // Visão geral (VP): uma lista por vez — solicitações ou viagens.
+    const [listaVisaoGeral, setListaVisaoGeral] = useState<"solicitacoes" | "viagens">("solicitacoes")
 
     return (
         <div className="space-y-6">
@@ -63,9 +65,21 @@ export default function GasolinaPage() {
                 {gestor && (
                     <>
                         <TabsContent value="visao-geral" className="border-none p-0 outline-none">
-                            <div className="space-y-6">
-                                <Solicitacoes todos versao={versaoSolicitacoes} />
-                                <VisaoGeral />
+                            <div className="space-y-4">
+                                <div role="tablist" aria-label="O que ver na visão geral" className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800/50 p-1">
+                                    {([["solicitacoes", "Solicitações"], ["viagens", "Viagens"]] as const).map(([valor, rotulo]) => (
+                                        <button key={valor} type="button" role="tab" aria-selected={listaVisaoGeral === valor}
+                                            onClick={() => setListaVisaoGeral(valor)}
+                                            className={`rounded-md px-4 py-1.5 text-sm font-semibold transition-colors ${listaVisaoGeral === valor
+                                                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
+                                                : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}>
+                                            {rotulo}
+                                        </button>
+                                    ))}
+                                </div>
+                                {listaVisaoGeral === "solicitacoes"
+                                    ? <Solicitacoes todos versao={versaoSolicitacoes} />
+                                    : <VisaoGeral />}
                             </div>
                         </TabsContent>
                         <TabsContent value="precos" className="border-none p-0 outline-none">
