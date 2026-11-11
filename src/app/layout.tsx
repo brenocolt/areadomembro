@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { AbrirCalendarioAoClicar } from "@/components/abrir-calendario";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,6 +35,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <AbrirCalendarioAoClicar />
           <Toaster richColors position="top-center" />
         </ThemeProvider>
       </body>
