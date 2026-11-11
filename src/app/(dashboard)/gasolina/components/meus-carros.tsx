@@ -13,6 +13,7 @@ import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 import { COMBUSTIVEIS, formatarNumero, type GasolinaVeiculo } from "@/lib/gasolina"
 import { gasolinaApi } from "./api"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 export function MeusCarros() {
     const [veiculos, setVeiculos] = useState<GasolinaVeiculo[]>([])
@@ -84,10 +85,10 @@ export function MeusCarros() {
                                     </div>
                                 )}
                                 {v.foto_painel_url ? (
-                                    <a href={v.foto_painel_url} target="_blank" rel="noreferrer" title="Ver foto do painel">
+                                    <VerArquivo url={v.foto_painel_url} titulo="Foto do painel" className="block w-full">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img src={v.foto_painel_url} alt={`Painel do ${v.modelo}`} className="h-36 w-full object-cover bg-slate-100" />
-                                    </a>
+                                    </VerArquivo>
                                 ) : (
                                     <div className="flex h-36 w-full items-center justify-center bg-slate-100 dark:bg-white/5 px-4 text-center text-xs text-slate-500">
                                         Sem foto do painel — carro importado da planilha

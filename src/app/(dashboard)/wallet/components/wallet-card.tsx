@@ -11,6 +11,7 @@ import { ShoppingBag, Coffee, Car, GraduationCap, Lock, ArrowUpRight, Loader2, P
 import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 const ICON_MAP: Record<string, any> = { 'coffee': Coffee, 'car': Car, 'graduation-cap': GraduationCap, 'shopping-bag': ShoppingBag }
 const VALOR_MAXIMO_SAQUE = 300
@@ -256,7 +257,7 @@ function SaqueForm({ saldo, colaboradorId, onClose }: { saldo: number; colaborad
                             />
                         </label>
                         {form.comprovante_url && (
-                            <a href={form.comprovante_url} target="_blank" rel="noreferrer" className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline shrink-0">Ver</a>
+                            <VerArquivo url={form.comprovante_url} titulo="Comprovante" className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline shrink-0">Ver</VerArquivo>
                         )}
                     </div>
                 </div>

@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { useColaborador } from "@/hooks/use-supabase"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { RequestRemovalDialog } from "./request-removal-dialog"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 export function RemovalRequestsHistory() {
     const { colaboradorId } = useColaborador()
@@ -81,9 +82,9 @@ export function RemovalRequestsHistory() {
                                         {new Date(req.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                                     </p>
                                     {req.comprovante_url && (
-                                        <a href={req.comprovante_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:text-blue-600 hover:underline mt-1 inline-block">
+                                        <VerArquivo url={req.comprovante_url} titulo="Comprovante" className="text-[10px] text-blue-500 hover:text-blue-600 hover:underline mt-1 inline-block">
                                             Ver Comprovante
-                                        </a>
+                                        </VerArquivo>
                                     )}
                                 </div>
                             </div>

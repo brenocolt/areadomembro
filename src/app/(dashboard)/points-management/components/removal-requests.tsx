@@ -8,6 +8,7 @@ import { CARGO_FANTASMA } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 export function RemovalRequests() {
     const [viewMode, setViewMode] = useState<"list" | "kanban">("list")
@@ -201,9 +202,9 @@ export function RemovalRequests() {
                                             {req.reason}
                                         </p>
                                         {req.comprovante_url && (
-                                            <a href={req.comprovante_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-1 inline-block">
+                                            <VerArquivo url={req.comprovante_url} titulo="Comprovante" className="text-[10px] text-blue-500 hover:underline mt-1 inline-block">
                                                 Ver Comprovante
-                                            </a>
+                                            </VerArquivo>
                                         )}
                                     </div>
 
@@ -247,9 +248,9 @@ export function RemovalRequests() {
                                     </p>
                                     <p className="text-xs text-slate-600 dark:text-slate-400 italic">&quot;{req.reason}&quot;</p>
                                     {req.comprovante_url && (
-                                        <a href={req.comprovante_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-2 inline-block">
+                                        <VerArquivo url={req.comprovante_url} titulo="Comprovante" className="text-[10px] text-blue-500 hover:underline mt-2 inline-block">
                                             Ver Comprovante
-                                        </a>
+                                        </VerArquivo>
                                     )}
                                 </div>
 

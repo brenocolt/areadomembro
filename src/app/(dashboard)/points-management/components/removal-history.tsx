@@ -7,6 +7,7 @@ import { CARGO_FANTASMA } from "@/lib/cargos"
 import { NUCLEOS } from "@/lib/nucleos"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 export function RemovalHistory() {
     const [history, setHistory] = useState<any[]>([])
@@ -116,9 +117,9 @@ export function RemovalHistory() {
                                     <div className="flex gap-4 items-center">
                                         <span className="text-[10px] font-mono text-slate-400 mt-2 block">{item.date}</span>
                                         {item.comprovante_url && (
-                                            <a href={item.comprovante_url} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline mt-2 inline-block">
+                                            <VerArquivo url={item.comprovante_url} titulo="Comprovante" className="text-[10px] text-blue-500 hover:underline mt-2 inline-block">
                                                 Ver Comprovante
-                                            </a>
+                                            </VerArquivo>
                                         )}
                                     </div>
                                 </div>
