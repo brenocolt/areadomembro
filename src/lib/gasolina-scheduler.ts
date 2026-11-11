@@ -101,9 +101,9 @@ export function scheduleVencimentoGasolina() {
     agendado = true
 
     rodarSincronizacao()
-    // A cada 2 min: Lançado/Pago são movidos à mão no Monday e o membro
-    // acompanha pelo app. É uma consulta ao Monday por rodada (lotes de 50).
-    setInterval(rodarSincronizacao, 2 * 60 * 1000)
+    // A cada 1 min: Lançado/Pago são movidos à mão no Monday e o membro recebe
+    // o aviso quando o app percebe. É uma consulta ao Monday por rodada (lotes de 50).
+    setInterval(rodarSincronizacao, 60 * 1000)
 
     rodar()
     setTimeout(function agendarProximo() {

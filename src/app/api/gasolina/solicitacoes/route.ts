@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
         .eq('id', solicitacao.id)
     if (erroItem) console.error(`[gasolina] Card ${itemId} criado, mas falhou ao gravar na solicitação ${solicitacao.id}:`, erroItem)
 
-    await avisarMembro(supabase, solicitacao.id, 'Solicitado')
+    void avisarMembro(supabase, solicitacao.id, 'Solicitado')   // sem esperar o envio
 
     return NextResponse.json({ solicitacao_id: solicitacao.id, monday_item_id: itemId, valor_total: preview.valor_total })
 }
