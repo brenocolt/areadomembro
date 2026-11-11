@@ -54,7 +54,8 @@ async function rodar() {
 // Acompanha no app o kanban do Monday (Aprovado -> Lançado -> Pago, ou
 // Recusado) das solicitações em aberto.
 // filtro.colaboradorId: só as solicitações daquele membro (botão "Atualizar").
-export async function sincronizarSolicitacoes(filtro: { colaboradorId?: string } = {}): Promise<number> {
+// filtro.mondayItemId: só o card que o Monday avisou que mudou (webhook).
+export async function sincronizarSolicitacoes(filtro: { colaboradorId?: string, mondayItemId?: string } = {}): Promise<number> {
     if (!MONDAY_PAGAMENTOS_API_TOKEN) return 0
     const supabase = createServerSupabaseClient()
     let query = supabase
@@ -63,6 +64,7 @@ export async function sincronizarSolicitacoes(filtro: { colaboradorId?: string }
         .in('status', ['Solicitado', 'Aprovado', 'Lançado'])
         .not('monday_item_id', 'is', null)
     if (filtro.colaboradorId) query = query.eq('colaborador_id', filtro.colaboradorId)
+    if (filtro.mondayItemId) query = query.eq('monday_item_id', filtro.mondayItemId)
     const { data: abertas, error } = await query
     if (error) {
         if (isSchemaDesatualizado(error)) return 0
