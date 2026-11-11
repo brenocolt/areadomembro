@@ -20,6 +20,8 @@ export interface GasolinaVeiculo {
     // Invalidado pela VP (tentativa de fraude): não pode ser usado em viagens.
     invalidado_em?: string | null
     motivo_invalidacao?: string | null
+    // Aprovado pela VP (carro novo só pode ser usado depois disso).
+    aprovado_em?: string | null
 }
 
 export interface GasolinaPreco {

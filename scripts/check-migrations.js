@@ -48,6 +48,15 @@ const MIGRACOES = [
             ['gasolina_veiculos', 'motivo_invalidacao'],
         ],
     },
+    {
+        arquivo: 'supabase/migrations/20261112_gasolina_aprovar_carro.sql',
+        descricao: 'Reembolso de gasolina: VP aprova carro antes do uso',
+        tabelas: [],
+        colunas: [
+            ['gasolina_veiculos', 'aprovado_em'],
+            ['gasolina_veiculos', 'aprovado_por'],
+        ],
+    },
 ];
 
 async function main() {

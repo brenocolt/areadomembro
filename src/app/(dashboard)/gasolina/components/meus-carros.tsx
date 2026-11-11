@@ -70,6 +70,12 @@ export function MeusCarros() {
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {veiculos.map(v => (
                             <div key={v.id} className={`rounded-xl border overflow-hidden ${v.invalidado_em ? "border-red-300 dark:border-red-500/40 opacity-90" : "border-slate-200 dark:border-white/10"}`}>
+                                {!v.invalidado_em && !v.aprovado_em && (
+                                    <div className="bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                                        <p className="font-semibold">Aguardando aprovação da VP</p>
+                                        <p className="text-xs mt-1">A VP vai conferir a foto do painel e a autonomia. Depois de aprovado, o carro aparece para lançar viagens.</p>
+                                    </div>
+                                )}
                                 {v.invalidado_em && (
                                     <div className="bg-red-50 dark:bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
                                         <p className="font-semibold">Carro invalidado pela VP</p>

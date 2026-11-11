@@ -169,6 +169,11 @@ O app responde o desafio do Monday, lê o status de novo na API (o corpo só diz
 qual card mudou) e avisa o membro na hora. A sincronização a cada minuto fica de
 reserva.
 
+Aprovação de carro (migração `20261112_gasolina_aprovar_carro.sql`): carro
+novo fica "Aguardando aprovação" e não serve para lançar viagens até a VP
+aprovar em "Carros dos membros" (`POST /api/gasolina/veiculos/[id]/aprovar`).
+Os carros que já existiam quando a migração rodou entram aprovados.
+
 ### Importação da planilha antiga (uma vez)
 
 Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da

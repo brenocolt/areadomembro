@@ -32,6 +32,14 @@ interface ResumoProjeto {
     litrosPendentes: number
     aguardandoPreco: number
     litrosTotal: number
+    idsPendentes: string[]
+}
+
+// Cards de projeto que o membro escondeu (só neste navegador). Guarda as viagens
+// pendentes que existiam ao esconder: se aparecer outra, o card volta sozinho.
+const CHAVE_PROJETOS_OCULTOS = "gasolina:projetos-ocultos"
+function lerProjetosOcultos(): Record<string, string[]> {
+    try { return JSON.parse(localStorage.getItem(CHAVE_PROJETOS_OCULTOS) ?? "{}") } catch { return {} }
 }
 
 export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
@@ -44,6 +52,17 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     const [excluindo, setExcluindo] = useState<string | null>(null)
     const [solicitando, setSolicitando] = useState<{ centroId: string, centroNome: string, projeto: string } | null>(null)
     const [retomando, setRetomando] = useState<string | null>(null)
+    const [projetosOcultos, setProjetosOcultos] = useState<Record<string, string[]>>(() => (typeof window === "undefined" ? {} : lerProjetosOcultos()))
+    const chaveProjeto = (r: ResumoProjeto) => `${r.centroId}|${r.projeto}`
+    const estaOculto = (r: ResumoProjeto) => {
+        const guardadas = projetosOcultos[chaveProjeto(r)]
+        return !!guardadas && r.idsPendentes.every(id => guardadas.includes(id))
+    }
+    function salvarOcultos(novos: Record<string, string[]>) {
+        setProjetosOcultos(novos)
+        try { localStorage.setItem(CHAVE_PROJETOS_OCULTOS, JSON.stringify(novos)) } catch { /* sem armazenamento: vale até recarregar */ }
+    }
+    const ocultarProjeto = (r: ResumoProjeto) => salvarOcultos({ ...projetosOcultos, [chaveProjeto(r)]: r.idsPendentes })
     const [avisosOcultos, setAvisosOcultos] = useState<string[]>(() => (typeof window === "undefined" ? [] : lerAvisosOcultos()))
 
     function fecharAviso(id: string) {
@@ -76,9 +95,10 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
         const mapa = new Map<string, ResumoProjeto>()
         for (const v of viagens) {
             const chave = `${v.centro_custo_id}|${v.projeto}`
-            const r = mapa.get(chave) ?? { centroId: v.centro_custo_id ?? "", projeto: v.projeto, centro: v.centro?.nome ?? "", valorPendente: 0, litrosPendentes: 0, aguardandoPreco: 0, litrosTotal: 0 }
+            const r = mapa.get(chave) ?? { centroId: v.centro_custo_id ?? "", projeto: v.projeto, centro: v.centro?.nome ?? "", valorPendente: 0, litrosPendentes: 0, aguardandoPreco: 0, litrosTotal: 0, idsPendentes: [] }
             r.litrosTotal += Number(v.litros ?? 0)
             if (v.status === "Pendente") {
+                r.idsPendentes.push(v.id)
                 r.litrosPendentes += Number(v.litros ?? 0)
                 if (v.valor == null) r.aguardandoPreco++
                 else r.valorPendente += Number(v.valor)
@@ -90,7 +110,7 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
 
     const totalPendente = resumo.reduce((s, r) => s + r.valorPendente, 0)
     // Carros invalidados pela VP não aparecem para escolha.
-    const veiculosAtivos = useMemo(() => veiculos.filter(v => v.ativo), [veiculos])
+    const veiculosAtivos = useMemo(() => veiculos.filter(v => v.ativo && v.aprovado_em), [veiculos])
 
     // Solicitações recusadas com viagens ainda não retomadas.
     const recusadas = useMemo(() => {
@@ -122,7 +142,9 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
 
     function abrirNova() {
         if (veiculosAtivos.length === 0) {
-            toast.error('Cadastre um carro na aba "Meus carros e Pix" antes de lançar viagens.')
+            toast.error(veiculos.some(v => v.ativo && !v.aprovado_em)
+                ? "Seu carro ainda está aguardando a aprovação da VP. Assim que for aprovado, você poderá lançar viagens."
+                : 'Cadastre um carro na aba "Meus carros e Pix" antes de lançar viagens.')
             return
         }
         setEditando(null)
@@ -187,9 +209,13 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
                                 {formatarReais(totalPendente)} <span className="text-sm font-normal text-slate-500">pendentes no total</span>
                             </p>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                {resumo.map(r => (
-                                    <div key={`${r.centro}|${r.projeto}`} className="rounded-xl border border-slate-200 dark:border-white/10 p-4 space-y-1">
-                                        <p className="font-semibold text-slate-900 dark:text-white">{r.projeto}</p>
+                                {resumo.filter(r => !estaOculto(r)).map(r => (
+                                    <div key={`${r.centro}|${r.projeto}`} className="relative rounded-xl border border-slate-200 dark:border-white/10 p-4 space-y-1">
+                                        <button type="button" onClick={() => ocultarProjeto(r)} title="Excluir card" aria-label={`Excluir card do projeto ${r.projeto}`}
+                                            className="absolute right-2 top-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/10 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                        <p className="font-semibold text-slate-900 dark:text-white pr-6">{r.projeto}</p>
                                         <p className="text-xs text-slate-500">{r.centro}</p>
                                         <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatarReais(r.valorPendente)}</p>
                                         <p className="text-xs text-slate-500">
@@ -209,6 +235,11 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
                                     </div>
                                 ))}
                             </div>
+                            {resumo.some(estaOculto) && (
+                                <button type="button" onClick={() => salvarOcultos({})} className="text-xs text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300">
+                                    Mostrar {resumo.filter(estaOculto).length} card(s) excluído(s)
+                                </button>
+                            )}
                         </div>
                     )}
                 </CardContent>

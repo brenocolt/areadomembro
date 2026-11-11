@@ -52,8 +52,9 @@ export async function lerViagem(supabase: any, colaboradorId: string, body: Reco
     if (data < maisAntiga) return erro(`O prazo para reembolso é de 2 meses — só dá para lançar viagens a partir de ${formatarData(maisAntiga)}.`)
 
     const { data: veiculo } = await supabase.from('gasolina_veiculos')
-        .select('id, autonomia_km_l').eq('id', veiculoId).eq('colaborador_id', colaboradorId).eq('ativo', true).maybeSingle()
+        .select('id, autonomia_km_l, aprovado_em').eq('id', veiculoId).eq('colaborador_id', colaboradorId).eq('ativo', true).maybeSingle()
     if (!veiculo) return erro('Carro não encontrado. Cadastre o carro na aba "Meus carros e Pix".')
+    if (!veiculo.aprovado_em) return erro('Este carro ainda está aguardando a aprovação da VP. Assim que for aprovado, você poderá lançar viagens com ele.')
 
     const { data: centro } = await supabase.from('gasolina_centros_custo')
         .select('id, tipo, rotulo_fixo, monday_coluna_projeto, ativo').eq('id', centroId).maybeSingle()

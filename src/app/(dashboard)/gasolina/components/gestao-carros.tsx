@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Ban, Loader2, Pencil, RotateCcw, Save, X } from "lucide-react"
+import { Ban, CheckCircle2, Loader2, Pencil, RotateCcw, Save, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -50,11 +50,36 @@ function SituacaoCarro({ v, onMudou }: { v: VeiculoGestao, onMudou: () => void }
             </div>
         )
     }
+    async function aprovar() {
+        setEnviando(true)
+        try {
+            await gasolinaApi(`/api/gasolina/veiculos/${v.id}/aprovar`, { method: "POST" })
+            toast.success("Carro aprovado. O membro já pode lançar viagens com ele.")
+            onMudou()
+        } catch (e) {
+            toast.error((e as Error).message)
+        } finally {
+            setEnviando(false)
+        }
+    }
+
     if (!aberto) {
         return (
-            <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700" onClick={() => setAberto(true)}>
-                <Ban className="h-3.5 w-3.5" /> Invalidar
-            </Button>
+            <div className="space-y-1">
+                {!v.aprovado_em && (
+                    <>
+                        <span className="inline-block rounded-full bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 px-2 py-0.5 text-xs font-semibold">Aguardando aprovação</span>
+                        <div>
+                            <Button size="sm" className="h-7 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={aprovar} disabled={enviando}>
+                                {enviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Aprovar
+                            </Button>
+                        </div>
+                    </>
+                )}
+                <Button size="sm" variant="ghost" className="h-7 text-red-600 hover:text-red-700" onClick={() => setAberto(true)}>
+                    <Ban className="h-3.5 w-3.5" /> Invalidar
+                </Button>
+            </div>
         )
     }
     return (
@@ -96,7 +121,9 @@ export function GestaoCarros() {
 
     const filtrados = useMemo(() => {
         const termo = busca.trim().toLowerCase()
-        const lista = [...veiculos].sort((a, b) => (a.colaborador?.nome ?? "").localeCompare(b.colaborador?.nome ?? ""))
+        // Os que aguardam aprovação aparecem primeiro.
+        const pendente = (v: VeiculoGestao) => (!v.aprovado_em && !v.invalidado_em ? 0 : 1)
+        const lista = [...veiculos].sort((a, b) => pendente(a) - pendente(b) || (a.colaborador?.nome ?? "").localeCompare(b.colaborador?.nome ?? ""))
         if (!termo) return lista
         return lista.filter(v => `${v.colaborador?.nome ?? ""} ${v.modelo}`.toLowerCase().includes(termo))
     }, [veiculos, busca])
@@ -121,7 +148,7 @@ export function GestaoCarros() {
                 <CardTitle className="text-lg">Carros dos membros</CardTitle>
                 <CardDescription>
                     Confira a foto do painel e corrija a autonomia se ela não bater. A correção vale para as viagens ainda pendentes.
-                    Em caso de tentativa de fraude, invalide o carro: ele deixa de poder ser usado e o membro vê o motivo.
+                    Carro novo só pode ser usado depois que a VP aprovar. Em caso de tentativa de fraude, invalide o carro: ele deixa de poder ser usado e o membro vê o motivo.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
