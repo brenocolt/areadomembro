@@ -20,6 +20,18 @@ interface ViagemPreview {
     motivo?: string
 }
 
+// Por que nenhuma viagem pode ser solicitada agora (pelo motivo de cada uma que ficou de fora).
+function avisoSemViagens(excluidas: ViagemPreview[]): string {
+    const motivos = new Set(excluidas.map(v => v.motivo ?? ""))
+    if (motivos.size === 1 && motivos.has("Carro invalidado pela VP")) {
+        return "As viagens deste projeto foram feitas com um carro invalidado pela VP e não podem ser solicitadas. Dúvidas: fale com a Vice-Presidência."
+    }
+    if ([...motivos].every(m => m.startsWith("Aguardando o preço"))) {
+        return "Ainda não há viagens deste projeto com o preço do mês definido. Assim que a VP lançar o preço, elas poderão ser solicitadas."
+    }
+    return "Nenhuma viagem deste projeto pode ser solicitada agora. Veja acima o motivo de cada uma."
+}
+
 interface Preview {
     incluidas: ViagemPreview[]
     excluidas: ViagemPreview[]
@@ -140,13 +152,13 @@ export function SolicitarDialog({ alvo, onOpenChange, onSolicitado }: Props) {
                         {preview.incluidas.length === 0 && (
                             <p className="flex items-start gap-2 text-sm text-slate-500">
                                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
-                                Ainda não há viagens deste projeto com o preço do mês definido. Assim que a VP lançar o preço, elas poderão ser solicitadas.
+                                {avisoSemViagens(preview.excluidas)}
                             </p>
                         )}
 
                         <p className="text-xs text-slate-500">
                             Ao confirmar, o pedido vai para o Processos de Pagamento (Monday) com o extrato das viagens. Se for recusado,
-                            as viagens voltam para pendentes e você vê o motivo na aba Solicitações.
+                            você vê o motivo e pode retomar as viagens para corrigir e pedir de novo.
                         </p>
                     </div>
                 )}

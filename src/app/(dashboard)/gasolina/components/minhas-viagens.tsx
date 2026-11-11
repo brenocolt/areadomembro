@@ -56,7 +56,8 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
     const chaveProjeto = (r: ResumoProjeto) => `${r.centroId}|${r.projeto}`
     const estaOculto = (r: ResumoProjeto) => {
         const guardadas = projetosOcultos[chaveProjeto(r)]
-        return !!guardadas && r.idsPendentes.every(id => guardadas.includes(id))
+        // Card com viagem pendente nunca fica escondido.
+        return !!guardadas && r.idsPendentes.length === 0
     }
     function salvarOcultos(novos: Record<string, string[]>) {
         setProjetosOcultos(novos)
@@ -211,10 +212,12 @@ export function MinhasViagens({ onSolicitado }: { onSolicitado?: () => void }) {
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                 {resumo.filter(r => !estaOculto(r)).map(r => (
                                     <div key={`${r.centro}|${r.projeto}`} className="relative rounded-xl border border-slate-200 dark:border-white/10 p-4 space-y-1">
-                                        <button type="button" onClick={() => ocultarProjeto(r)} title="Excluir card" aria-label={`Excluir card do projeto ${r.projeto}`}
-                                            className="absolute right-2 top-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/10 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
-                                            <X className="h-4 w-4" />
-                                        </button>
+                                        {r.idsPendentes.length === 0 && (
+                                            <button type="button" onClick={() => ocultarProjeto(r)} title="Excluir card" aria-label={`Excluir card do projeto ${r.projeto}`}
+                                                className="absolute right-2 top-2 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/10 dark:hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        )}
                                         <p className="font-semibold text-slate-900 dark:text-white pr-6">{r.projeto}</p>
                                         <p className="text-xs text-slate-500">{r.centro}</p>
                                         <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{formatarReais(r.valorPendente)}</p>
