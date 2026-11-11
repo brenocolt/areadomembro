@@ -86,7 +86,7 @@ export function Solicitacoes({ todos = false, versao = 0 }: { todos?: boolean, v
                     <CardTitle className="text-lg">{todos ? "Solicitações de todos os membros" : "Minhas solicitações"}</CardTitle>
                     <CardDescription className="mt-1">
                         O andamento acompanha o Processos de Pagamento: Solicitado → Aprovado → Lançado (pela terceirizada no banco) → Pago.
-                        Atualiza sozinho a cada 2 minutos.
+                        Atualiza sozinho a cada minuto.
                     </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={atualizar} disabled={atualizando} className="shrink-0">

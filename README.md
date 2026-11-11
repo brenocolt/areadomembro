@@ -162,6 +162,13 @@ gatilho "Aviso do app" da automação "AUTOMAÇÃO PAGAMENTO VP"; `-` desliga), 
 `mensagem_whatsapp`. O WhatsApp usa o
 telefone do cadastro do membro.
 
+Status instantâneo: no board Processos de Pagamento, uma integração do Monday
+"Quando o status mudar, enviar um webhook" (coluna de status do kanban) apontando
+para `https://areadomembro.produtivajunior.com.br/api/gasolina/integracao/monday-status`.
+O app responde o desafio do Monday, lê o status de novo na API (o corpo só diz
+qual card mudou) e avisa o membro na hora. A sincronização a cada minuto fica de
+reserva.
+
 ### Importação da planilha antiga (uma vez)
 
 Aba "Importar planilha" (só gestão da gasolina): escolher o .xlsx baixado da

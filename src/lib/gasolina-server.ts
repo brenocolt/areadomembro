@@ -214,8 +214,10 @@ export async function aplicarStatusSolicitacao(supabase: any, solicitacao: { id:
         await supabase.from('gasolina_viagens').update({ status: 'Reembolsado', atualizado_em: agora })
             .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
     }
-    // Avisa o membro (e-mail + WhatsApp, via n8n) a cada mudança de status.
-    await avisarMembro(supabase, solicitacao.id, novo)
+    // Avisa o membro (e-mail + WhatsApp, via n8n) a cada mudança de status, sem
+    // esperar o envio: quem chamou (n8n, sincronização) segue na hora.
+    // avisarMembro nunca lança erro (só registra no log).
+    void avisarMembro(supabase, solicitacao.id, novo)
     return true
 }
 
