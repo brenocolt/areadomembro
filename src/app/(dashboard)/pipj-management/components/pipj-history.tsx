@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 // ─── Category color palette (deterministic by name) ────────────────────────
 
@@ -554,9 +555,9 @@ export function SaquePendingRequestsList() {
                                                 </span>
                                             )}
                                             {s.comprovante_url && (
-                                                <a href={s.comprovante_url} target="_blank" rel="noopener noreferrer" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:underline">
+                                                <VerArquivo url={s.comprovante_url} titulo="Comprovante" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:underline">
                                                     📎 Comprovante
-                                                </a>
+                                                </VerArquivo>
                                             )}
                                             <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
                                                 📅 {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}
@@ -826,9 +827,9 @@ export function SaqueHistoryList() {
                                             </span>
                                         )}
                                         {s.comprovante_url && (
-                                            <a href={s.comprovante_url} target="_blank" rel="noopener noreferrer" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:underline">
+                                            <VerArquivo url={s.comprovante_url} titulo="Comprovante" className="bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2 py-1 rounded-lg hover:underline">
                                                 📎 Comprovante
-                                            </a>
+                                            </VerArquivo>
                                         )}
                                         <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg">
                                             📅 Solicitado em {s.data_solicitacao ? new Date(s.data_solicitacao).toLocaleDateString('pt-BR') : '—'}

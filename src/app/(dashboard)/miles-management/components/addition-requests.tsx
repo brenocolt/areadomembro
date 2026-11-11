@@ -6,6 +6,7 @@ import { Check, X, PlusCircle, LayoutGrid, List } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { VerArquivo } from "@/components/ver-arquivo"
 
 export function AdditionRequests() {
     const [viewMode, setViewMode] = useState<"list" | "kanban">("list")
@@ -194,9 +195,9 @@ export function AdditionRequests() {
                                             <p className="text-[10px] text-slate-500 line-clamp-1">{req.reason}</p>
                                         )}
                                         {req.comprovanteUrl && (
-                                            <a href={req.comprovanteUrl} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 w-fit flex items-center gap-1">
+                                            <VerArquivo url={req.comprovanteUrl} titulo="Comprovante" className="text-[10px] font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 w-fit flex items-center gap-1">
                                                 Visualizar Comprovante
-                                            </a>
+                                            </VerArquivo>
                                         )}
                                     </div>
 
@@ -254,9 +255,9 @@ export function AdditionRequests() {
                                         <p className="text-[10px] text-slate-500 line-clamp-2">{req.reason}</p>
                                     )}
                                     {req.comprovanteUrl && (
-                                        <a href={req.comprovanteUrl} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 w-fit mt-1 flex items-center gap-1">
+                                        <VerArquivo url={req.comprovanteUrl} titulo="Comprovante" className="text-[10px] font-bold text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 w-fit mt-1 flex items-center gap-1">
                                             Visualizar Comprovante
-                                        </a>
+                                        </VerArquivo>
                                     )}
                                 </div>
 
