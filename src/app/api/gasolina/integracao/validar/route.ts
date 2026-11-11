@@ -2,7 +2,8 @@ import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { aplicarStatusSolicitacao, type StatusSolicitacao } from '@/lib/gasolina-server'
-import { formatarReais, lerNumero } from '@/lib/gasolina'
+import { lerNumero } from '@/lib/gasolina'
+import { dadosDoAviso } from '@/lib/gasolina-avisos'
 
 // Chamado pela automação "AUTOMAÇÃO PAGAMENTO VP" (n8n) quando um card de
 // gasolina chega ao board Processos de Pagamento. Substitui a leitura da
@@ -27,29 +28,13 @@ function tokenValido(req: NextRequest): boolean {
 
 const esperar = (ms: number) => new Promise(r => setTimeout(r, ms))
 
-// Telefone do cadastro -> formato do Evolution (55 + DDD + número). null se não der.
-function numeroWhatsapp(telefone: unknown): string | null {
-    let n = String(telefone ?? '').replace(/\D/g, '')
-    if (n.length === 10 || n.length === 11) n = '55' + n
-    return n.length >= 12 && n.length <= 13 && n.startsWith('55') ? n : null
-}
+type Solicitacao = { id: string, status: StatusSolicitacao, valor_total: number, qtd_viagens: number, motivo_recusa: string | null }
 
-type Solicitacao = { id: string, status: StatusSolicitacao, valor_total: number, qtd_viagens: number, motivo_recusa: string | null, projeto: string, colaborador_id: string }
-
+// Contato e mensagem prontos para o n8n (o mesmo texto dos avisos automáticos).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function dadosDoAviso(supabase: any, s: Solicitacao, aprovado: boolean, motivo?: string) {
-    const { data: c } = await supabase.from('colaboradores')
-        .select('nome, email_corporativo, email_pessoal, telefone').eq('id', s.colaborador_id).maybeSingle()
-    const nome = (c?.nome ?? '').trim()
-    const primeiro = nome.split(' ')[0] || nome
-    const pedido = `📝 *Sua solicitação:*\n- Projeto: ${s.projeto}\n- Valor: ${formatarReais(Number(s.valor_total))}`
-    const mensagem = aprovado
-        ? `⛽ *Reembolso de gasolina aprovado* ✅\n\nOi *${primeiro}*!\n\n${pedido}\n\nAgora ela segue para o pagamento: primeiro é lançada no banco e depois o Pix cai na sua conta.\n\nAcompanhe na Área do Membro → Reembolso de Gasolina → aba Solicitações.\n\n— VP Produtiva ⛽`
-        : `⛽ *Reembolso de gasolina recusado* ❌\n\nOi *${primeiro}*!\n\n${pedido}\n\n❌ *Motivo:*\n${motivo || 'Não informado.'}\n\n💡 *O que fazer:*\nNa Área do Membro → Reembolso de Gasolina, as viagens aparecem como *Recusada*. Clique em *Retomar viagens*, corrija o que for preciso e solicite de novo.\n\nDúvidas? Fala com a gente!\n— VP Produtiva ⛽`
-    return {
-        membro: { nome, email: c?.email_corporativo || c?.email_pessoal || null, whatsapp: numeroWhatsapp(c?.telefone) },
-        mensagem_whatsapp: mensagem,
-    }
+async function contato(supabase: any, s: Solicitacao, status: 'Aprovado' | 'Recusado') {
+    const aviso = await dadosDoAviso(supabase, s.id, status)
+    return aviso ? { membro: aviso.membro, mensagem_whatsapp: aviso.mensagem_whatsapp } : {}
 }
 
 export async function POST(req: NextRequest) {
@@ -71,7 +56,7 @@ export async function POST(req: NextRequest) {
     for (let tentativa = 0; tentativa < 6 && !solicitacao; tentativa++) {
         if (tentativa) await esperar(1500)
         const { data } = await supabase.from('gasolina_solicitacoes')
-            .select('id, status, valor_total, qtd_viagens, motivo_recusa, projeto, colaborador_id')
+            .select('id, status, valor_total, qtd_viagens, motivo_recusa')
             .eq('monday_item_id', itemId)
             .maybeSingle()
         solicitacao = data
@@ -81,15 +66,15 @@ export async function POST(req: NextRequest) {
     // Já decidido antes (o n8n pode reprocessar): responde de forma estável.
     if (solicitacao.status === 'Recusado') {
         const motivo = solicitacao.motivo_recusa || 'Solicitação recusada.'
-        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await dadosDoAviso(supabase, solicitacao, false, motivo) })
+        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await contato(supabase, solicitacao, 'Recusado') })
     }
     if (solicitacao.status !== 'Solicitado') {
-        return NextResponse.json({ origem: 'app', aprovado: true, ...await dadosDoAviso(supabase, solicitacao, true) })
+        return NextResponse.json({ origem: 'app', aprovado: true, ...await contato(supabase, solicitacao, 'Aprovado') })
     }
 
     const recusar = async (motivo: string) => {
         await aplicarStatusSolicitacao(supabase, solicitacao!, 'Recusado', motivo)
-        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await dadosDoAviso(supabase, solicitacao!, false, motivo) })
+        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await contato(supabase, solicitacao!, 'Recusado') })
     }
 
     const { data: viagens } = await supabase.from('gasolina_viagens')
@@ -108,5 +93,5 @@ export async function POST(req: NextRequest) {
     // O n8n move o card para APROVADO logo em seguida; já reflete no app
     // para o membro não esperar a próxima sincronização (o sync só confirma).
     await aplicarStatusSolicitacao(supabase, solicitacao, 'Aprovado')
-    return NextResponse.json({ origem: 'app', aprovado: true, ...await dadosDoAviso(supabase, solicitacao, true) })
+    return NextResponse.json({ origem: 'app', aprovado: true, ...await contato(supabase, solicitacao, 'Aprovado') })
 }

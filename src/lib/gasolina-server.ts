@@ -4,6 +4,7 @@
 import { auth } from '@/auth'
 import { paginaPermitida, podeGerirGasolina } from '@/lib/access-control'
 import { calcularLitros, dataMaisAntigaPermitida, formatarMes, inicioDoMes } from '@/lib/gasolina'
+import { avisarMembro } from '@/lib/gasolina-avisos'
 
 type Resultado =
     | { ok: true, colaboradorId: string, gestor: boolean }
@@ -213,6 +214,8 @@ export async function aplicarStatusSolicitacao(supabase: any, solicitacao: { id:
         await supabase.from('gasolina_viagens').update({ status: 'Reembolsado', atualizado_em: agora })
             .eq('solicitacao_id', solicitacao.id).eq('status', 'Em solicitação')
     }
+    // Avisa o membro (e-mail + WhatsApp, via n8n) a cada mudança de status.
+    await avisarMembro(supabase, solicitacao.id, novo)
     return true
 }
 
