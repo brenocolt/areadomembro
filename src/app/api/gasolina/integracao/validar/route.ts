@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { aplicarStatusSolicitacao, type StatusSolicitacao } from '@/lib/gasolina-server'
-import { lerNumero } from '@/lib/gasolina'
+import { formatarReais, lerNumero } from '@/lib/gasolina'
 
 // Chamado pela automação "AUTOMAÇÃO PAGAMENTO VP" (n8n) quando um card de
 // gasolina chega ao board Processos de Pagamento. Substitui a leitura da
@@ -11,6 +11,10 @@ import { lerNumero } from '@/lib/gasolina'
 //   -> { origem: 'planilha' }                       card não veio do app: siga o fluxo antigo
 //   -> { origem: 'app', aprovado: true }            pode marcar APROVADO
 //   -> { origem: 'app', aprovado: false, motivo }   marcar RECUSADO e avisar o membro
+// Nas respostas de origem 'app' vão também os dados para avisar o membro, tirados do
+// cadastro dele na Área do Membro (sem planilha de contatos):
+//   membro: { nome, email, whatsapp }  (whatsapp só dígitos com 55, ou null se faltar/for inválido)
+//   mensagem_whatsapp                   texto pronto para o Evolution
 
 function tokenValido(req: NextRequest): boolean {
     const esperado = process.env.GASOLINA_INTEGRACAO_TOKEN || ''
@@ -22,6 +26,31 @@ function tokenValido(req: NextRequest): boolean {
 }
 
 const esperar = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// Telefone do cadastro -> formato do Evolution (55 + DDD + número). null se não der.
+function numeroWhatsapp(telefone: unknown): string | null {
+    let n = String(telefone ?? '').replace(/\D/g, '')
+    if (n.length === 10 || n.length === 11) n = '55' + n
+    return n.length >= 12 && n.length <= 13 && n.startsWith('55') ? n : null
+}
+
+type Solicitacao = { id: string, status: StatusSolicitacao, valor_total: number, qtd_viagens: number, motivo_recusa: string | null, projeto: string, colaborador_id: string }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function dadosDoAviso(supabase: any, s: Solicitacao, aprovado: boolean, motivo?: string) {
+    const { data: c } = await supabase.from('colaboradores')
+        .select('nome, email_corporativo, email_pessoal, telefone').eq('id', s.colaborador_id).maybeSingle()
+    const nome = (c?.nome ?? '').trim()
+    const primeiro = nome.split(' ')[0] || nome
+    const pedido = `📝 *Sua solicitação:*\n- Projeto: ${s.projeto}\n- Valor: ${formatarReais(Number(s.valor_total))}`
+    const mensagem = aprovado
+        ? `⛽ *Reembolso de gasolina aprovado* ✅\n\nOi *${primeiro}*!\n\n${pedido}\n\nAgora ela segue para o pagamento: primeiro é lançada no banco e depois o Pix cai na sua conta.\n\nAcompanhe na Área do Membro → Reembolso de Gasolina → aba Solicitações.\n\n— VP Produtiva ⛽`
+        : `⛽ *Reembolso de gasolina recusado* ❌\n\nOi *${primeiro}*!\n\n${pedido}\n\n❌ *Motivo:*\n${motivo || 'Não informado.'}\n\n💡 *O que fazer:*\nNa Área do Membro → Reembolso de Gasolina, as viagens aparecem como *Recusada*. Clique em *Retomar viagens*, corrija o que for preciso e solicite de novo.\n\nDúvidas? Fala com a gente!\n— VP Produtiva ⛽`
+    return {
+        membro: { nome, email: c?.email_corporativo || c?.email_pessoal || null, whatsapp: numeroWhatsapp(c?.telefone) },
+        mensagem_whatsapp: mensagem,
+    }
+}
 
 export async function POST(req: NextRequest) {
     if (!process.env.GASOLINA_INTEGRACAO_TOKEN) {
@@ -38,11 +67,11 @@ export async function POST(req: NextRequest) {
 
     // O webhook do Monday dispara assim que o card é criado, às vezes antes de
     // o app gravar o ID do card na solicitação — tenta por alguns segundos.
-    let solicitacao: { id: string, status: StatusSolicitacao, valor_total: number, qtd_viagens: number, motivo_recusa: string | null } | null = null
+    let solicitacao: Solicitacao | null = null
     for (let tentativa = 0; tentativa < 6 && !solicitacao; tentativa++) {
         if (tentativa) await esperar(1500)
         const { data } = await supabase.from('gasolina_solicitacoes')
-            .select('id, status, valor_total, qtd_viagens, motivo_recusa')
+            .select('id, status, valor_total, qtd_viagens, motivo_recusa, projeto, colaborador_id')
             .eq('monday_item_id', itemId)
             .maybeSingle()
         solicitacao = data
@@ -51,13 +80,16 @@ export async function POST(req: NextRequest) {
 
     // Já decidido antes (o n8n pode reprocessar): responde de forma estável.
     if (solicitacao.status === 'Recusado') {
-        return NextResponse.json({ origem: 'app', aprovado: false, motivo: solicitacao.motivo_recusa || 'Solicitação recusada.' })
+        const motivo = solicitacao.motivo_recusa || 'Solicitação recusada.'
+        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await dadosDoAviso(supabase, solicitacao, false, motivo) })
     }
-    if (solicitacao.status !== 'Solicitado') return NextResponse.json({ origem: 'app', aprovado: true })
+    if (solicitacao.status !== 'Solicitado') {
+        return NextResponse.json({ origem: 'app', aprovado: true, ...await dadosDoAviso(supabase, solicitacao, true) })
+    }
 
     const recusar = async (motivo: string) => {
         await aplicarStatusSolicitacao(supabase, solicitacao!, 'Recusado', motivo)
-        return NextResponse.json({ origem: 'app', aprovado: false, motivo })
+        return NextResponse.json({ origem: 'app', aprovado: false, motivo, ...await dadosDoAviso(supabase, solicitacao!, false, motivo) })
     }
 
     const { data: viagens } = await supabase.from('gasolina_viagens')
@@ -76,5 +108,5 @@ export async function POST(req: NextRequest) {
     // O n8n move o card para APROVADO logo em seguida; já reflete no app
     // para o membro não esperar a próxima sincronização (o sync só confirma).
     await aplicarStatusSolicitacao(supabase, solicitacao, 'Aprovado')
-    return NextResponse.json({ origem: 'app', aprovado: true })
+    return NextResponse.json({ origem: 'app', aprovado: true, ...await dadosDoAviso(supabase, solicitacao, true) })
 }
