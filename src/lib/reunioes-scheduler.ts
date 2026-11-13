@@ -2,6 +2,7 @@
 // tela de gestão — mesmo modelo do agendador do Monday (processo
 // persistente no VPS, ver src/instrumentation.ts).
 import { processarReunioesEncerradas } from './reunioes'
+import { alertarFalha } from './alertas'
 
 const INTERVALO_MS = 5 * 60 * 1000
 
@@ -13,6 +14,7 @@ async function rodar() {
         if (geradas > 0) console.log(`[reunioes] ${geradas} falta(s) pré-pontuada(s).`)
     } catch (err) {
         console.error('[reunioes] Falha ao processar reuniões encerradas:', err)
+        void alertarFalha('Faltas automáticas das reuniões', err)
     }
 }
 

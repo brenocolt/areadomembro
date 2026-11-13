@@ -6,16 +6,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Pencil, UserX, UserCheck, Shield, Mail } from "lucide-react"
+import { Search, Pencil, UserX, UserCheck, Shield, Mail, KeyRound } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
-import { desligarMembro, reativarMembro } from "@/lib/admin-actions"
+import { desligarMembro, reativarMembro, gerarSenhaTemporaria } from "@/lib/admin-actions"
 import { CARGO_FANTASMA } from "@/lib/cargos"
 import { useColaborador } from "@/hooks/use-supabase"
 import { getUsersManagementTier } from "@/lib/access-control"
 import { EditUserAccessDialog } from "./edit-user-access-dialog"
 
-type PendingAction = { id: string, name: string, type: 'desligar' | 'reativar' }
+type PendingAction = { id: string, name: string, type: 'desligar' | 'reativar' | 'senha' }
 
 export function UsersList() {
     const { colaborador: proprioColaborador, role: proprioRole } = useColaborador()
@@ -27,6 +27,8 @@ export function UsersList() {
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null)
     const [processing, setProcessing] = useState(false)
     const [userToEdit, setUserToEdit] = useState<any | null>(null)
+    const [senhaGerada, setSenhaGerada] = useState<{ nome: string, senha: string } | null>(null)
+    const [senhaCopiada, setSenhaCopiada] = useState(false)
 
     useEffect(() => {
         async function fetch() {
@@ -66,6 +68,18 @@ export function UsersList() {
         if (!pendingAction) return;
         setProcessing(true)
         try {
+            if (pendingAction.type === 'senha') {
+                const res = await gerarSenhaTemporaria(pendingAction.id)
+                if (res.success && res.senha) {
+                    setSenhaCopiada(false)
+                    setSenhaGerada({ nome: pendingAction.name, senha: res.senha })
+                } else {
+                    alert("Erro: " + res.error)
+                }
+                setProcessing(false)
+                setPendingAction(null)
+                return
+            }
             const { success, error } = pendingAction.type === 'desligar'
                 ? await desligarMembro(pendingAction.id)
                 : await reativarMembro(pendingAction.id)
@@ -186,9 +200,14 @@ export function UsersList() {
                                                         <UserCheck className="h-4 w-4" />
                                                     </Button>
                                                 ) : (
+                                                    <>
+                                                    <Button onClick={() => setPendingAction({ id: c.id, name: c.nome, type: 'senha' })} size="icon" variant="ghost" title="Gerar senha temporária" aria-label={`Gerar senha temporária para ${c.nome}`} className="h-8 w-8 text-slate-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg">
+                                                        <KeyRound className="h-4 w-4" />
+                                                    </Button>
                                                     <Button onClick={() => setPendingAction({ id: c.id, name: c.nome, type: 'desligar' })} size="icon" variant="ghost" className="h-8 w-8 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg">
                                                         <UserX className="h-4 w-4" />
                                                     </Button>
+                                                    </>
                                                 )}
                                             </div>
                                         </TableCell>
@@ -205,11 +224,15 @@ export function UsersList() {
                 <DialogContent className="sm:max-w-[420px] bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800">
                     <DialogHeader>
                         <DialogTitle className="text-slate-900 dark:text-white">
-                            {pendingAction?.type === 'reativar' ? 'Reativar Membro' : 'Desligar Membro'}
+                            {pendingAction?.type === 'senha' ? 'Gerar senha temporária' : pendingAction?.type === 'reativar' ? 'Reativar Membro' : 'Desligar Membro'}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="py-4">
-                        {pendingAction?.type === 'reativar' ? (
+                        {pendingAction?.type === 'senha' ? (
+                            <p className="text-sm border-l-4 border-amber-500 pl-4 py-1 text-slate-500 dark:text-slate-400">
+                                A senha atual de <span className="font-bold text-slate-900 dark:text-white">{pendingAction?.name}</span> deixa de funcionar e uma senha temporária é gerada. Confirme que é a própria pessoa pedindo (por exemplo, pelo Slack corporativo) e envie a senha só para ela. Depois de entrar, ela troca a senha no Perfil.
+                            </p>
+                        ) : pendingAction?.type === 'reativar' ? (
                             <p className="text-sm border-l-4 border-emerald-500 pl-4 py-1 text-slate-500 dark:text-slate-400">
                                 Tem certeza que deseja <strong>REATIVAR</strong> <span className="font-bold text-slate-900 dark:text-white">{pendingAction?.name}</span>? A conta volta a ter acesso ao portal e os saldos de milhas, pontos e PIPJ voltam a circular normalmente.
                             </p>
@@ -226,12 +249,35 @@ export function UsersList() {
                         <Button
                             onClick={handleConfirmAction}
                             disabled={processing}
-                            className={pendingAction?.type === 'reativar'
+                            className={pendingAction?.type === 'senha'
+                                ? "bg-amber-500 hover:bg-amber-600 text-white border-none"
+                                : pendingAction?.type === 'reativar'
                                 ? "bg-emerald-500 hover:bg-emerald-600 text-white border-none"
                                 : "bg-rose-500 hover:bg-rose-600 text-white border-none"}
                         >
-                            {processing ? 'Processando...' : pendingAction?.type === 'reativar' ? 'Sim, Reativar' : 'Sim, Desligar'}
+                            {processing ? 'Processando...' : pendingAction?.type === 'senha' ? 'Gerar senha' : pendingAction?.type === 'reativar' ? 'Sim, Reativar' : 'Sim, Desligar'}
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* SENHA TEMPORÁRIA GERADA */}
+            <Dialog open={!!senhaGerada} onOpenChange={(open) => !open && setSenhaGerada(null)}>
+                <DialogContent className="sm:max-w-[420px] bg-white dark:bg-[#0f172a] border-slate-200 dark:border-slate-800">
+                    <DialogHeader>
+                        <DialogTitle className="text-slate-900 dark:text-white">Senha temporária de {senhaGerada?.nome}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Envie esta senha só para a própria pessoa. Ela não aparece de novo depois que esta janela for fechada.</p>
+                        <div className="flex items-center gap-2">
+                            <code className="flex-1 select-all rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 font-mono text-base text-slate-900 dark:text-white break-all">{senhaGerada?.senha}</code>
+                            <Button variant="outline" onClick={async () => {
+                                try { await navigator.clipboard.writeText(senhaGerada?.senha || ''); setSenhaCopiada(true) } catch { setSenhaCopiada(false) }
+                            }} className="dark:border-white/10 dark:text-slate-300">{senhaCopiada ? 'Copiada' : 'Copiar'}</Button>
+                        </div>
+                    </div>
+                    <div className="flex justify-end">
+                        <Button onClick={() => setSenhaGerada(null)}>Fechar</Button>
                     </div>
                 </DialogContent>
             </Dialog>

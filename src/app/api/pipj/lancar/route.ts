@@ -5,6 +5,7 @@ import { resolvePipjCargoKey, PIPJ_CARGO_KEYS as K } from '@/lib/pipj-cargo-rule
 import { getNpsInternoMap } from '@/lib/pipj-nps-interno'
 import { getAvaliacoesNpsGenericoSinteticas } from '@/lib/nps-projetos-generico'
 import { contarProjetosNoMes, normalizarProjetoDetalhe } from '@/lib/pipj-projetos'
+import { bloquearSemPagina } from '@/lib/server-auth'
 
 // Business Rules Constants — indexadas pela chave resolvida por
 // resolvePipjCargoKey (cargo simplificado + núcleo), não mais diretamente
@@ -102,6 +103,8 @@ function getAbsenceBusinessDays(dataIda: string, dataVolta: string, year: number
 }
 
 export async function POST(req: NextRequest) {
+  const bloqueio = await bloquearSemPagina('/pipj-management')
+  if (bloqueio) return bloqueio
   try {
     const body = await req.json().catch(() => ({}));
     const overrides: Record<string, { deducao?: number, valor_final?: number, motivo: string }> = body.overrides || {};

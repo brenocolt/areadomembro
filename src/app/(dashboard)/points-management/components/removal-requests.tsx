@@ -45,12 +45,13 @@ export function RemovalRequests() {
 
     const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
         try {
-            await fetch('https://n8n.produtivajunior.com.br/webhook/puni', {
+            await fetch('/api/avisos/n8n', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    tipo: 'punicao',
                     nome: req.name,
                     motivo: req.reason,
                     quantidade: req.pontos_solicitados || 0,

@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { auth } from '@/auth'
 import { CARGO_FANTASMA } from '@/lib/cargos'
 import { paginaPermitida } from '@/lib/access-control'
+import { avisarN8n } from '@/lib/n8n-avisos'
 
 export async function POST(request: Request) {
     try {
@@ -136,18 +137,8 @@ export async function POST(request: Request) {
             decisao: status // APROVADO ou REJEITADO
         }
 
-        try {
-            console.log("Enviando para N8N:", webhookPayload)
-            const n8nRes = await fetch('https://n8n.produtivajunior.com.br/webhook/f7415c53-7aa2-4254-a910-3298ae6931d0', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(webhookPayload)
-            })
-            const resText = await n8nRes.text()
-            console.log("Resposta N8N:", n8nRes.status, resText)
-        } catch (err) {
-            console.error("Erro ao enviar webhook n8n", err)
-        }
+        // Aviso ao membro via n8n (sai do servidor, com senha quando configurada).
+        await avisarN8n('saque_pipj', webhookPayload)
 
 
         // Update the request status. Registra quando e por quem a decisão

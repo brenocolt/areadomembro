@@ -43,12 +43,13 @@ export function ExchangeRequests() {
 
     const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
         try {
-            await fetch('https://n8n.produtivajunior.com.br/webhook/troca', {
+            await fetch('/api/avisos/n8n', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    tipo: 'troca',
                     nome: req.name,
                     motivo: req.item,
                     quantidade: req.miles,

@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { exigirPagina, SEM_PERMISSAO } from '@/lib/server-auth';
 
 // "gabriel bacellar e ana gabriela sao a mesma pessoa"
 const ALIASES: Record<string, string> = {
@@ -33,6 +34,7 @@ const MONTHS: Record<string, number> = {
 };
 
 export async function importNpsData(rows: Record<string, unknown>[]) {
+    if (!(await exigirPagina('/users-management'))) return { success: false, error: SEM_PERMISSAO };
     try {
         const supabase = createServerSupabaseClient();
         

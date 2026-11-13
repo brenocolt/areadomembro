@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { bloquearSemPagina } from '@/lib/server-auth'
 
 export async function GET() {
+  const bloqueio = await bloquearSemPagina('/points-management')
+  if (bloqueio) return bloqueio
     const supabase = createServerSupabaseClient()
 
     const { data, error } = await supabase
@@ -18,6 +21,8 @@ export async function GET() {
 }
 
 export async function DELETE(request: Request) {
+  const bloqueio = await bloquearSemPagina('/points-management')
+  if (bloqueio) return bloqueio
     const supabase = createServerSupabaseClient()
 
     const { id } = await request.json()
