@@ -49,11 +49,12 @@ test('obrigatórios e comprovante', () => {
 
 test('categorias seguem o centro de custo; opção de outro centro é recusada', () => {
     assert.equal(validarSolicitacao({ ...base, categoria: 'Tráfego pago' }, um).ok, false)
-    const mej = validarSolicitacao({ ...base, centro_custo: 'Eventos MEJ', categoria: 'Hospedagem', evento_mej: 'ENEJ 2026' }, um)
-    assert.equal(mej.ok, true); assert.equal(mej.dados.evento_mej, 'ENEJ 2026')
+    const mej = validarSolicitacao({ ...base, centro_custo: 'Eventos MEJ', categoria: 'Hospedagem', evento_mej: 'ENEJ' }, um)
+    assert.equal(mej.ok, true); assert.equal(mej.dados.evento_mej, 'ENEJ')
+    assert.ok(validarSolicitacao({ ...base, centro_custo: 'Eventos MEJ', categoria: 'Hospedagem', evento_mej: 'Evento inventado' }, um).erros.evento_mej)
     const semEvento = validarSolicitacao({ ...base, centro_custo: 'Eventos MEJ', categoria: 'Hospedagem' }, um)
     assert.ok(semEvento.erros.evento_mej)
-    const pres = validarSolicitacao({ ...base, centro_custo: 'Presidência', categoria: 'Endomarketing', outra_categoria: 'Brindes' }, um)
+    const pres = validarSolicitacao({ ...base, centro_custo: 'Feira de carreira', categoria: 'Endomarketing', outra_categoria: 'Brindes' }, um)
     assert.equal(pres.ok, true); assert.equal(pres.dados.categoria, null); assert.equal(pres.dados.outra_categoria, 'Brindes')
     assert.equal(CENTROS_CUSTO.length, 9)
 })
@@ -83,4 +84,19 @@ test('fase de testes: só Vice Presidência e administradores, até liberar para
     assert.equal(pode(null, 'ADMIN', false), true)
     for (const n of ['Projetos', 'Gestão de Pessoas', 'Marketing', null]) assert.equal(pode({ nucleo_atual: n }, 'USER', false), false, String(n))
     assert.equal(pode({ nucleo_atual: 'Projetos' }, 'USER', true), true)
+})
+
+test('listas da planilha "VP Categorias": cada centro aceita as suas opções (e mantém as antigas)', async () => {
+    const { CENTROS_CUSTO: C } = await import('../../src/lib/pagamentos-formulario.ts')
+    const ops = Object.fromEntries(C.map(c => [c.nome, c.categoria.opcoes ? c.categoria.opcoes.length : null]))
+    assert.deepEqual(ops, { 'Consultorias/Assessorias': 14, 'Diretoria Executiva': 7, 'Eventos MEJ': 5, 'Feira de carreira': null,
+        GP: 14, Marketing: 12, 'Presidência': 16, Projetos: 5, VP: 14 })
+    const cons = validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Gasolina' }, um)
+    assert.equal(cons.ok, true); assert.equal(cons.dados.categoria_execucao, 'Gasolina'); assert.equal(cons.dados.categoria, null)
+    assert.ok(validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias' }, um).erros.categoria_execucao)
+    assert.equal(validarSolicitacao({ ...base, centro_custo: 'VP', categoria: 'Auxílio-alimentação' }, um).ok, true)
+    assert.equal(validarSolicitacao({ ...base, centro_custo: 'GP', categoria: 'Engajamento GP' }, um).ok, true)
+    assert.equal(validarSolicitacao({ ...base, centro_custo: 'Presidência', categoria: 'GO!RN' }, um).ok, true)
+    assert.equal(camposVisiveis({ centro_custo: 'Marketing', categoria: 'Workday e workweek' }).anexo_workday, true)
+    assert.equal(camposVisiveis({ centro_custo: 'Presidência', categoria: 'Workday' }).anexo_workday, true)
 })

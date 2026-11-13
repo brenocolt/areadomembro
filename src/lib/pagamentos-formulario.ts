@@ -24,7 +24,7 @@ export function podeUsarFormularioProprio(
 
 // Sobe quando perguntas/opções mudarem: cada solicitação guarda a versão com
 // que foi preenchida, para o n8n e o futuro Kanban saberem como ler.
-export const VERSAO_FORMULARIO = 1
+export const VERSAO_FORMULARIO = 2
 
 export const TIPOS_SOLICITACAO = ['REEMBOLSO', 'PAGAMENTO'] as const
 export type TipoSolicitacao = typeof TIPOS_SOLICITACAO[number]
@@ -37,34 +37,66 @@ export const SIM_NAO = ['Sim', 'Não'] as const
 
 // Campo de categoria de cada centro de custo:
 //   opcoes: lista fechada (lista suspensa obrigatória)
-//   opcoes: null -> sem lista confirmada: texto livre opcional
+//   opcoes: null -> sem lista: texto livre opcional
+// Listas da planilha "VP Categorias" (13/11/2026), na mesma ordem e grafia —
+// as automações comparam pelo texto exato. Opções que já existiam e não estão
+// na planilha foram mantidas no fim da lista.
 export interface CentroCusto {
     nome: string
     categoria: { campo: 'categoria' | 'categoria_execucao' | 'outra_categoria', rotulo: string, opcoes: readonly string[] | null }
 }
 
 export const CENTROS_CUSTO: readonly CentroCusto[] = [
-    // A CONFIRMAR: opções da "Categoria de execução de projetos" (no Monday
-    // há ao menos "Gasolina", usada pelo reembolso de gasolina).
-    { nome: 'Consultorias/Assessorias', categoria: { campo: 'categoria_execucao', rotulo: 'Categoria de execução de projetos', opcoes: null } },
-    // A CONFIRMAR: sem lista de categorias informada.
-    { nome: 'Diretoria Executiva', categoria: { campo: 'outra_categoria', rotulo: 'Outra categoria', opcoes: null } },
+    { nome: 'Consultorias/Assessorias', categoria: { campo: 'categoria_execucao', rotulo: 'Categoria de execução de projetos', opcoes: [
+        'Gasolina', 'Uber', 'Estacionamento', 'Jantar de Finalização', 'Material para projetos',
+        'Manual de finalização para consultoria', 'Hospedagem Projetos', 'Placa de finalização', 'Mimo de finalização',
+        'Engajamento com o cliente', 'Tercerizada para projetos', 'Aluguel de sala', 'Cliente oculto', 'Estorno de projeto',
+    ] } },
+    { nome: 'Diretoria Executiva', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Cogestão', 'Conquistas e planos', 'Engajamento empresa', 'Relacionamento com Departamento', 'PlaneJa',
+        'Apresentação de case', 'Consultoria para Empresa',
+    ] } },
+    // "Gasto com Evento MEJ"; qual evento vai em EVENTOS_MEJ (pergunta "Evento MEJ").
     { nome: 'Eventos MEJ', categoria: { campo: 'categoria', rotulo: 'Gasto com Evento MEJ', opcoes: ['Alimentação', 'Hospedagem', 'Ingresso', 'Passagem', 'Transporte'] } },
+    // Sem coluna na planilha: continua com texto livre.
     { nome: 'Feira de carreira', categoria: { campo: 'outra_categoria', rotulo: 'Outra categoria', opcoes: null } },
-    { nome: 'GP', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: ['Desligamento', 'Endomarketing', 'Engajamento empresa', 'Engajamento GP'] } },
-    { nome: 'Marketing', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: ['Softwares e sistemas marketing', 'Telefone e internet', 'Terceirizada para marketing', 'Tráfego pago'] } },
-    { nome: 'Presidência', categoria: { campo: 'outra_categoria', rotulo: 'Outra categoria', opcoes: null } },
-    { nome: 'Projetos', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: ['Capacitações', 'Engajamento projetos', 'Números Virtuais', 'Reconhecimento consultores', 'Workday'] } },
-    { nome: 'VP', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: ['Manutenção', 'Material de escritório', 'Softwares e sistemas', 'Workday'] } },
+    { nome: 'GP', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Endomarketing', 'PDI', 'Conexão', 'Voa PJ', 'Turbinar', 'Descubra', 'Workday', 'Kit Piloto', 'PTPJ', 'Take Off',
+        'Engajamento empresa', 'Desligamento', 'Aniversário da PJ',
+        'Engajamento GP', // já existia; não está na planilha
+    ] } },
+    { nome: 'Marketing', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Compra de listas', 'Tráfego pago', 'Marketing e Publicidade', 'Terceirizada para marketing', 'Site',
+        'Workday e workweek', 'Engajamento marketing', 'Telefone e internet', 'Prospecção', 'Container',
+        'Plano de Indicação', 'Softwares e sistemas marketing',
+    ] } },
+    { nome: 'Presidência', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Despesas com LIDE', 'CDL', 'RN Júnior', 'Despesas com parcerias', 'Workday', 'Eventos de parceiros',
+        'Viagens e representações', 'Visita Técnica', 'Eventos para parceiros', 'Engajamento Presi',
+        'Feira de Carreiras/Workshop', 'Fórum de Negócios', 'Altitude Experience', 'Open House', 'PJ nas escolas', 'GO!RN',
+    ] } },
+    { nome: 'Projetos', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Workday', 'Engajamento projetos', 'Reconhecimento consultores', 'Capacitações', 'Números Virtuais',
+    ] } },
+    { nome: 'VP', categoria: { campo: 'categoria', rotulo: 'Categoria', opcoes: [
+        'Taxa de boletos', 'Taxa de cartão', 'Taxa Pix', 'Assessoria financeira', 'Assessoria Jurídica', 'Contabilidade',
+        'Auxílio-alimentação', 'Cartão corporativo', 'PIPJ', 'Softwares e sistemas', 'Engajamento VP',
+        'Material de escritório', 'Manutenção', 'Workday',
+    ] } },
 ]
+
+// Pergunta "Evento MEJ" (centro de custo Eventos MEJ), da mesma planilha.
+export const EVENTOS_MEJ = ['ENEJ', 'Destine', 'EDL', 'Pulso', 'Portto', 'Onda verde', 'Prêmio RN', 'EAI', 'EPEEJ'] as const
 
 export function centroPorNome(nome: string | null | undefined): CentroCusto | undefined {
     return CENTROS_CUSTO.find(c => c.nome === nome)
 }
 
-// Categorias que pedem o anexo de Workday/SDR. A CONFIRMAR: no original o
-// anexo aparece "quando aplicável"; aqui aparece (opcional) para "Workday".
-export const CATEGORIAS_COM_ANEXO_WORKDAY = ['Workday'] as const
+// Anexo de Workday/SDR: aparece (opcional) quando a categoria escolhida é de
+// Workday ("Workday", "Workday e workweek"), em qualquer centro de custo.
+export function categoriaPedeAnexoWorkday(categoria: string | null | undefined): boolean {
+    return /^workday\b/i.test((categoria ?? '').trim())
+}
 
 // Anexos
 export const ANEXO_TIPOS_ACEITOS = [
@@ -131,8 +163,7 @@ export function camposVisiveis(r: RespostasFormulario) {
         outra_categoria: campoCategoria === 'outra_categoria',
         evento_mej: r.centro_custo === 'Eventos MEJ',
         tipo_retirada_milha: r.eh_retirada_milha === 'Sim',
-        anexo_workday: campoCategoria === 'categoria'
-            && (CATEGORIAS_COM_ANEXO_WORKDAY as readonly string[]).includes(r.categoria ?? ''),
+        anexo_workday: !!campoCategoria && categoriaPedeAnexoWorkday(r[campoCategoria]),
     }
 }
 
@@ -186,12 +217,15 @@ export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos)
     const centroNome = opcao('centro_custo', CENTROS_CUSTO.map(c => c.nome), 'Escolha o centro de custo.')
     const centro = centroPorNome(centroNome)
 
-    let categoria: string | null = null
-    if (vis.categoria && centro?.categoria.opcoes) {
-        categoria = opcao('categoria', centro.categoria.opcoes, `Escolha: ${centro.categoria.rotulo}.`)
+    // Campo de categoria do centro escolhido: lista (obrigatória) ou texto livre.
+    const valorCategoria = (campo: 'categoria' | 'categoria_execucao' | 'outra_categoria'): string | null => {
+        if (!vis[campo] || !centro) return null
+        if (centro.categoria.opcoes) return opcao(campo, centro.categoria.opcoes, `Escolha: ${centro.categoria.rotulo}.`)
+        return txt(campo) || null
     }
-    const categoriaExecucao = vis.categoria_execucao ? (txt('categoria_execucao') || null) : null
-    const outraCategoria = vis.outra_categoria ? (txt('outra_categoria') || null) : null
+    const categoria = valorCategoria('categoria')
+    const categoriaExecucao = valorCategoria('categoria_execucao')
+    const outraCategoria = valorCategoria('outra_categoria')
 
     let formaPagamento: string | null = null
     let dadosBancarios: string | null = null
@@ -214,7 +248,7 @@ export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos)
     const ehPipj = opcao('eh_pipj', SIM_NAO, 'Responda se é PIPJ.') === 'Sim'
     const ehRetirada = opcao('eh_retirada_milha', SIM_NAO, 'Responda se é retirada por milha.') === 'Sim'
     const tipoRetirada = vis.tipo_retirada_milha ? obrigatorio('tipo_retirada_milha', 'Informe o tipo de retirada por milha.') || null : null
-    const eventoMej = vis.evento_mej ? obrigatorio('evento_mej', 'Informe qual Evento MEJ.') || null : null
+    const eventoMej = vis.evento_mej ? opcao('evento_mej', EVENTOS_MEJ, 'Escolha qual Evento MEJ.') || null : null
 
     if (anexos.comprovantes < 1) erros.comprovantes = 'Anexe o comprovante.'
     if (anexos.comprovantes > ANEXO_QTD_MAX) erros.comprovantes = `Envie no máximo ${ANEXO_QTD_MAX} arquivos.`

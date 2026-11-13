@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useColaborador } from "@/hooks/use-supabase"
 import {
-    ANEXO_EXTENSOES_ACEITAS, ANEXO_QTD_MAX, ANEXO_TAMANHO_MAX, CENTROS_CUSTO, FORMAS_PAGAMENTO, SIM_NAO,
+    ANEXO_EXTENSOES_ACEITAS, ANEXO_QTD_MAX, ANEXO_TAMANHO_MAX, CENTROS_CUSTO, EVENTOS_MEJ, FORMAS_PAGAMENTO, SIM_NAO,
     TIPOS_SOLICITACAO, camposVisiveis, centroPorNome, validarSolicitacao,
     type ErrosFormulario, type RespostasFormulario,
 } from "@/lib/pagamentos-formulario"
@@ -285,28 +285,28 @@ export function FormularioSolicitacao() {
 
                 {vis.evento_mej && (
                     <Campo id="evento_mej" rotulo="Evento MEJ" obrigatorio erro={erros.evento_mej}>
-                        <Input id="evento_mej" value={r.evento_mej ?? ""} onChange={e => set("evento_mej", e.target.value)} aria-invalid={!!erros.evento_mej} />
-                    </Campo>
-                )}
-
-                {vis.categoria && categoria?.opcoes && (
-                    <Campo id="categoria" rotulo={categoria.rotulo} obrigatorio erro={erros.categoria}>
-                        <Select value={r.categoria ?? ""} onValueChange={v => set("categoria", v)}>
-                            <SelectTrigger id="categoria" className="w-full" aria-invalid={!!erros.categoria}><SelectValue placeholder="Escolha" /></SelectTrigger>
+                        <Select value={r.evento_mej ?? ""} onValueChange={v => set("evento_mej", v)}>
+                            <SelectTrigger id="evento_mej" className="w-full" aria-invalid={!!erros.evento_mej}><SelectValue placeholder="Escolha" /></SelectTrigger>
                             <SelectContent>
-                                {categoria.opcoes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                                {EVENTOS_MEJ.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </Campo>
                 )}
-                {vis.categoria_execucao && (
-                    <Campo id="categoria_execucao" rotulo="Categoria de execução de projetos" erro={erros.categoria_execucao}>
-                        <Input id="categoria_execucao" value={r.categoria_execucao ?? ""} onChange={e => set("categoria_execucao", e.target.value)} />
-                    </Campo>
-                )}
-                {vis.outra_categoria && (
-                    <Campo id="outra_categoria" rotulo="Outra categoria" erro={erros.outra_categoria}>
-                        <Input id="outra_categoria" value={r.outra_categoria ?? ""} onChange={e => set("outra_categoria", e.target.value)} />
+
+                {/* Categoria do centro escolhido: lista suspensa ou texto livre. */}
+                {categoria && (
+                    <Campo id={categoria.campo} rotulo={categoria.rotulo} obrigatorio={!!categoria.opcoes} erro={erros[categoria.campo]}>
+                        {categoria.opcoes ? (
+                            <Select value={r[categoria.campo] ?? ""} onValueChange={v => set(categoria.campo, v)}>
+                                <SelectTrigger id={categoria.campo} className="w-full" aria-invalid={!!erros[categoria.campo]}><SelectValue placeholder="Escolha" /></SelectTrigger>
+                                <SelectContent>
+                                    {categoria.opcoes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <Input id={categoria.campo} value={r[categoria.campo] ?? ""} onChange={e => set(categoria.campo, e.target.value)} />
+                        )}
                     </Campo>
                 )}
 
