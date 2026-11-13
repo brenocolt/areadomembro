@@ -8,7 +8,7 @@ import { isAdmin } from '@/lib/access-control'
 async function exigirAdmin(): Promise<NextResponse | null> {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-    if (!isAdmin((session.user as any)?.role)) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+    if (!isAdmin((session.user as { role?: string | null } | undefined)?.role)) return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
     return null
 }
 

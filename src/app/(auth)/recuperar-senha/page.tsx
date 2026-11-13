@@ -59,6 +59,7 @@ export default function RecuperarSenhaPage() {
                 <div className="mb-8 text-center">
                     <h1 className="text-3xl font-display font-bold text-white mb-2">Produtiva Júnior</h1>
                     <p className="text-slate-400">Recuperação de Senha</p>
+                    <p className="mt-4 text-sm text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">Esqueceu a senha? Por segurança, a troca pelo CPF está suspensa. Peça uma senha temporária à Gestão de Pessoas.</p>
                 </div>
 
                 {!isSent ? (

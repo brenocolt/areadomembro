@@ -2,8 +2,12 @@
 
 import bcrypt from 'bcryptjs';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { exigirPagina, nivelGestaoUsuarios, SEM_PERMISSAO } from '@/lib/server-auth';
+import { isAdmin, isEstrategicoOuAdmin } from '@/lib/access-control';
+import { randomBytes } from 'crypto';
 
 export async function approveAccountRequest(id: string) {
+    if (!(await exigirPagina('/users-management'))) return { success: false, error: SEM_PERMISSAO };
     const supabase = createServerSupabaseClient();
 
     // 1. Get the request
@@ -186,6 +190,7 @@ export async function approveAccountRequest(id: string) {
 }
 
 export async function desligarMembro(colaboradorId: string) {
+    if (!(await exigirPagina('/users-management'))) return { success: false, error: SEM_PERMISSAO };
     const supabase = createServerSupabaseClient();
 
     const { error } = await supabase
@@ -200,6 +205,7 @@ export async function desligarMembro(colaboradorId: string) {
 }
 
 export async function reativarMembro(colaboradorId: string) {
+    if (!(await exigirPagina('/users-management'))) return { success: false, error: SEM_PERMISSAO };
     const supabase = createServerSupabaseClient();
 
     const { error } = await supabase
@@ -214,6 +220,9 @@ export async function reativarMembro(colaboradorId: string) {
 }
 
 export async function deleteUserCompletely(colaboradorId: string) {
+    // Apaga tudo do membro: só o nível mais alto da Gestão de Usuários.
+    const chamador = await exigirPagina('/users-management');
+    if (!chamador || nivelGestaoUsuarios(chamador) < 3) return { success: false, error: SEM_PERMISSAO };
     const supabase = createServerSupabaseClient();
 
     // 1. Get colaborador email to find related solicitacoes_conta and membros_pre_cadastro
@@ -270,4 +279,35 @@ export async function deleteUserCompletely(colaboradorId: string) {
     }
 
     return { success: true };
+}
+
+// Gera uma senha temporária para um membro que esqueceu a dele (substitui a
+// recuperação por CPF, suspensa por segurança). Quem gera repassa a senha ao
+// membro por um canal confiável; ele troca no Perfil depois de entrar.
+export async function gerarSenhaTemporaria(colaboradorId: string) {
+    const chamador = await exigirPagina('/users-management');
+    if (!chamador) return { success: false, error: SEM_PERMISSAO };
+
+    const supabase = createServerSupabaseClient();
+    const [{ data: alvo }, { data: user }] = await Promise.all([
+        supabase.from('colaboradores').select('cargo_atual').eq('id', colaboradorId).maybeSingle(),
+        supabase.from('users').select('id, role').eq('colaborador_id', colaboradorId).maybeSingle(),
+    ]);
+    if (!user) return { success: false, error: 'Este membro ainda não tem acesso ao portal.' };
+
+    // Trocar a senha de um administrador ou do Estratégico daria acesso total:
+    // só o nível mais alto da Gestão de Usuários pode.
+    const alvoSensivel = isAdmin(user.role) || isEstrategicoOuAdmin(alvo?.cargo_atual);
+    if (alvoSensivel && nivelGestaoUsuarios(chamador) < 3) {
+        return { success: false, error: 'Só o Estratégico ou um administrador pode trocar a senha desta pessoa.' };
+    }
+
+    const senha = randomBytes(9).toString('base64url');
+    const { error } = await supabase
+        .from('users')
+        .update({ senha: await bcrypt.hash(senha, 10) })
+        .eq('id', user.id);
+    if (error) return { success: false, error: 'Não foi possível salvar a nova senha. Tente de novo.' };
+
+    return { success: true, senha };
 }

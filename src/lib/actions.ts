@@ -5,6 +5,10 @@ import { AuthError } from 'next-auth';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { obterChamador, SEM_PERMISSAO } from '@/lib/server-auth';
+import { isAdmin } from '@/lib/access-control';
+
+const RECUPERACAO_SUSPENSA = 'A recuperação de senha pelo portal está suspensa temporariamente. Peça a troca de senha à Gestão de Pessoas.';
 
 // Define schema for input validation if needed, but we do it in client too.
 
@@ -37,6 +41,13 @@ export async function authenticate(
 }
 
 export async function resetPasswordLocal(email: string, dataNascimento: string, cpf: string) {
+    // Suspensa por segurança (plano de ação dos riscos, ação 0.3): CPF e data
+    // de nascimento não são segredo suficiente enquanto o banco aceitar leitura
+    // pela chave pública. GP troca a senha pela Gestão de Usuários. Para religar
+    // depois que o banco for fechado: RECUPERACAO_SENHA_CPF=ativa no servidor.
+    if (process.env.RECUPERACAO_SENHA_CPF !== 'ativa') {
+        return { success: false, message: RECUPERACAO_SUSPENSA };
+    }
     const supabase = createServerSupabaseClient();
     
     // 1. Fetch colleague from colaboradores
@@ -97,6 +108,14 @@ export async function resetPasswordLocal(email: string, dataNascimento: string, 
 }
 
 export async function changePasswordLocal(colaboradorId: string, novaSenha: string) {
+    // Cada um troca só a própria senha (administrador pode trocar a de qualquer um).
+    const chamador = await obterChamador();
+    if (!chamador || (chamador.colaboradorId !== colaboradorId && !isAdmin(chamador.role))) {
+        return { success: false, message: SEM_PERMISSAO };
+    }
+    if (typeof novaSenha !== 'string' || novaSenha.length < 6) {
+        return { success: false, message: 'A nova senha precisa ter pelo menos 6 caracteres.' };
+    }
     const supabase = createServerSupabaseClient();
     
     const hashedPassword = await bcrypt.hash(novaSenha, 10);
