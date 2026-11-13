@@ -8,6 +8,7 @@ import { isSchemaDesatualizado } from './db-compat'
 import { aplicarStatusSolicitacao, type StatusSolicitacao } from './gasolina-server'
 import { COLUNAS_PAGAMENTO, statusDoKanban } from './gasolina-monday'
 import { lerColunaDosItens, MONDAY_PAGAMENTOS_API_TOKEN } from './monday'
+import { alertarFalha } from './alertas'
 
 const HORA_UTC = 3    // 3h UTC = meia-noite em Brasília: vira o dia e vence
 const MINUTO_UTC = 5
@@ -48,6 +49,7 @@ async function rodar() {
         if (vencidas > 0) console.log(`[gasolina] ${vencidas} viagem(ns) marcada(s) como Vencido.`)
     } catch (err) {
         console.error('[gasolina] Falha ao marcar viagens vencidas:', err)
+        void alertarFalha('Vencimento das viagens de gasolina', err)
     }
 }
 
@@ -95,6 +97,7 @@ async function rodarSincronizacao() {
         if (alteradas > 0) console.log(`[gasolina] ${alteradas} solicitação(ões) atualizada(s) pelo Monday.`)
     } catch (err) {
         console.error('[gasolina] Falha ao sincronizar solicitações com o Monday:', err)
+        void alertarFalha('Status dos reembolsos de gasolina no Monday', err)
     }
 }
 
