@@ -45,3 +45,14 @@ export function nivelGestaoUsuarios(chamador: Chamador): 0 | 1 | 2 | 3 {
 }
 
 export const SEM_PERMISSAO = 'Você não tem permissão para fazer isso. Entre de novo no portal e tente outra vez.'
+
+// Versão para rotas /api (o middleware de login não cobre /api): devolve a
+// resposta de erro pronta, ou null quando a pessoa pode seguir.
+export async function bloquearSemPagina(pathname: string): Promise<Response | null> {
+    const chamador = await obterChamador()
+    if (!chamador) return Response.json({ error: 'Não autorizado' }, { status: 401 })
+    if (!paginaPermitida(pathname, chamador.colaborador, chamador.role)) {
+        return Response.json({ error: 'Acesso negado' }, { status: 403 })
+    }
+    return null
+}

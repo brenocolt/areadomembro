@@ -1,7 +1,10 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { bloquearSemPagina } from '@/lib/server-auth'
 
 export async function GET() {
+  const bloqueio = await bloquearSemPagina('/users-management')
+  if (bloqueio) return bloqueio
     const supabase = createServerSupabaseClient();
 
     const { data, error } = await supabase
