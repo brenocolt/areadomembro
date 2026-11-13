@@ -75,3 +75,12 @@ test('Pix inválido e valores inválidos', () => {
     for (const v of ['abc', '0', '-5', '1,234', '10,999']) assert.ok(validarSolicitacao({ ...base, valor: v }, um).erros.valor, v)
     assert.deepEqual(['50', '50,5', 'R$ 1.000,00', '1234.56', '1.000.000'].map(lerValorReais), [50, 50.5, 1000, 1234.56, 1000000])
 })
+
+test('fase de testes: só Vice Presidência e administradores, até liberar para todos', async () => {
+    const { podeUsarFormularioProprio: pode } = await import('../../src/lib/pagamentos-formulario.ts')
+    assert.equal(pode({ nucleo_atual: 'Vice Presidência' }, 'USER', false), true)
+    assert.equal(pode({ nucleo_atual: 'Vice-Presidência' }, 'USER', false), true)
+    assert.equal(pode(null, 'ADMIN', false), true)
+    for (const n of ['Projetos', 'Gestão de Pessoas', 'Marketing', null]) assert.equal(pode({ nucleo_atual: n }, 'USER', false), false, String(n))
+    assert.equal(pode({ nucleo_atual: 'Projetos' }, 'USER', true), true)
+})
