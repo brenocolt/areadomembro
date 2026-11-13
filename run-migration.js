@@ -8,12 +8,13 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// A senha de produção está versionada aqui desde o início do projeto e
-// continua como padrão para não quebrar quem já usa o script. Defina
-// DATABASE_URL no ambiente para não depender dela — e troque a senha no
-// painel do Supabase, já que esta está exposta no repositório.
-const CONNECTION_STRING = process.env.DATABASE_URL
-    || 'postgresql://postgres.jskzxtpabmwvmgnuhbjf:Produtivajr12*@aws-1-us-east-2.pooler.supabase.com:5432/postgres';
+// A senha do banco nunca deve ficar escrita aqui: defina DATABASE_URL no
+// ambiente antes de rodar (ex.: DATABASE_URL='postgresql://...' node run-migration.js ...).
+const CONNECTION_STRING = process.env.DATABASE_URL;
+if (!CONNECTION_STRING) {
+    console.error('Defina a variável DATABASE_URL com o endereço do banco antes de rodar este script.');
+    process.exit(1);
+}
 
 async function main() {
     const client = new Client({
