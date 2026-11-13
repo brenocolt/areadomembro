@@ -37,6 +37,7 @@
   *{box-sizing:border-box}
   html{scroll-behavior:smooth; scroll-padding-top:calc(env(safe-area-inset-top,0px) + 72px)}
   @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto} *{animation:none!important; transition:none!important}}
+  html,body{overflow-x:clip}
   body{background:var(--bg); color:var(--ink); font-family:var(--text); font-size:15.5px; line-height:1.6; -webkit-font-smoothing:antialiased}
   h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; color:var(--brand); letter-spacing:-.01em}
   p{margin:0}
@@ -192,6 +193,126 @@
   footer .fb{display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:600; color:var(--brand)}
   footer svg{width:26px; height:26px; color:var(--accent-fill)}
 
+  /* ---------- Ilustrações das telas (sempre no tema claro do portal, como um print) ---------- */
+  .figs{display:flex; flex-direction:column; gap:26px; margin-top:22px}
+  .fig{margin:0; display:flex; flex-direction:column; gap:10px; min-width:0}
+  .fig.narrow{max-width:560px; width:100%}
+  .fig figcaption{font-size:13.5px; color:var(--muted); display:flex; gap:10px; align-items:baseline; flex-wrap:wrap}
+  .fig figcaption b{color:var(--ink); font-weight:600}
+  .tag-ill{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); background:var(--accent-soft); border-radius:6px; padding:2px 7px; flex:none}
+  .split{display:grid; grid-template-columns:minmax(0,270px) minmax(0,1fr); gap:22px; align-items:start}
+  .shot{
+    --m-bg:#F8FAFC; --m-line:#E2E8F0; --m-ink:#0F172A; --m-muted:#64748B; --m-navy:#001A41;
+    --m-amber:#F59E0B; --m-sky:#0EA5E9; --m-em:#059669; --m-red:#DC2626; --m-soft:#F1F5F9;
+    color-scheme:light; background:var(--m-bg); color:var(--m-ink); border:1px solid var(--line); border-radius:14px;
+    overflow:hidden; box-shadow:0 22px 44px -28px rgba(0,26,65,.55); font-size:12.5px; line-height:1.45; text-align:left
+  }
+  .shot-bar{display:flex; align-items:center; gap:10px; padding:8px 12px; background:#E8EDF4; border-bottom:1px solid #D5DEEA}
+  .shot-bar .dots{display:flex; gap:5px; flex:none} .shot-bar .dots i{width:9px; height:9px; border-radius:50%; background:#C3CCD9}
+  .shot-bar .url{flex:1; min-width:0; background:#fff; border-radius:7px; padding:3px 10px; color:#64748B; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .shot-scroll{overflow-x:auto}
+  .shot-body{min-width:600px}
+  .shot-body.sm{min-width:0}
+  .m-top{height:38px; display:flex; align-items:center; gap:10px; padding:0 14px; background:#fff; border-bottom:1px solid var(--m-line); color:var(--m-muted); font-size:12px}
+  .m-top .sep{width:1px; height:14px; background:var(--m-line)}
+  .m-top .sp{flex:1}
+  .m-main{padding:16px; display:flex; flex-direction:column; gap:12px}
+  .m-crumb{font-size:11.5px; color:var(--m-muted)} .m-crumb b{color:var(--m-ink)}
+  .m-back{font-size:11px; color:var(--m-muted)}
+  .m-h1{font-family:var(--display); font-size:21px; font-weight:700; color:var(--m-ink); margin:0; display:flex; align-items:center; gap:7px; letter-spacing:-.01em}
+  .m-h1 .p{color:var(--m-navy)} .m-h1 .a{color:var(--m-amber)}
+  .m-sub{color:var(--m-muted); font-size:12px; margin-top:-8px}
+  .m-card{background:#fff; border:1px solid var(--m-line); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; min-width:0; position:relative}
+  .m-ct{font-family:var(--display); font-weight:600; font-size:14px; color:var(--m-ink); display:flex; align-items:center; gap:6px}
+  .m-cd{color:var(--m-muted); font-size:11px; margin-top:-6px}
+  .m-row{display:flex; gap:10px; align-items:center} .m-row.between{justify-content:space-between}
+  .m-g2{display:grid; grid-template-columns:1fr 1fr; gap:10px} .m-g3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px} .m-g4{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+  .m-lbl{font-size:11.5px; font-weight:600; color:var(--m-ink); margin-bottom:4px; display:block}
+  .m-lbl .req{color:var(--m-amber)}
+  .m-in{border:1px solid var(--m-line); border-radius:8px; padding:7px 9px; color:#94A3B8; background:#fff; font-size:12px; display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:32px}
+  .m-in.v{color:var(--m-ink)} .m-in.ta{min-height:46px; align-items:flex-start}
+  .m-in.dash{border-style:dashed; justify-content:center; color:var(--m-muted)}
+  .m-help{font-size:10.5px; color:var(--m-muted); margin-top:3px}
+  .m-btn{display:inline-flex; align-items:center; gap:6px; border-radius:9px; padding:7px 12px; font-weight:600; font-size:12px; color:#fff; background:var(--m-navy); border:1px solid transparent; white-space:nowrap; position:relative; width:max-content}
+  .m-btn.amber{background:var(--m-amber)} .m-btn.out{background:#fff; color:var(--m-ink); border-color:var(--m-line)} .m-btn.sky{background:var(--m-sky)} .m-btn.cyan{background:#00B4D8} .m-btn.ghost{background:transparent; color:var(--m-muted)}
+  .m-btn.full{width:100%; justify-content:center} .m-btn.lg{padding:10px 16px; font-size:13px}
+  .m-badge{display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; width:max-content}
+  .b-amber{background:#FEF3C7; color:#92400E} .b-sky{background:#E0F2FE; color:#0369A1} .b-em{background:#D1FAE5; color:#047857} .b-red{background:#FEE2E2; color:#B91C1C} .b-slate{background:#E2E8F0; color:#475569} .b-yellow{background:#FEF9C3; color:#A16207} .b-blue{background:#DBEAFE; color:#1D4ED8}
+  .m-tabs{display:inline-flex; flex-wrap:wrap; background:var(--m-soft); border-radius:10px; padding:3px; gap:2px; width:max-content; position:relative}
+  .m-tabs span{padding:5px 11px; border-radius:7px; color:var(--m-muted); font-weight:500; position:relative}
+  .m-tabs span.on{background:#fff; color:var(--m-ink); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .m-tabs.violet span.on{background:#7C3AED; color:#fff}
+  .m-overlay{background:rgba(15,23,42,.5); padding:22px 16px; display:flex; justify-content:center}
+  .m-dialog{background:#fff; border-radius:16px; padding:18px; width:100%; max-width:470px; display:flex; flex-direction:column; gap:11px; box-shadow:0 20px 40px -10px rgba(0,0,0,.4); position:relative}
+  .m-dialog.wide{max-width:640px}
+  .m-dt{font-family:var(--display); font-weight:700; font-size:16px; color:var(--m-ink); display:flex; align-items:center; gap:8px}
+  .m-dd{font-size:11.5px; color:var(--m-muted); margin-top:-6px}
+  .m-x{position:absolute; top:14px; right:16px; color:#94A3B8; font-size:15px; line-height:1}
+  .m-seg{display:flex; background:var(--m-soft); border-radius:9px; padding:3px} .m-seg span{flex:1; text-align:center; padding:5px; border-radius:7px; color:var(--m-muted); font-weight:600; font-size:11.5px} .m-seg span.on{background:#fff; color:var(--m-ink); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .ic{width:14px; height:14px; flex:none; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round}
+  .ic.lg{width:18px; height:18px}
+  .m-chip{width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex:none}
+  .m-small{font-size:10.5px; color:var(--m-muted)}
+  .m-up{font-size:9.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase}
+  .m-table{width:100%; border-collapse:collapse; font-size:11.5px}
+  .m-table th{font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--m-muted); text-align:left; padding:6px 8px; border-bottom:1px solid var(--m-line); background:#fff; font-family:var(--text)}
+  .m-table td{padding:7px 8px; border-bottom:1px solid var(--m-line); vertical-align:top; color:var(--m-ink)}
+  .m-table tr:last-child td{border-bottom:0}
+  .pin{position:absolute; top:-9px; right:-9px; width:20px; height:20px; border-radius:50%; background:#00D1FF; color:#001A41; font:700 11px/20px var(--display); text-align:center; box-shadow:0 0 0 3px #fff; z-index:2}
+  .pin.l{right:auto; left:-9px}
+  .hl{box-shadow:0 0 0 2px #00D1FF !important}
+  /* sidebar */
+  .m-side{background:#fff; padding:12px 10px; display:flex; flex-direction:column; gap:3px}
+  .m-brand{display:flex; gap:9px; align-items:center; padding:2px 6px 10px}
+  .m-brand svg{width:26px; height:26px; color:#6CC0D6}
+  .m-brand b{display:block; font-family:var(--display); font-size:13px} .m-brand small{display:block; font-size:10.5px; color:var(--m-muted)}
+  .m-grp{font-size:10.5px; font-weight:600; color:var(--m-muted); padding:6px 8px 4px}
+  .m-item{display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:8px; color:#334155; font-size:12px}
+  .m-item.rel{background:#E6FAFF; color:var(--m-navy); font-weight:600}
+  .m-item.rel::after{content:"VP"; margin-left:auto; font:700 9px var(--display); letter-spacing:.06em; color:#0087B8}
+  .m-item.gp::after{content:"GP"; margin-left:auto; font:700 9px var(--display); letter-spacing:.06em; color:#64748B}
+  .m-user{margin-top:10px; display:flex; align-items:center; gap:9px; padding:8px; border:1px solid var(--m-line); border-radius:12px; background:#F8FAFC}
+  .m-av{width:30px; height:30px; border-radius:8px; background:#E6EDF7; color:var(--m-navy); font:700 11px/30px var(--display); text-align:center; flex:none}
+  /* carteira */
+  .m-navy{background:#001A41; color:#fff; border-color:transparent}
+  .m-navy .m-ct{color:#fff}
+  .m-tile{background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:8px 10px}
+  .m-tile .m-up{color:#93C5FD}
+  .m-tile b{display:block; font-family:var(--display); font-size:14px; margin-top:2px}
+  .m-fr{display:flex; justify-content:space-between; gap:10px; font-size:11px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.08)}
+  .m-fr:last-child{border-bottom:0}
+  .m-fr span:first-child{color:#BFD3EE} .m-fr small{display:block; color:#7E97BC; font-size:10px}
+  .m-fr span:last-child{font-weight:600; white-space:nowrap}
+  /* gasolina */
+  .m-car{border:1px solid var(--m-line); border-radius:12px; overflow:hidden; background:#fff}
+  .m-band{background:#FFFBEB; border-bottom:1px solid #FDE68A; padding:8px 10px; color:#92400E; font-size:10.5px; position:relative}
+  .m-band b{display:block; font-size:11px}
+  .m-photo{height:84px; background:radial-gradient(circle at 30% 60%, #1E293B, #020617); display:flex; align-items:center; justify-content:center; gap:14px; color:#7DD3FC; font-family:var(--mono); font-size:11px}
+  .m-photo b{font-size:20px; color:#E0F2FE}
+  .m-step{display:flex; align-items:center; gap:0}
+  .m-step .s{display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10.5px; color:var(--m-muted); flex:none}
+  .m-step .c{width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px; background:#E2E8F0; color:#64748B}
+  .m-step .c.ok{background:var(--m-em); color:#fff}
+  .m-step .ln{flex:1; height:2px; background:#E2E8F0; margin:0 6px 16px; min-width:30px} .m-step .ln.ok{background:var(--m-em)}
+  .m-step .s.cur{color:var(--m-ink); font-weight:700}
+  /* punições */
+  .m-redpanel{background:#FEF2F2; border:1px solid #FECACA; border-radius:14px; padding:14px; display:flex; gap:12px}
+  .m-bar{height:7px; border-radius:7px; background:#FECACA; overflow:hidden} .m-bar i{display:block; height:100%; background:#DC2626}
+  .m-occ{border:1px solid var(--m-line); border-left:3px solid #DC2626; border-radius:10px; padding:9px 10px; display:flex; justify-content:space-between; gap:10px}
+  .m-occ.blue{border-left-color:#3B82F6}
+  .m-pts{background:#fff; border:1px solid var(--m-line); border-radius:8px; padding:4px 8px; text-align:center; font-family:var(--display); color:#DC2626; font-weight:800; font-size:16px; line-height:1}
+  .m-pts small{display:block; font-size:8.5px; color:var(--m-muted); font-weight:700}
+  .m-tilebtn{border:1px solid var(--m-line); border-radius:10px; padding:9px 6px; display:flex; flex-direction:column; align-items:center; gap:5px; text-align:center; font-size:10.5px; color:#334155; position:relative}
+  .m-tilebtn .ic{width:17px; height:17px; color:#0EA5E9}
+  .m-tilebtn.on{border-color:#38BDF8; background:#F0F9FF}
+  .m-perf{background:#fff; border:1px solid var(--m-line); border-radius:12px; padding:10px}
+  .m-perf b{display:block; font-family:var(--display); font-size:22px; line-height:1.1; margin-top:4px}
+  .m-shop{border:1px solid var(--m-line); border-radius:12px; overflow:hidden; background:#fff; position:relative}
+  .m-shop .top{height:62px; display:flex; align-items:center; justify-content:center}
+  .m-shop .bt{padding:6px 8px} .m-shop .bt b{display:block; font-size:10.5px} .m-shop .bt span{font-size:9.5px; color:#0891B2; font-weight:600}
+
+  @media (max-width:760px){ .split{grid-template-columns:1fr} .split .fig{max-width:320px} }
+
   @media (max-width:820px){
     .hero .wrap{grid-template-columns:1fr; padding-block:40px 36px}
     .hero-logo{display:none}
@@ -214,6 +335,51 @@
       <path class="b b3" d="M183 318 V72 Q183 25 230 25 H300 Q392 25 392 112 Q392 172 304 195"/>
     </g>
   </symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 6l2 2 3-3M3 13l2 2 3-3M11 7h10M11 14h10M11 20h10"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8M14 7h7v7"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 7l4 4 5-7 5 7 4-4-2 12H5z"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><path d="M5 8h14v11H5zM12 8V4M9 13h.01M15 13h.01M2 13h3M19 13h3"/></symbol>
+  <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l12-4v4M16 14h.01"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 12h.01"/></symbol>
+  <symbol id="i-form" viewBox="0 0 24 24"><path d="M6 2h9l5 5v15H6zM14 2v6h6M10 13a2 2 0 1 1 3 1.7c-.6.4-1 .8-1 1.3M12 19h.01"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M3 8V6h18v2a3 3 0 0 0 0 6v4H3v-4a3 3 0 0 0 0-6zM13 6v12"/></symbol>
+  <symbol id="i-coins" viewBox="0 0 24 24"><path d="M16 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM2 15h4l5 2h4a2 2 0 0 1 0 4H8M6 13v8"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3zM12 10v4M12 17h.01"/></symbol>
+  <symbol id="i-qr" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v1M14 20h1M18 18h3v3"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5V3h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM9 4v16"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+  <symbol id="i-fuel" viewBox="0 0 24 24"><path d="M3 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 11h11M14 9h2a2 2 0 0 1 2 2v6a2 2 0 0 0 4 0V8l-3-3"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="M3 17v-5l2-5h14l2 5v5h-2M5 17H3M9 17h6M7 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM17 15a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><path d="M15 3a6 6 0 1 1-4.7 9.7L4 19v2h3v-2h2v-2h2l.3-.3A6 6 0 0 1 15 3zM16.5 7.5h.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21 12l-9 9a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 7v5l3 2"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11zM12 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4z"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><path d="M6 19a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM18 9a2 2 0 1 1 0-4 2 2 0 0 1 0 4zM8 17h7a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h7"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"/></symbol>
+  <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2zM9 8h6M9 12h6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7M22 21a7 7 0 0 0-4-6.3"/></symbol>
+  <symbol id="i-brief" viewBox="0 0 24 24"><path d="M3 7h18v13H3zM9 7V4h6v3M3 13h18"/></symbol>
+  <symbol id="i-thumb" viewBox="0 0 24 24"><path d="M7 10v11H3V10zM7 10l4-8a3 3 0 0 1 3 3v4h6a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 18.6 21H7"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18M2 2l7.6 7.6M11 13a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 15v6h16v-6"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><path d="M3 8h18v4H3zM5 12h14v9H5zM12 8v13M12 8S10 3 7.5 4 8 8 12 8zM12 8s2-5 4.5-4S16 8 12 8z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+  <symbol id="i-award" viewBox="0 0 24 24"><path d="M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.2 13.9 7 22l5-3 5 3-1.2-8.1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 5h6l2 2h10v12H3z"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><path d="M3 5h18v16H3zM3 10h18M8 3v4M16 3v4"/></symbol>
 </svg>
 
 <header class="hero">
@@ -391,6 +557,93 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
         </ol>
       </div>
     </div>
+    <h3>Como aparece na tela</h3>
+    <p style="color:var(--muted)">Os números azuis nas ilustrações indicam onde clicar, na ordem do passo a passo.</p>
+    <div class="figs">
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/gasolina</span></div>
+          <div class="shot-scroll"><div class="shot-body">
+            <div class="m-top"><svg class="ic"><use href="#i-menu"/></svg><span class="sep"></span>Portal do Membro<span class="sp"></span><svg class="ic"><use href="#i-bell"/></svg><svg class="ic"><use href="#i-logout"/></svg></div>
+            <div class="m-main">
+              <span class="m-back">← Voltar para Pagamentos e Reembolsos</span>
+              <h4 class="m-h1"><svg class="ic lg" style="color:#F59E0B"><use href="#i-fuel"/></svg>Reembolso de <span class="a">Gasolina</span></h4>
+              <p class="m-sub">Cadastre seus carros, lance suas viagens a serviço da Produtiva e solicite o reembolso.</p>
+              <div class="m-tabs"><span>Viagens</span><span>Solicitações</span><span class="on">Meus carros e Pix</span></div>
+              <div class="m-card hl"><span class="pin">3</span>
+                <div class="m-ct"><svg class="ic" style="color:#F59E0B"><use href="#i-key"/></svg>Chave Pix para reembolso</div>
+                <div class="m-cd">É para esta chave que o financeiro envia o reembolso. CPF, CNPJ, e-mail, celular (+55...) ou chave aleatória.</div>
+                <div class="m-row"><span class="m-in v" style="flex:1;font-family:var(--mono)">ana.souza@email.com</span><span class="m-btn out"><svg class="ic"><use href="#i-edit"/></svg>Alterar</span></div>
+              </div>
+              <div class="m-card">
+                <div class="m-row between"><div><div class="m-ct"><svg class="ic" style="color:#F59E0B"><use href="#i-car"/></svg>Meus carros</div><div class="m-cd" style="margin-top:2px">A autonomia (quantos km o carro faz com 1 litro) é usada para calcular os litros de cada viagem.</div></div><span class="m-btn amber hl"><span class="pin">1</span><svg class="ic"><use href="#i-plus"/></svg>Adicionar carro</span></div>
+                <div class="m-g3">
+                  <div class="m-car">
+                    <div class="m-band hl"><span class="pin" style="top:6px;right:6px;box-shadow:none">2</span><b>Aguardando aprovação da VP</b>A VP vai conferir a foto do painel e a autonomia.</div>
+                    <div class="m-photo"><span>AUTONOMIA</span><b>10,5</b><span>km/L</span></div>
+                    <div style="padding:8px 10px"><div class="m-row between"><b>Fiat Mobi</b><svg class="ic" style="color:#DC2626"><use href="#i-trash"/></svg></div><span class="m-small">2020 · Flex</span><div style="font-weight:700;margin-top:2px">10,5 km/L</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Aba "Meus carros e Pix".</b> Cadastre o carro (1), espere a aprovação da VP (2) e salve sua chave Pix (3).</span></figcaption>
+      </figure>
+
+      <figure class="fig narrow">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/gasolina</span></div>
+          <div class="m-overlay"><div class="m-dialog">
+            <span class="m-x">✕</span>
+            <div class="m-dt">Lançar viagem</div>
+            <div class="m-dd">Informe o trajeto feito a serviço da Produtiva. Os litros e o valor são calculados automaticamente.</div>
+            <div class="hl" style="border-radius:10px;padding:8px;position:relative;display:flex;flex-direction:column;gap:9px"><span class="pin">1</span>
+              <div class="m-g2"><div><span class="m-lbl">Centro de custo <span class="req">*</span></span><span class="m-in v">Projetos (Consultorias/Assessorias) ▾</span></div><div><span class="m-lbl">Carro <span class="req">*</span></span><span class="m-in v">Fiat Mobi · 10,5 km/L ▾</span></div></div>
+              <div><span class="m-lbl">Projeto <span class="req">*</span></span><span class="m-in v">Consultoria Café Potiguar</span><div class="m-help">Lista do Monday. Se o projeto não estiver aqui, peça à VP para cadastrá-lo.</div></div>
+              <div class="m-g2"><div><span class="m-lbl">Local de saída <span class="req">*</span></span><span class="m-in v">UFRN</span></div><div><span class="m-lbl">Local de chegada <span class="req">*</span></span><span class="m-in v">Café Potiguar</span></div></div>
+              <span class="m-btn out" style="width:max-content"><svg class="ic"><use href="#i-plus"/></svg>Adicionar parada</span>
+              <span class="m-row" style="font-size:11.5px"><span style="width:14px;height:14px;border-radius:4px;background:#001A41;display:inline-flex;align-items:center;justify-content:center;color:#fff"><svg class="ic" style="width:10px;height:10px"><use href="#i-check"/></svg></span>Ida e volta (voltei ao local de saída)</span>
+            </div>
+            <div class="m-in dash hl" style="position:relative"><span class="pin">3</span><span class="m-btn out"><svg class="ic"><use href="#i-map"/></svg>Calcular km pelo Google Maps</span></div>
+            <div class="m-g2 hl" style="border-radius:10px;padding:6px;position:relative"><span class="pin">2</span><div><span class="m-lbl">Distância total (km) <span class="req">*</span></span><span class="m-in v">40,0</span></div><div><span class="m-lbl">Data <span class="req">*</span></span><span class="m-in v">12/11/2026</span></div></div>
+            <div class="m-help">Viagens podem ser lançadas até 2 meses depois da data. Estimativa: 3,81 L.</div>
+            <div class="m-row" style="justify-content:flex-end"><span class="m-btn out">Cancelar</span><span class="m-btn amber">Lançar viagem</span></div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Janela "Lançar viagem"</b>, aberta pelo botão de mesmo nome na aba Viagens.</span></figcaption>
+      </figure>
+
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/gasolina</span></div>
+          <div class="shot-scroll"><div class="shot-body">
+            <div class="m-main">
+              <div class="m-tabs"><span class="on">Viagens</span><span>Solicitações</span><span>Meus carros e Pix</span></div>
+              <div class="m-card">
+                <div class="m-row between"><div><div class="m-ct">Para reembolsar</div><div class="m-cd" style="margin-top:2px">Só entram no reembolso as viagens de meses que já têm o preço da gasolina definido pela VP.</div></div><span class="m-btn amber"><svg class="ic"><use href="#i-plus"/></svg>Lançar viagem</span></div>
+                <div style="font-family:var(--display);font-size:16px;font-weight:700">R$ 8,76 <span style="font-weight:500;color:#64748B;font-size:12px">pendentes no total</span></div>
+                <div class="m-g3"><div class="m-card" style="gap:6px">
+                  <b>Consultoria Café Potiguar</b><span class="m-small" style="margin-top:-6px">Projetos (Consultorias/Assessorias)</span>
+                  <span style="color:#D97706;font-weight:700;font-size:15px">R$ 8,76</span>
+                  <span class="m-small">1,35 L pendentes · 5,16 L no total</span>
+                  <span class="m-row" style="color:#0369A1;font-size:10.5px;gap:5px"><svg class="ic" style="width:12px;height:12px"><use href="#i-clock"/></svg>1 viagem aguardando o preço do mês</span>
+                  <span class="m-btn amber full hl"><span class="pin">2</span><svg class="ic"><use href="#i-send"/></svg>Solicitar reembolso</span>
+                </div></div>
+              </div>
+              <div class="m-card">
+                <div class="m-ct"><svg class="ic" style="color:#F59E0B"><use href="#i-route"/></svg>Minhas viagens</div>
+                <table class="m-table"><thead><tr><th>Data</th><th>Projeto</th><th>Trajeto</th><th>Km / Litros</th><th>Valor</th><th>Status</th><th></th></tr></thead><tbody>
+                  <tr><td>12/11/2026</td><td>Café Potiguar<div class="m-small">Fiat Mobi</div></td><td>UFRN → Café Potiguar<div class="m-small">Ida e volta</div></td><td>40,0 km<div class="m-small">3,81 L</div></td><td style="color:#0369A1">Aguardando preço de novembro</td><td><span class="m-badge b-amber">Pendente</span></td><td><span class="m-row" style="gap:6px;color:#64748B"><svg class="ic"><use href="#i-edit"/></svg><svg class="ic" style="color:#DC2626"><use href="#i-trash"/></svg></span></td></tr>
+                  <tr><td>28/10/2026</td><td>Café Potiguar<div class="m-small">Fiat Mobi</div></td><td>UFRN → Container PJ</td><td>14,2 km<div class="m-small">1,35 L</div></td><td>R$ 8,76</td><td><span class="m-badge b-amber">Pendente</span><div class="m-small">Vence em 45 dias</div></td><td><span class="m-row" style="gap:6px;color:#64748B"><svg class="ic"><use href="#i-edit"/></svg><svg class="ic" style="color:#DC2626"><use href="#i-trash"/></svg></span></td></tr>
+                  <tr><td>20/10/2026</td><td>Café Potiguar<div class="m-small">Fiat Mobi</div></td><td>UFRN → Café Potiguar</td><td>42,0 km<div class="m-small">4,00 L</div></td><td>R$ 25,96</td><td><span class="m-badge b-sky">Em solicitação</span></td><td></td></tr>
+                  <tr><td>02/10/2026</td><td>Café Potiguar<div class="m-small">Fiat Mobi</div></td><td>UFRN → Café Potiguar</td><td>30,0 km<div class="m-small">2,86 L</div></td><td>R$ 18,54</td><td><span class="m-badge b-em">Reembolsado</span></td><td></td></tr>
+                </tbody></table>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Aba "Viagens".</b> Cada projeto tem seu botão "Solicitar reembolso" (2). Abaixo, o histórico com o prazo de cada viagem.</span></figcaption>
+      </figure>
+    </div>
+
     <h3>O caminho do seu pedido</h3>
     <div class="card">
       <div class="flow">
@@ -409,6 +662,34 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
         <div><b>Recusado</b><span>Pode acontecer em qualquer etapa, sempre com motivo. Clique em <span class="ui">Retomar viagens</span>, corrija e envie de novo.</span></div>
       </div>
     </div>
+    <figure class="fig" style="margin-top:22px">
+      <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/gasolina</span></div>
+        <div class="shot-scroll"><div class="shot-body">
+          <div class="m-main">
+            <div class="m-tabs"><span>Viagens</span><span class="on">Solicitações</span><span>Meus carros e Pix</span></div>
+            <div class="m-card">
+              <div class="m-row between"><div><div class="m-ct">Minhas solicitações</div><div class="m-cd" style="margin-top:2px">O andamento acompanha o Processos de Pagamento: Solicitado → Aprovado → Lançado → Pago. Atualiza sozinho a cada minuto.</div></div><span class="m-btn out">Atualizar</span></div>
+              <div class="m-card" style="gap:12px">
+                <div class="m-row between"><b>Consultoria Café Potiguar</b><b style="font-size:15px">R$ 25,96</b></div>
+                <span class="m-small" style="margin-top:-8px">Projetos (Consultorias/Assessorias) · pedido em 22/10/2026 · 1 viagem, 4,00 L</span>
+                <div class="m-step">
+                  <div class="s"><span class="c ok">✓</span>Solicitado</div><span class="ln ok"></span>
+                  <div class="s"><span class="c ok">✓</span>Aprovado</div><span class="ln"></span>
+                  <div class="s cur"><span class="c">3</span>Lançado</div><span class="ln"></span>
+                  <div class="s"><span class="c">4</span>Pago</div>
+                </div>
+                <span class="m-small">⌄ Ver viagens</span>
+              </div>
+              <div class="m-card" style="gap:10px">
+                <div class="m-row between"><b>Prospecção (Marketing)</b><b style="font-size:15px">R$ 12,40</b></div>
+                <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:9px 10px;color:#991B1B;font-size:11.5px"><b>Recusado.</b> Km acima do trajeto do Google Maps. Retome as viagens para corrigir e solicitar de novo.<div style="margin-top:7px"><span class="m-btn out" style="color:#B91C1C;border-color:#FCA5A5">Retomar viagens</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <figcaption><span class="tag-ill">Ilustração</span><span><b>Aba "Solicitações".</b> A barra mostra em que etapa está cada pedido; um pedido recusado mostra o motivo e o botão para retomar.</span></figcaption>
+    </figure>
     <div class="note warn" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--warn)"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><p><b>Prazo de 2 meses:</b> viagem não pedida em até 2 meses vira "Vencido" e não pode mais ser reembolsada. Centros de custo: "Projetos (Consultorias/Assessorias)" e "Prospecção (Marketing)".</p></div>
   </section>
 
@@ -436,6 +717,51 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
   <section id="pagamentos">
     <div class="sec-head"><span class="mark"><i></i><i></i><i></i></span><h2>Pagamentos e reembolsos em geral</h2></div>
     <p class="lede">Gastos da PJ que você pagou do seu bolso, ou contas que a PJ precisa pagar, são pedidos em <span class="ui">Pagamentos e Reembolsos</span> → <span class="ui">Solicitar Pagamento ou Reembolso</span>.</p>
+    <div class="figs">
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/pagamentos</span></div>
+          <div class="shot-scroll"><div class="shot-body">
+            <div class="m-top"><svg class="ic"><use href="#i-menu"/></svg><span class="sep"></span>Portal do Membro<span class="sp"></span><svg class="ic"><use href="#i-bell"/></svg><svg class="ic"><use href="#i-logout"/></svg></div>
+            <div class="m-main">
+              <h4 class="m-h1"><svg class="ic lg" style="color:#F59E0B"><use href="#i-coins"/></svg>Pagamentos e <span class="a">Reembolsos</span></h4>
+              <p class="m-sub">Gerencie suas solicitações de pagamentos e reembolsos em um só lugar.</p>
+              <div class="m-g2">
+                <div class="m-card hl"><span class="pin">1</span><span class="m-chip" style="background:#FFFBEB;color:#F59E0B"><svg class="ic lg"><use href="#i-receipt"/></svg></span><b style="font-family:var(--display);font-size:14px">Solicitar Pagamento ou Reembolso</b><span class="m-small" style="font-size:11.5px">Preencha o formulário para solicitar pagamentos, reembolsos e outras despesas relacionadas às atividades da Produtiva Júnior.</span><span style="color:#D97706;font-weight:600">Acessar →</span></div>
+                <div class="m-card"><span class="m-chip" style="background:#FFFBEB;color:#F59E0B"><svg class="ic lg"><use href="#i-fuel"/></svg></span><b style="font-family:var(--display);font-size:14px">Reembolso de Gasolina</b><span class="m-small" style="font-size:11.5px">Cadastre seus veículos, registre viagens e acompanhe seus reembolsos de combustível.</span><span style="color:#D97706;font-weight:600">Acessar →</span></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Pagamentos e Reembolsos.</b> Para outros gastos, entre em "Solicitar Pagamento ou Reembolso" (1).</span></figcaption>
+      </figure>
+      <figure class="fig narrow">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/pagamentos/solicitar</span></div>
+          <div class="m-main">
+            <h4 class="m-h1"><svg class="ic lg" style="color:#F59E0B"><use href="#i-receipt"/></svg>Solicitar Pagamento ou <span class="a">Reembolso</span></h4>
+            <p class="m-sub">Preencha o formulário abaixo para registrar sua solicitação.</p>
+            <div class="m-card" style="flex-direction:row;align-items:center"><span class="m-chip" style="background:#FFFBEB;color:#F59E0B"><svg class="ic"><use href="#i-user"/></svg></span><div><span class="m-small">Solicitante</span><b style="display:block">Ana Souza</b></div></div>
+            <div class="m-card">
+              <div class="hl" style="border-radius:9px;position:relative"><span class="pin">1</span><span class="m-lbl">Tipo de solicitação <span class="req">*</span></span><div class="m-seg"><span class="on">REEMBOLSO</span><span>PAGAMENTO</span></div></div>
+              <div class="hl" style="border-radius:9px;position:relative"><span class="pin">2</span><span class="m-lbl">Descrição do pagamento <span class="req">*</span></span>
+                <div style="background:#FFFBEB;border-radius:8px;padding:7px 9px;font-size:10.5px;color:#92400E;margin-bottom:6px">Se for auxílio alimentação: <b>Auxílio alimentação - (XX/YY/ZZZZ)</b></div>
+                <span class="m-in ta v">Auxílio alimentação - (12/11/2026)</span></div>
+              <div class="m-g2 hl" style="border-radius:9px;position:relative"><span class="pin">3</span><div><span class="m-lbl">Fornecedor <span class="req">*</span></span><span class="m-in v">Restaurante Universitário</span></div><div><span class="m-lbl">Valor (R$) <span class="req">*</span></span><span class="m-in v">R$ 28,50</span></div></div>
+            </div>
+            <div class="m-card">
+              <div class="m-g2"><div><span class="m-lbl">Centro de custo <span class="req">*</span></span><span class="m-in v">VP ▾</span></div><div><span class="m-lbl">Categoria</span><span class="m-in">Escolha ▾</span></div></div>
+              <div><span class="m-lbl">Chave Pix para reembolso <span class="req">*</span></span><span class="m-in v">ana.souza@email.com</span></div>
+              <div class="m-g2 hl" style="border-radius:9px;position:relative"><span class="pin">4</span><div><span class="m-lbl">É PIPJ? <span class="req">*</span></span><div class="m-seg"><span>Sim</span><span class="on">Não</span></div></div><div><span class="m-lbl">É retirada por milha? <span class="req">*</span></span><div class="m-seg"><span>Sim</span><span class="on">Não</span></div></div></div>
+            </div>
+            <div class="m-card">
+              <div class="hl" style="border-radius:9px;position:relative"><span class="pin">5</span><span class="m-lbl">Anexe o comprovante <span class="req">*</span></span><span class="m-in dash"><svg class="ic"><use href="#i-clip"/></svg>Escolher arquivos (PDF ou imagem, até 10 MB)</span></div>
+            </div>
+            <div class="m-row" style="justify-content:flex-end"><span class="m-btn amber lg"><svg class="ic"><use href="#i-send"/></svg>Enviar solicitação</span></div>
+          </div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Formulário de solicitação.</b> Os números seguem o passo a passo "Como preencher". Ao enviar, aparece um número de protocolo: guarde-o.</span></figcaption>
+      </figure>
+    </div>
+
     <div class="grid g2" style="margin-top:22px">
       <div class="card"><span class="owner">Reembolso</span><p>Você <b>já pagou</b> e quer o dinheiro de volta. O formulário pede sua chave Pix.</p></div>
       <div class="card"><span class="owner">Pagamento</span><p>A PJ <b>precisa pagar</b> um fornecedor. O formulário pede boleto ou dados de transferência/cartão.</p></div>
@@ -595,6 +921,74 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
         </ol>
       </div>
     </div>
+    <div class="figs">
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/wallet</span></div>
+          <div class="shot-scroll"><div class="shot-body" style="min-width:660px">
+            <div class="m-top"><svg class="ic"><use href="#i-menu"/></svg><span class="sep"></span>Portal do Membro<span class="sp"></span><svg class="ic"><use href="#i-bell"/></svg><svg class="ic"><use href="#i-logout"/></svg></div>
+            <div class="m-main">
+              <h4 class="m-h1">Carteira <span class="p">PIPJ</span></h4>
+              <p class="m-sub">Gerencie seu saldo, benefícios e reembolsos.</p>
+              <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:12px;align-items:start">
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div class="m-card" style="border-radius:20px;background:linear-gradient(135deg,#fff,#F8FAFC);padding:18px">
+                    <span class="m-up" style="color:#64748B">Saldo atual disponível</span>
+                    <b style="font-family:var(--display);font-size:38px;color:#001A41;line-height:1">R$ 165,00</b>
+                    <span class="m-badge b-em">↗ +R$ 165,00 este mês</span>
+                    <span class="m-btn lg hl"><span class="pin">1</span><svg class="ic"><use href="#i-up"/></svg>Solicitar Saque</span>
+                  </div>
+                  <div class="m-card m-navy" style="border-radius:20px">
+                    <div class="m-ct"><svg class="ic" style="color:#60A5FA"><use href="#i-target"/></svg>Critérios do Saldo PIPJ</div>
+                    <div class="m-g2">
+                      <div class="m-tile"><span class="m-up">Cargo</span><b>Operacional</b></div>
+                      <div class="m-tile"><span class="m-up">Núcleo</span><b>Projetos</b></div>
+                      <div class="m-tile"><span class="m-up">Punições</span><b style="color:#F87171;font-family:var(--mono)">1 pts</b></div>
+                      <div class="m-tile"><span class="m-up">NPS Global</span><b style="color:#67E8F9">4.5 <small style="color:#93C5FD">/ 5</small></b></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="m-card m-navy" style="border-radius:20px;background:linear-gradient(160deg,#001A41,#0A2A5E)">
+                  <div class="m-ct">Previsão PIPJ</div><span style="font-size:11px;color:#93C5FD;margin-top:-8px">Novembro 2026</span>
+                  <div style="background:rgba(16,185,129,.14);border:1px solid rgba(16,185,129,.35);border-radius:10px;padding:8px 10px"><span class="m-up" style="color:#6EE7B7">Valor estimado</span><b style="display:block;font-family:var(--display);font-size:22px;color:#fff">R$ 165,00</b></div>
+                  <div>
+                    <div class="m-fr"><span>BASE DO CARGO<small>Operacional</small></span><span>+ R$ 100,00</span></div>
+                    <div class="m-fr"><span>BÔNUS PROJETOS<small>3 projeto(s) × R$ 15</small></span><span>+ R$ 45,00</span></div>
+                    <div class="m-fr"><span>BÔNUS NÍVEL<small>Pleno</small></span><span>+ R$ 15,00</span></div>
+                    <div class="m-fr"><span>DESC. PUNIÇÕES<small>1 pt(s) × R$ 10</small></span><span style="color:#FCA5A5">- R$ 10,00</span></div>
+                    <div class="m-fr"><span>DESC. AUSÊNCIAS<small>0 dia(s) de 22</small></span><span>R$ 0,00</span></div>
+                    <div class="m-fr"><span>BÔNUS NPS<small>NPS 4.5 (&gt; 4 → +10%)</small></span><span>+ R$ 15,00</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="m-card">
+                <div class="m-row between"><div class="m-ct"><svg class="ic"><use href="#i-receipt"/></svg>Minhas Solicitações de Saque PIPJ</div><span class="m-small">Total solicitado: R$ 120,00</span></div>
+                <div class="m-row between" style="border-top:1px solid #E2E8F0;padding-top:8px"><div><b>Curso de Excel avançado</b><div class="m-small">◷ 05/11/2026</div></div><div class="m-row"><b>R$ 120,00</b><span class="m-badge b-yellow">PENDENTE</span></div></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Carteira PIPJ.</b> Saldo, critérios, previsão do mês e seus pedidos de saque. O botão "Solicitar Saque" (1) abre a janela abaixo.</span></figcaption>
+      </figure>
+      <figure class="fig narrow">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/wallet</span></div>
+          <div class="m-overlay"><div class="m-dialog">
+            <span class="m-x">✕</span>
+            <div class="m-dt">Solicitar Saque PIPJ</div>
+            <div class="m-dd">Preencha os dados para solicitar o saque do seu saldo.</div>
+            <div style="background:#F1F5F9;border-radius:10px;padding:8px 10px"><span class="m-up" style="color:#64748B">Saldo disponível para solicitar</span><b style="display:block;font-family:var(--display);font-size:18px">R$ 45,00</b><span style="font-size:10.5px;color:#B45309">R$ 120,00 já solicitado(s) e pendente(s) de aprovação</span></div>
+            <div class="hl" style="border-radius:9px;position:relative;display:flex;flex-direction:column;gap:8px"><span class="pin">2</span>
+              <div><span class="m-lbl">Descrição / Motivo</span><span class="m-in ta">Descreva o motivo do saque...</span></div>
+              <div><span class="m-lbl">Valor (R$)</span><span class="m-in">0</span><div class="m-help">Máximo de R$ 300,00 por solicitação.</div></div>
+            </div>
+            <div class="hl" style="border-radius:9px;position:relative"><span class="pin">3</span><span class="m-lbl">Tipo de Gasto</span><span class="m-in">Selecione o tipo... ▾</span></div>
+            <div class="m-g2 hl" style="border-radius:9px;position:relative"><span class="pin">4</span><div><span class="m-lbl">Forma de Pagamento</span><span class="m-in v">PIX ▾</span></div><div><span class="m-lbl">Chave PIX</span><span class="m-in">CPF, e-mail, telefone…</span></div></div>
+            <div class="hl" style="border-radius:9px;position:relative"><span class="pin">5</span><span class="m-lbl">Comprovante / Imagem</span><span class="m-in" style="justify-content:flex-start"><svg class="ic"><use href="#i-clip"/></svg>Anexar imagem...</span></div>
+            <span class="m-btn full lg"><svg class="ic"><use href="#i-up"/></svg>Enviar Solicitação</span>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Janela "Solicitar Saque PIPJ".</b> Os números seguem o passo a passo acima.</span></figcaption>
+      </figure>
+    </div>
   </section>
 
   <!-- Pontos -->
@@ -620,9 +1014,136 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
         <p>Aplicado pela Gestão de Pessoas, com motivo e, às vezes, data de fim. Enquanto ativo, o PIPJ do mês é <b>zero</b>, sem exceção.</p>
       </div>
     </div>
+    <div class="note bad" style="margin-top:14px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--bad)"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg><p><b>Limite de 10 pontos.</b> O acúmulo de pontos negativos pode levar a desligamento ou perda de benefícios.</p></div>
+
+    <figure class="fig" style="margin-top:22px">
+      <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/punishments</span></div>
+        <div class="shot-scroll"><div class="shot-body" style="min-width:640px">
+          <div class="m-top"><svg class="ic"><use href="#i-menu"/></svg><span class="sep"></span>Portal do Membro<span class="sp"></span><svg class="ic"><use href="#i-bell"/></svg><svg class="ic"><use href="#i-logout"/></svg></div>
+          <div class="m-main">
+            <span class="m-crumb">Dashboard › <b>Gestão de Punições</b></span>
+            <div class="m-redpanel">
+              <span class="m-chip" style="background:#FEE2E2;color:#DC2626;border-radius:50%"><svg class="ic"><use href="#i-alert"/></svg></span>
+              <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                <b style="font-family:var(--display);font-size:14px;color:#991B1B">Status da Disciplina</b>
+                <span style="font-size:11.5px;color:#7F1D1D">Você possui <b>1 ponto(s)</b> ativo(s). O limite é 10.</span>
+                <div class="m-bar"><i style="width:10%"></i></div>
+                <div class="m-row between m-small" style="color:#991B1B"><span>1 Pontos</span><span>10 Pontos (Limite)</span></div>
+              </div>
+            </div>
+            <div class="m-g2">
+              <div class="m-card"><div class="m-ct">Histórico de Ocorrências</div>
+                <div class="m-occ"><div><b>Atraso em reunião</b> <span class="m-badge b-slate">LEVE</span><div class="m-small">Chegou 20 min depois do início.</div><div class="m-small" style="font-family:var(--mono)">03/11/2026 • Operacional</div></div><span class="m-pts">1<small>PTS</small></span></div>
+              </div>
+              <div class="m-card"><div class="m-row between"><div class="m-ct">Meus Pedidos de Remoção</div><span class="m-btn sky hl"><span class="pin">1</span><svg class="ic"><use href="#i-shield"/></svg>Solicitar Remoção de Pontos</span></div>
+                <div class="m-occ blue"><div><b>Solicitação de Remoção (1 pt)</b><div style="margin:3px 0"><span class="m-badge b-blue">◷ EM ANÁLISE</span></div><div class="m-small">Curso com certificado · 10/11/2026</div><span style="color:#2563EB;font-size:10.5px">Ver Comprovante</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <figcaption><span class="tag-ill">Ilustração</span><span><b>Tela Punições.</b> Seus pontos, o limite, o histórico e os pedidos de remoção. Para pedir, clique em "Solicitar Remoção de Pontos" (1).</span></figcaption>
+    </figure>
+
     <h3>Ações que removem pontos</h3>
-    <div class="flow">
-      <span class="pill">Treinamento para outra EJ</span><span class="pill">Consultoria externa</span><span class="pill">CSAT 5 ou NPS 10</span><span class="pill">Fidelizar projeto</span><span class="pill">Finalizar edital</span><span class="pill">PDI no prazo</span><span class="pill">Concretizar parcerias</span><span class="pill">Escrever um case</span><span class="pill">Projeto de melhoria</span>
+    <div class="tw"><table>
+      <thead><tr><th>Grupo</th><th>Pontos removidos</th><th>Ações</th></tr></thead>
+      <tbody>
+        <tr><td><b>Desenvolvimento</b></td><td class="n">1 ponto</td><td>Curso com certificado, treinamento interno, participar de um bench, indicar lead quente, participação de GT</td></tr>
+        <tr><td><b>Crescimento</b></td><td class="n">2 pontos</td><td>Treinamento para outra EJ, consultoria externa, CSAT 5 ou NPS 10, fidelizar projeto, finalizar edital, finalizar PDI no prazo, concretizar parcerias</td></tr>
+        <tr><td><b>Fortalecimento</b></td><td class="n">3 pontos</td><td>Escrever um case, projeto de melhoria</td></tr>
+      </tbody>
+    </table></div>
+    <p style="color:var(--muted);font-size:13.5px;margin-top:8px">A lista pode mudar: a Gestão de Pessoas atualiza as ações no sistema.</p>
+
+    <div class="figs">
+      <figure class="fig" style="max-width:680px">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/punishments</span></div>
+          <div class="shot-scroll"><div class="shot-body" style="min-width:560px">
+          <div class="m-overlay"><div class="m-dialog wide">
+            <span class="m-x">✕</span>
+            <div class="m-dt"><span class="m-chip" style="background:#E0F2FE;color:#0EA5E9;border-radius:50%"><svg class="ic"><use href="#i-award"/></svg></span>Retirada de Pontos</div>
+            <div class="hl" style="border-radius:10px;padding:8px;position:relative;display:flex;flex-direction:column;gap:7px"><span class="pin">2</span>
+              <span class="m-up" style="color:#64748B">Desenvolvimento - retirada de 1 ponto</span>
+              <div class="m-g4">
+                <div class="m-tilebtn on"><svg class="ic"><use href="#i-star"/></svg>Curso com certificado</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-users"/></svg>Treinamento interno</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-users"/></svg>Participar de um bench</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-zap"/></svg>Indicar lead quente</div>
+              </div>
+              <span class="m-up" style="color:#64748B">Crescimento - retirada de 2 pontos</span>
+              <div class="m-g4">
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-brief"/></svg>Consultoria externa</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-thumb"/></svg>CSAT 5 ou NPS 10</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-form"/></svg>Finalizar edital</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-cal"/></svg>Finalizar PDI no prazo</div>
+              </div>
+              <span class="m-up" style="color:#64748B">Fortalecimento - retirada de 3 pontos</span>
+              <div class="m-g4">
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-pen"/></svg>Escrever um case</div>
+                <div class="m-tilebtn"><svg class="ic"><use href="#i-trend"/></svg>Projeto de melhoria</div>
+              </div>
+            </div>
+            <div><span class="m-lbl">Descrição Detalhada</span><span class="m-in ta v">Concluí o curso de Power BI (20h) em 08/11.</span></div>
+            <div class="hl" style="border-radius:9px;position:relative"><span class="pin">3</span><span class="m-lbl">Comprovante</span><span class="m-in dash" style="flex-direction:column;padding:12px"><svg class="ic lg"><use href="#i-upload"/></svg><span><b style="color:#0F172A">Clique para enviar</b> ou arraste o arquivo</span><span class="m-small">PNG, JPG ou PDF (Máx. 5MB)</span></span></div>
+            <div class="m-row between"><span class="m-row m-up" style="color:#64748B">Saldo a retirar: <span class="m-badge b-sky">1 ponto</span></span><span class="m-row"><span class="m-btn ghost">Cancelar</span><span class="m-btn cyan">Confirmar Retirada</span></span></div>
+          </div></div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Janela "Retirada de Pontos".</b> Escolha a ação (2), descreva e anexe a prova (3). O pedido fica "Em análise" até a GP decidir.</span></figcaption>
+      </figure>
+
+      <figure class="fig narrow">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/milhas</span></div>
+          <div class="m-overlay"><div class="m-dialog">
+            <span class="m-x">✕</span>
+            <div class="m-dt"><svg class="ic lg" style="color:#00B4D8"><use href="#i-gift"/></svg>Loja de Milhas</div>
+            <div class="m-g2">
+              <div style="background:#F1F5F9;border-radius:10px;padding:8px 10px"><span class="m-up" style="color:#64748B">Saldo disponível</span><b style="display:block;font-family:var(--display);font-size:16px">120 milhas</b></div>
+              <div style="background:#ECFEFF;border-radius:10px;padding:8px 10px"><span class="m-up" style="color:#0E7490">Total do carrinho</span><b style="display:block;font-family:var(--display);font-size:16px;color:#0891B2">10 milhas</b></div>
+            </div>
+            <div class="m-g3">
+              <div class="m-shop hl"><span class="pin">✓</span><div class="top" style="background:#FEE2E2;color:#DC2626"><svg class="ic lg"><use href="#i-ticket"/></svg></div><div class="bt"><b>-1 Ponto</b><span>10 milhas</span></div></div>
+              <div class="m-shop"><div class="top" style="background:#FFEDD5;color:#EA580C"><svg class="ic lg"><use href="#i-gift"/></svg></div><div class="bt"><b>Vale iFood (R$ 30,00)</b><span>30 milhas</span></div></div>
+              <div class="m-shop"><div class="top" style="background:#EDE9FE;color:#7C3AED"><svg class="ic lg"><use href="#i-ticket"/></svg></div><div class="bt"><b>2 ingressos de cinema</b><span>35 milhas</span></div></div>
+            </div>
+            <div class="m-row" style="justify-content:flex-end"><span class="m-btn ghost">Cancelar e voltar</span><span class="m-btn cyan">Confirmar Resgate</span></div>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Loja de Milhas</b> (Minhas Milhas → Resgatar Recompensas). O item "-1 Ponto" custa 10 milhas.</span></figcaption>
+      </figure>
+    </div>
+
+    <h3>Avisar uma ausência</h3>
+    <div class="grid g2" style="align-items:start">
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/</span></div>
+          <div class="m-main">
+            <span class="m-crumb"><b>Início</b></span>
+            <div class="m-card"><div class="m-ct">Ações Rápidas</div>
+              <span class="m-btn full lg" style="justify-content:flex-start"><svg class="ic"><use href="#i-wallet"/></svg>Ver Carteira PIPJ</span>
+              <span class="m-btn full lg" style="justify-content:flex-start"><svg class="ic"><use href="#i-trend"/></svg>Ver Relatório NPS</span>
+              <span class="m-btn full lg hl" style="justify-content:flex-start"><span class="pin">1</span><svg class="ic"><use href="#i-pin"/></svg>Agendar Ausência</span>
+            </div>
+          </div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Início → Ações Rápidas.</b> Clique em "Agendar Ausência" (1).</span></figcaption>
+      </figure>
+      <figure class="fig">
+        <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/</span></div>
+          <div class="m-overlay"><div class="m-dialog">
+            <span class="m-x">✕</span>
+            <div class="m-dt">Agendar Ausência</div>
+            <div class="hl" style="border-radius:9px;padding:6px;position:relative;display:flex;flex-direction:column;gap:8px"><span class="pin">2</span>
+              <div><span class="m-lbl">Localização da Viagem</span><span class="m-in v">Recife, PE</span></div>
+              <div class="m-g2"><div><span class="m-lbl">Data de Ida</span><span class="m-in v">24/11/2026</span></div><div><span class="m-lbl">Data de Volta</span><span class="m-in v">28/11/2026</span></div></div>
+              <div><span class="m-lbl">Justificativa da Viagem</span><span class="m-in ta v">Congresso universitário.</span></div>
+            </div>
+            <span class="m-btn full lg">Registrar Ausência</span>
+          </div></div>
+        </div>
+        <figcaption><span class="tag-ill">Ilustração</span><span><b>Janela "Agendar Ausência".</b> Preencha local, datas e justificativa (2).</span></figcaption>
+      </figure>
     </div>
   </section>
 
@@ -633,14 +1154,64 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
     <div class="grid g3" style="margin-top:22px">
       <div class="card"><span class="owner">NPS de Projetos</span><p>Respondido em <span class="ui">Formulários</span> e mostrado em <span class="ui">Performance</span>.</p></div>
       <div class="card"><span class="owner">NPS Interno</span><p>Avaliação interna (antigo "Piloto de Elite"), também em <span class="ui">Performance</span>.</p></div>
-      <div class="card"><span class="owner">Nota final</span><p>Média das duas no mesmo mês, ou a que existir. Um CSAT 5 ou NPS 10 também remove um ponto negativo.</p></div>
+      <div class="card"><span class="owner">Nota final</span><p>Média das duas no mesmo mês, ou a que existir. Um CSAT 5 ou NPS 10 também remove 2 pontos negativos.</p></div>
     </div>
+    <figure class="fig" style="margin-top:22px">
+      <div class="shot"><div class="shot-bar"><span class="dots"><i></i><i></i><i></i></span><span class="url">areadomembro.produtivajunior.com.br/performance</span></div>
+        <div class="shot-scroll"><div class="shot-body" style="min-width:640px">
+          <div class="m-top"><svg class="ic"><use href="#i-menu"/></svg><span class="sep"></span>Portal do Membro<span class="sp"></span><svg class="ic"><use href="#i-bell"/></svg><svg class="ic"><use href="#i-logout"/></svg></div>
+          <div class="m-main">
+            <span class="m-crumb">Dashboard › <b>Performance &amp; NPS</b></span>
+            <div class="m-tabs violet"><span class="on">NPS Projetos</span><span>NPS Interno</span></div>
+            <div class="m-g4">
+              <div class="m-perf"><span class="m-up" style="color:#7C3AED">Comunicação</span><b style="color:#7C3AED">4.7</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#E11D48">Dedicação</span><b style="color:#E11D48">4.6</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#2563EB">Confiança</span><b style="color:#2563EB">4.5</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#4F46E5">Pontualidade</span><b style="color:#4F46E5">4.2</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#0891B2">Organização</span><b style="color:#0891B2">4.4</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#D97706">Proatividade</span><b style="color:#D97706">4.6</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#059669">Qualidade</span><b style="color:#059669">4.5</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#C026D3">Domínio Téc.</span><b style="color:#C026D3">4.5</b><span class="m-small">3 aval. em Outubro/2026</span></div>
+            </div>
+            <div class="m-g3">
+              <div class="m-perf hl" style="position:relative"><span class="pin">✓</span><span class="m-up" style="color:#64748B">Média geral</span><b style="color:#059669;font-size:28px">4.5</b></div>
+              <div class="m-perf"><span class="m-up" style="color:#64748B">Total avaliações</span><b style="color:#2563EB;font-size:28px">3</b><span class="m-small">Registradas no sistema</span></div>
+              <div class="m-perf"><span class="m-up" style="color:#64748B">Projetos alocados</span><b style="color:#7C3AED;font-size:28px">3</b></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+      <figcaption><span class="tag-ill">Ilustração</span><span><b>Performance.</b> Notas por competência no mês avaliado. A média geral acima de 4 garante os +10% no PIPJ.</span></figcaption>
+    </figure>
   </section>
 
   <!-- Onde -->
   <section id="onde">
     <div class="sec-head"><span class="mark"><i></i><i></i><i></i></span><h2>Onde encontrar cada coisa</h2></div>
-    <p class="lede" style="margin-bottom:18px">Tudo fica no menu lateral da Área do Membro, no grupo <b>Membro</b>.</p>
+    <p class="lede" style="margin-bottom:18px">Tudo fica no menu lateral da Área do Membro, no grupo <b>Membro</b>. As imagens deste manual são ilustrações das telas, com dados de exemplo.</p>
+    <div class="split">
+    <figure class="fig">
+      <div class="shot">
+        <div class="m-side">
+          <div class="m-brand"><svg aria-hidden="true" viewBox="0 0 420 420"><use href="#pj"/></svg><div><b>Produtiva Júnior</b><small>v2.0 Portal</small></div></div>
+          <div class="m-grp">Membro</div>
+          <div class="m-item"><svg class="ic"><use href="#i-home"/></svg>Início</div>
+          <div class="m-item"><svg class="ic"><use href="#i-list"/></svg>Minhas Atividades</div>
+          <div class="m-item rel"><svg class="ic"><use href="#i-trend"/></svg>Performance</div>
+          <div class="m-item"><svg class="ic"><use href="#i-crown"/></svg>NPS Gerente</div>
+          <div class="m-item"><svg class="ic"><use href="#i-bot"/></svg>Assistente Pessoal</div>
+          <div class="m-item rel"><svg class="ic"><use href="#i-wallet"/></svg>Carteira PIPJ</div>
+          <div class="m-item"><svg class="ic"><use href="#i-target"/></svg>PDI</div>
+          <div class="m-item"><svg class="ic"><use href="#i-form"/></svg>Formulários</div>
+          <div class="m-item gp"><svg class="ic"><use href="#i-ticket"/></svg>Minhas Milhas</div>
+          <div class="m-item rel"><svg class="ic"><use href="#i-coins"/></svg>Pagamentos e Reembolsos</div>
+          <div class="m-item gp"><svg class="ic"><use href="#i-alert"/></svg>Punições</div>
+          <div class="m-item"><svg class="ic"><use href="#i-qr"/></svg>Presença em Reuniões</div>
+          <div class="m-user"><span class="m-av">AS</span><div style="flex:1;min-width:0"><b style="display:block;font-size:12px">Ana Souza</b><span class="m-small">Operacional</span></div><svg class="ic" style="color:#94A3B8"><use href="#i-logout"/></svg></div>
+        </div>
+      </div>
+      <figcaption><span class="tag-ill">Ilustração</span><span><b>Menu lateral.</b> "VP" e "GP" marcam o que cada área cuida.</span></figcaption>
+    </figure>
     <div class="tw"><table>
       <thead><tr><th>Quero…</th><th>Onde ir</th></tr></thead>
       <tbody>
@@ -659,6 +1230,7 @@ Segundo turno: <span class="k">ATRIBUIÇÃO Y</span> (Horário de início - Hor�
         <tr><td>Usar o Uber Business</td><td>Fora do portal: app da Uber</td></tr>
       </tbody>
     </table></div>
+    </div>
   </section>
 
   <!-- Regras -->
