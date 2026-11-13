@@ -223,7 +223,9 @@ conferidos com o formulário original).
      n8n. Ex.: `openssl rand -hex 32`.
    - `PAGAMENTOS_N8N_WEBHOOK_URL` (opcional): URL do Webhook do n8n que deve
      receber cada nova solicitação. Sem ela, o n8n busca pela lista de pendentes.
-3. Reversão: `NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday` volta a mostrar o
+3. Enquanto `SUPABASE_SERVICE_ROLE_KEY` não estiver configurada, a página continua
+   mostrando o WorkForms do Monday (os membros nunca ficam sem formulário).
+   Reversão manual: `NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday` volta a mostrar o
    WorkForms do Monday no mesmo lugar (precisa publicar de novo).
 
 ### Integração com o n8n

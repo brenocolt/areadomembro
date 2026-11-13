@@ -4,11 +4,19 @@ import { FormularioMonday } from "./components/formulario-monday"
 import { FormularioSolicitacao } from "./components/formulario-solicitacao"
 
 // Formulário próprio do portal (respostas e comprovantes ficam no banco do
-// portal, não no Monday). Reversão: NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday
-// volta a exibir o WorkForms do Monday no mesmo lugar.
-const USAR_MONDAY = process.env.NEXT_PUBLIC_PAGAMENTOS_FORMULARIO === "monday"
+// portal, não no Monday). Continua exibindo o WorkForms do Monday enquanto:
+//   - o servidor não tiver SUPABASE_SERVICE_ROLE_KEY (sem ela o envio próprio
+//     não funciona — os membros não podem ficar sem formulário); ou
+//   - NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday (reversão manual).
+// Lido a cada acesso, então basta configurar a variável no Coolify.
+export const dynamic = "force-dynamic"
+
+function usarMonday(): boolean {
+    return process.env.NEXT_PUBLIC_PAGAMENTOS_FORMULARIO === "monday" || !process.env.SUPABASE_SERVICE_ROLE_KEY
+}
 
 export default function SolicitarPagamentoPage() {
+    const USAR_MONDAY = usarMonday()
     return (
         <div className="space-y-6">
             <VoltarPagamentos />

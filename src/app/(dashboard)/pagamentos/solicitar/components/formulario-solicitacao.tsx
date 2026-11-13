@@ -250,6 +250,11 @@ export function FormularioSolicitacao() {
                 )}
 
                 <Campo id="descricao" rotulo="Descrição do pagamento" obrigatorio erro={erros.descricao}>
+                    {/* Padrões de descrição combinados com a VP (lidos pelas automações). */}
+                    <ul className="space-y-0.5 rounded-lg bg-amber-50/60 dark:bg-amber-500/5 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">
+                        <li>Se for gasolina: <span className="font-semibold">Reembolso Gasolina (Nome do projeto como está na planilha de gasolina)</span></li>
+                        <li>Se for auxílio alimentação: <span className="font-semibold">Auxílio alimentação - (XX/YY/ZZZZ)</span></li>
+                    </ul>
                     <Textarea id="descricao" value={r.descricao ?? ""} onChange={e => set("descricao", e.target.value)}
                         aria-invalid={!!erros.descricao} rows={3} />
                 </Campo>
