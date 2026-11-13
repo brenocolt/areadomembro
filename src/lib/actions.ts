@@ -8,7 +8,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { obterChamador, SEM_PERMISSAO } from '@/lib/server-auth';
 import { isAdmin } from '@/lib/access-control';
 
-const RECUPERACAO_SUSPENSA = 'A recuperação de senha pelo portal está suspensa temporariamente. Peça a troca de senha à Gestão de Pessoas.';
+const RECUPERACAO_SUSPENSA = 'A recuperação de senha pelo portal está suspensa temporariamente. Peça uma senha temporária a quem cuida da Gestão de Usuários do portal (Gestão de Pessoas, Vice-Presidência ou Estratégico).';
 
 // Define schema for input validation if needed, but we do it in client too.
 
@@ -43,7 +43,7 @@ export async function authenticate(
 export async function resetPasswordLocal(email: string, dataNascimento: string, cpf: string) {
     // Suspensa por segurança (plano de ação dos riscos, ação 0.3): CPF e data
     // de nascimento não são segredo suficiente enquanto o banco aceitar leitura
-    // pela chave pública. GP troca a senha pela Gestão de Usuários. Para religar
+    // pela chave pública. Quem tem acesso à Gestão de Usuários gera uma senha temporária. Para religar
     // depois que o banco for fechado: RECUPERACAO_SENHA_CPF=ativa no servidor.
     if (process.env.RECUPERACAO_SENHA_CPF !== 'ativa') {
         return { success: false, message: RECUPERACAO_SUSPENSA };
