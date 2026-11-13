@@ -60,6 +60,10 @@ export const PAGINAS_UNIVERSAIS = [
     '/', '/profile', '/minhas-prioridades', '/performance', '/assistente-pessoal',
     '/wallet', '/pdi', '/formularios', '/milhas', '/punishments', '/pontuar-membros',
     '/presenca', '/gasolina',
+    // Pagamentos e Reembolsos: página inicial (dois cartões) e o formulário
+    // do Monday WorkForms. O módulo de gasolina continua em /gasolina, com
+    // as mesmas regras (abas de gestão via podeGerirGasolina).
+    '/pagamentos', '/pagamentos/solicitar',
 ]
 
 // Páginas só do Estratégico (e ADMIN). Vazia hoje — o reembolso de gasolina

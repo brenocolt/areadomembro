@@ -20,7 +20,7 @@ import {
     Briefcase,
     Target,
     QrCode,
-    Fuel,
+    HandCoins,
 } from "lucide-react"
 
 import {
@@ -43,7 +43,20 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { useSession, signOut } from "next-auth/react"
 import { paginaPermitida } from "@/lib/access-control"
 
-const memberItems = [
+type NavItem = {
+    title: string
+    url: string
+    icon: React.ComponentType
+    // Rotas (e sub-rotas) que também deixam o item marcado como ativo.
+    activePrefixes?: string[]
+}
+
+function itemAtivo(item: NavItem, pathname: string): boolean {
+    if (pathname === item.url) return true
+    return (item.activePrefixes ?? []).some(p => pathname === p || pathname.startsWith(p + "/"))
+}
+
+const memberItems: NavItem[] = [
     { title: "Início", url: "/", icon: LayoutDashboard },
     { title: "Minhas Atividades", url: "/minhas-prioridades", icon: ListChecks },
     { title: "Performance", url: "/performance", icon: TrendingUp },
@@ -53,12 +66,14 @@ const memberItems = [
     { title: "PDI", url: "/pdi", icon: Target },
     { title: "Formulários", url: "/formularios", icon: FileQuestion },
     { title: "Minhas Milhas", url: "/milhas", icon: Ticket },
-    { title: "Reembolso de Gasolina", url: "/gasolina", icon: Fuel },
+    // O módulo de gasolina (/gasolina) agora é aberto a partir desta página;
+    // o item fica ativo nas duas rotas.
+    { title: "Pagamentos e Reembolsos", url: "/pagamentos", icon: HandCoins, activePrefixes: ["/pagamentos", "/gasolina"] },
     { title: "Punições", url: "/punishments", icon: AlertTriangle },
     { title: "Presença em Reuniões", url: "/presenca", icon: QrCode },
 ]
 
-const managementItems = [
+const managementItems: NavItem[] = [
     { title: "Gestão de PDI", url: "/pdi-management", icon: Target },
     { title: "Gestão de Formulários", url: "/forms-management", icon: FileQuestion },
     { title: "Gestão de Pontos", url: "/points-management", icon: ClipboardList },
@@ -72,7 +87,7 @@ const managementItems = [
     { title: "Gestão de Reuniões", url: "/reunioes-management", icon: QrCode },
 ]
 
-function NavGroup({ label, items, pathname }: { label: string; items: typeof memberItems; pathname: string }) {
+function NavGroup({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
     if (items.length === 0) return null
     return (
         <SidebarGroup>
@@ -83,7 +98,7 @@ function NavGroup({ label, items, pathname }: { label: string; items: typeof mem
                         <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton
                                 asChild
-                                isActive={pathname === item.url}
+                                isActive={itemAtivo(item, pathname)}
                                 tooltip={item.title}
                             >
                                 <Link href={item.url}>

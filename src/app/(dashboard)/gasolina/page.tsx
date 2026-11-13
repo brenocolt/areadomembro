@@ -14,6 +14,7 @@ import { ChavePixCard } from "./components/chave-pix-card"
 import { GestaoPrecos } from "./components/gestao-precos"
 import { GestaoCarros } from "./components/gestao-carros"
 import { GestaoCentrosCusto } from "./components/gestao-centros-custo"
+import { VoltarPagamentos } from "../pagamentos/components/voltar-pagamentos"
 
 const TRIGGER = "rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white font-semibold"
 
@@ -27,6 +28,8 @@ export default function GasolinaPage() {
 
     return (
         <div className="space-y-6">
+            <VoltarPagamentos />
+
             <div>
                 <h1 className="text-3xl font-display font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <Fuel className="h-7 w-7 text-amber-500" />
