@@ -46,12 +46,13 @@ export function AdditionRequests() {
 
     const sendWebhook = async (req: any, status: 'Aceito' | 'Reprovado') => {
         try {
-            await fetch('https://n8n.produtivajunior.com.br/webhook/30f97f7d-b1f3-43c7-8bbe-6c570ae977c3', {
+            await fetch('/api/avisos/n8n', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    tipo: 'milhas',
                     nome: req.name,
                     motivo: req.atividade,
                     quantidade: req.miles,
