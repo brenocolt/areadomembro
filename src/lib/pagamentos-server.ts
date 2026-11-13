@@ -5,7 +5,8 @@ import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { auth } from '@/auth'
 import { paginaPermitida } from '@/lib/access-control'
-import { STATUS_FINAIS, type StatusProcessamento } from '@/lib/pagamentos-formulario'
+import { createAdminSupabaseClient } from '@/lib/supabase-admin'
+import { STATUS_FINAIS, podeUsarFormularioProprio, type StatusProcessamento } from '@/lib/pagamentos-formulario'
 
 export const BUCKET_PAGAMENTOS = 'pagamentos-comprovantes'
 export const LINK_ANEXO_SEGUNDOS = 60 * 60 // links de comprovante valem 1 hora
@@ -36,7 +37,35 @@ export async function exigirMembroPagamentos(db: SupabaseClient):
     if (!paginaPermitida('/pagamentos/solicitar', c, usuario?.role)) {
         return { ok: false, status: 403, error: 'Sem acesso a esta página.' }
     }
+    // Fase de testes (VP + administradores), mesma regra da página.
+    if (!podeUsarFormularioProprio(c, usuario?.role, formularioLiberadoParaTodos())) {
+        return { ok: false, status: 403, error: 'O formulário novo ainda está em teste com a VP. Use o formulário do Monday.' }
+    }
     return { ok: true, membro: { colaboradorId, nome: c.nome, email: c.email_corporativo || c.email_pessoal || null } }
+}
+
+export function formularioLiberadoParaTodos(): boolean {
+    return process.env.PAGAMENTOS_FORMULARIO_LIBERADO === 'todos'
+}
+
+// Qual formulário a página mostra para quem está acessando agora.
+export async function formularioDaPagina(): Promise<{ tipo: 'monday' | 'proprio', emTeste: boolean }> {
+    if (process.env.NEXT_PUBLIC_PAGAMENTOS_FORMULARIO === 'monday') return { tipo: 'monday', emTeste: false }
+    const db = createAdminSupabaseClient()
+    if (!db) return { tipo: 'monday', emTeste: false }   // servidor sem a chave: envio próprio não funcionaria
+    if (formularioLiberadoParaTodos()) return { tipo: 'proprio', emTeste: false }
+
+    const session = await auth()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const usuario = session?.user as any
+    let colaborador: { nucleo_atual?: string | null } | null = null
+    if (usuario?.colaborador_id) {
+        const { data } = await db.from('colaboradores').select('nucleo_atual').eq('id', usuario.colaborador_id).maybeSingle()
+        colaborador = data
+    }
+    return podeUsarFormularioProprio(colaborador, usuario?.role, false)
+        ? { tipo: 'proprio', emTeste: true }
+        : { tipo: 'monday', emTeste: false }
 }
 
 // ---------------------------------------------------------------------------

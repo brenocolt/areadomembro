@@ -8,6 +8,19 @@
 // ainda precisam ser conferidas com o WorkForms. Para corrigir, mude só este
 // arquivo (e suba VERSAO_FORMULARIO).
 import { validarChavePix } from './gasolina'
+import { isAdmin, isNucleoVicePresidencia } from './access-control'
+
+// Fase de testes: o formulário próprio fica visível só para a Vice
+// Presidência e administradores; os demais membros continuam com o WorkForms
+// do Monday. Para abrir a todos, PAGAMENTOS_FORMULARIO_LIBERADO=todos no
+// Coolify (lido no servidor, sem precisar mudar código).
+export function podeUsarFormularioProprio(
+    colaborador: { nucleo_atual?: string | null } | null | undefined,
+    role: string | null | undefined,
+    liberadoParaTodos: boolean,
+): boolean {
+    return liberadoParaTodos || isAdmin(role) || isNucleoVicePresidencia(colaborador?.nucleo_atual)
+}
 
 // Sobe quando perguntas/opções mudarem: cada solicitação guarda a versão com
 // que foi preenchida, para o n8n e o futuro Kanban saberem como ler.
