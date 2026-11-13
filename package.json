@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:pipj": "node --experimental-strip-types --test tests/pipj/*.test.mjs"
+    "test:pipj": "node --experimental-strip-types --test tests/pipj/*.test.mjs",
+    "test:pagamentos": "node --import ./tests/pagamentos/registrar.mjs --experimental-strip-types --no-warnings --test tests/pagamentos/*.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

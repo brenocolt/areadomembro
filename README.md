@@ -199,3 +199,90 @@ A chave fica só no servidor (as chamadas passam por `/api/gasolina/mapas/*`).
 No Google Cloud: ativar "Places API (New)" e "Routes API", restringir a chave a
 essas duas APIs e definir cotas diárias (ex.: 300 por dia em cada) para não
 sair da faixa gratuita (10.000 usos/mês por API).
+
+## Pagamentos e Reembolsos — formulário próprio (substitui o WorkForms do Monday)
+
+A página `/pagamentos/solicitar` tem um formulário do próprio portal. As
+respostas e os comprovantes ficam no Supabase do portal, sem passar pelo
+Monday. Perguntas, opções e regras condicionais ficam em
+`src/lib/pagamentos-formulario.ts` (itens "A CONFIRMAR" ainda precisam ser
+conferidos com o formulário original).
+
+### Configuração (uma vez)
+
+1. Rodar a migração `supabase/migrations/20261113_pagamentos_solicitacoes.sql`
+   (SQL Editor do Supabase). Ela só cria tabelas novas (`pagamentos_solicitacoes`,
+   `pagamentos_anexos`, `pagamentos_eventos`) e o bucket **privado**
+   `pagamentos-comprovantes`.
+2. No Coolify, criar as variáveis (sem o prefixo `NEXT_PUBLIC_`):
+   - `SUPABASE_SERVICE_ROLE_KEY`: Supabase → Project Settings → API →
+     `service_role`. **Chave mestra: nunca colar em chat, código ou lugar
+     público.** Só o servidor usa (as tabelas novas recusam a chave anon).
+   - `PAGAMENTOS_INTEGRACAO_TOKEN`: senha longa e aleatória (mínimo 32
+     caracteres) que o n8n usa nas chamadas ao portal e que o portal envia ao
+     n8n. Ex.: `openssl rand -hex 32`.
+   - `PAGAMENTOS_N8N_WEBHOOK_URL` (opcional): URL do Webhook do n8n que deve
+     receber cada nova solicitação. Sem ela, o n8n busca pela lista de pendentes.
+3. Reversão: `NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday` volta a mostrar o
+   WorkForms do Monday no mesmo lugar (precisa publicar de novo).
+
+### Integração com o n8n
+
+Todas as chamadas usam `Authorization: Bearer <PAGAMENTOS_INTEGRACAO_TOKEN>`.
+
+**Aviso de nova solicitação (portal → n8n).** Logo depois do envio, o portal faz
+`POST <PAGAMENTOS_N8N_WEBHOOK_URL>` com o cabeçalho
+`Idempotency-Key: pagamento-<id>` e o corpo:
+
+```json
+{
+  "evento": "solicitacao.criada",
+  "solicitacao": { "id": "...", "numero": 12, "tipo": "PAGAMENTO", "valor": 1250.9,
+                   "centro_custo": "VP", "categoria": "Workday", "forma_pagamento": "...",
+                   "dados_bancarios": "...", "descricao": "...", "fornecedor": "...",
+                   "chave_pix": null, "eh_pipj": false, "eh_retirada_milha": false,
+                   "tipo_retirada_milha": null, "evento_mej": null, "gasto_evento_mej": null,
+                   "categoria_execucao": null, "outra_categoria": null,
+                   "status_processamento": "recebida", "criado_em": "...", "...": "..." },
+  "solicitante": { "colaborador_id": "...", "nome": "...", "email": "..." },
+  "anexos": [{ "campo": "comprovante", "nome": "nota.pdf", "tipo_mime": "application/pdf",
+               "url": "<link temporário, 1 h>", "url_expira_em": "..." }],
+  "links": { "consultar": "...", "atualizar_processamento": "..." }
+}
+```
+
+Se o n8n não responder 2xx, a solicitação fica `erro_envio` (com o motivo em
+`n8n_ultimo_erro`) e continua salva.
+
+**Consultas (n8n → portal).**
+
+- `GET /api/pagamentos/integracao/solicitacoes?status=recebida,erro_envio&limite=50`
+  — pendentes (padrão), mais antigas primeiro. Use num gatilho agendado como
+  rede de segurança do webhook.
+- `GET /api/pagamentos/integracao/solicitacoes/<id>?historico=1` — tudo da
+  solicitação, com links novos dos comprovantes (para a validação por IA) e o histórico.
+
+**Resultados (n8n → portal).** `POST /api/pagamentos/integracao/solicitacoes/<id>/processamento`
+
+```json
+{ "chave_idempotencia": "<id da execução>-<etapa>",
+  "etapa": "google_agenda",
+  "status_processamento": "em_processamento",
+  "detalhes": { "eventos_pj": 2 },
+  "erro": null }
+```
+
+- `status_processamento`: `em_processamento`, `aguardando_aprovacao`,
+  `erro_processamento`, `aprovada`, `recusada`.
+- Decisão final: `{ "chave_idempotencia": "...", "decisao": "aprovada", "decidido_por": "Fulano (Slack)" }`
+  ou `"recusada"` com `"motivo"` (obrigatório). Depois de decidida, não muda (409).
+- Repetir a mesma `chave_idempotencia` não registra de novo (`"repetido": true`).
+- Tudo fica em `pagamentos_eventos` (envios, etapas, erros).
+
+As verificações (Google Agenda, eventos [PJ], auxílio-alimentação, Workday/SDR,
+IA nos comprovantes, e-mail, Slack, regras financeiras) continuam no n8n. O
+fluxo "AUTOMAÇÃO PAGAMENTO VP" ainda lê do Monday e precisa ser adaptado e
+testado antes de desligar o WorkForms. O campo `kanban_item_id` fica reservado
+para o futuro Kanban financeiro.
+
+Testes das regras do formulário: `npm run test:pagamentos`.
