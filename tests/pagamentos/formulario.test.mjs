@@ -91,7 +91,7 @@ test('listas da planilha "VP Categorias": cada centro aceita as suas opções (e
     const ops = Object.fromEntries(C.map(c => [c.nome, c.categoria.opcoes ? c.categoria.opcoes.length : null]))
     assert.deepEqual(ops, { 'Consultorias/Assessorias': 14, 'Diretoria Executiva': 7, 'Eventos MEJ': 5, 'Feira de carreira': null,
         GP: 14, Marketing: 12, 'Presidência': 16, Projetos: 5, VP: 14 })
-    const cons = validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Gasolina' }, um)
+    const cons = validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Gasolina', projeto: 'Projeto X' }, um)
     assert.equal(cons.ok, true); assert.equal(cons.dados.categoria_execucao, 'Gasolina'); assert.equal(cons.dados.categoria, null)
     assert.ok(validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias' }, um).erros.categoria_execucao)
     assert.equal(validarSolicitacao({ ...base, centro_custo: 'VP', categoria: 'Auxílio-alimentação' }, um).ok, true)
@@ -99,4 +99,43 @@ test('listas da planilha "VP Categorias": cada centro aceita as suas opções (e
     assert.equal(validarSolicitacao({ ...base, centro_custo: 'Presidência', categoria: 'GO!RN' }, um).ok, true)
     assert.equal(camposVisiveis({ centro_custo: 'Marketing', categoria: 'Workday e workweek' }).anexo_workday, true)
     assert.equal(camposVisiveis({ centro_custo: 'Presidência', categoria: 'Workday' }).anexo_workday, true)
+})
+
+test('Consultorias/Assessorias pede o gasto e o projeto (lista da VP ou texto se vazia)', async () => {
+    const { opcoesDeLinhas, OPCOES_PADRAO } = await import('../../src/lib/pagamentos-formulario.ts')
+    const v = camposVisiveis({ centro_custo: 'Consultorias/Assessorias' })
+    assert.deepEqual([v.categoria_execucao, v.projeto], [true, true])
+    assert.equal(camposVisiveis({ centro_custo: 'VP' }).projeto, false)
+    const semProjeto = validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Uber' }, um)
+    assert.ok(semProjeto.erros.projeto)
+    const opcoes = { ...OPCOES_PADRAO, projetos: ['Padaria Alfa', 'Clínica Beta'] }
+    assert.ok(validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Uber', projeto: 'Outro' }, um, opcoes).erros.projeto)
+    const ok = validarSolicitacao({ ...base, centro_custo: 'Consultorias/Assessorias', categoria_execucao: 'Uber', projeto: 'Clínica Beta' }, um, opcoes)
+    assert.equal(ok.ok, true); assert.equal(ok.dados.projeto, 'Clínica Beta')
+    // Projeto não grava fora de Consultorias
+    assert.equal(validarSolicitacao({ ...base, projeto: 'Clínica Beta' }, um, opcoes).dados.projeto, null)
+    assert.equal(opcoesDeLinhas([]).projetos.length, 0)
+})
+
+test('listas editadas pela VP valem na validação (adicionar, ocultar, esvaziar)', async () => {
+    const { opcoesDeLinhas, listaDeCategorias, podeEditarOpcoesPagamentos, listaEditavelValida } = await import('../../src/lib/pagamentos-formulario.ts')
+    const o = opcoesDeLinhas([
+        { lista: listaDeCategorias('GP'), valor: 'Nova categoria GP' },
+        { lista: 'evento_mej', valor: 'ENEJ' },
+        { lista: listaDeCategorias('Feira de carreira'), valor: 'Estande' },
+    ])
+    assert.deepEqual(o.categorias.GP, ['Nova categoria GP'])
+    assert.equal(validarSolicitacao({ ...base, categoria: 'Endomarketing' }, um, o).ok, false, 'categoria fora da lista atual é recusada')
+    assert.equal(validarSolicitacao({ ...base, categoria: 'Nova categoria GP' }, um, o).ok, true)
+    const feira = validarSolicitacao({ ...base, centro_custo: 'Feira de carreira', categoria: 'Estande' }, um, o)
+    assert.equal(feira.ok, true); assert.equal(feira.dados.categoria, 'Estande')
+    // Marketing ficou sem linhas -> texto livre "Outra categoria"
+    assert.equal(camposVisiveis({ centro_custo: 'Marketing' }, o).outra_categoria, true)
+    assert.equal(validarSolicitacao({ ...base, centro_custo: 'Marketing', categoria: '' }, um, o).ok, true)
+    assert.equal(podeEditarOpcoesPagamentos({ nucleo_atual: 'Vice Presidência' }, 'USER'), true)
+    assert.equal(podeEditarOpcoesPagamentos({ nucleo_atual: 'Projetos' }, 'USER'), false)
+    assert.equal(podeEditarOpcoesPagamentos(null, 'ADMIN'), true)
+    assert.equal(listaEditavelValida('categoria:VP'), true)
+    assert.equal(listaEditavelValida('categoria:Inventado'), false)
+    assert.equal(listaEditavelValida('qualquer'), false)
 })

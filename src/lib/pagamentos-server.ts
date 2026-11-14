@@ -6,7 +6,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { auth } from '@/auth'
 import { paginaPermitida } from '@/lib/access-control'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
-import { STATUS_FINAIS, podeUsarFormularioProprio, type StatusProcessamento } from '@/lib/pagamentos-formulario'
+import {
+    OPCOES_PADRAO, STATUS_FINAIS, opcoesDeLinhas, podeEditarOpcoesPagamentos, podeUsarFormularioProprio,
+    type OpcoesFormulario, type StatusProcessamento,
+} from '@/lib/pagamentos-formulario'
 
 export const BUCKET_PAGAMENTOS = 'pagamentos-comprovantes'
 export const LINK_ANEXO_SEGUNDOS = 60 * 60 // links de comprovante valem 1 hora
@@ -18,7 +21,7 @@ export const MSG_NAO_CONFIGURADO =
 // Membro autenticado
 // ---------------------------------------------------------------------------
 
-export interface MembroPagamentos { colaboradorId: string, nome: string, email: string | null }
+export interface MembroPagamentos { colaboradorId: string, nome: string, email: string | null, podeEditarOpcoes: boolean }
 
 export async function exigirMembroPagamentos(db: SupabaseClient):
     Promise<{ ok: true, membro: MembroPagamentos } | { ok: false, status: number, error: string }> {
@@ -41,7 +44,13 @@ export async function exigirMembroPagamentos(db: SupabaseClient):
     if (!podeUsarFormularioProprio(c, usuario?.role, formularioLiberadoParaTodos())) {
         return { ok: false, status: 403, error: 'O formulário novo ainda está em teste com a VP. Use o formulário do Monday.' }
     }
-    return { ok: true, membro: { colaboradorId, nome: c.nome, email: c.email_corporativo || c.email_pessoal || null } }
+    return {
+        ok: true,
+        membro: {
+            colaboradorId, nome: c.nome, email: c.email_corporativo || c.email_pessoal || null,
+            podeEditarOpcoes: podeEditarOpcoesPagamentos(c, usuario?.role),
+        },
+    }
 }
 
 export function formularioLiberadoParaTodos(): boolean {
@@ -66,6 +75,22 @@ export async function formularioDaPagina(): Promise<{ tipo: 'monday' | 'proprio'
     return podeUsarFormularioProprio(colaborador, usuario?.role, false)
         ? { tipo: 'proprio', emTeste: true }
         : { tipo: 'monday', emTeste: false }
+}
+
+// ---------------------------------------------------------------------------
+// Listas editáveis (pagamentos_opcoes). Se o banco falhar, usa as listas do
+// código para o formulário continuar funcionando.
+// ---------------------------------------------------------------------------
+
+export async function carregarOpcoes(db: SupabaseClient): Promise<OpcoesFormulario> {
+    const { data, error } = await db.from('pagamentos_opcoes')
+        .select('lista, valor').eq('ativo', true)
+        .order('ordem').order('valor')
+    if (error) {
+        console.error('[pagamentos] Listas do formulário indisponíveis (usando as do código):', error.message)
+        return OPCOES_PADRAO
+    }
+    return opcoesDeLinhas(data ?? [])
 }
 
 // ---------------------------------------------------------------------------
@@ -116,11 +141,11 @@ export async function registrarEvento(db: SupabaseClient, e: EventoPagamento): P
 const COLUNAS_SOLICITACAO = `id, numero, colaborador_id, solicitante_nome, solicitante_email, versao_formulario,
     tipo, forma_pagamento, dados_bancarios, descricao, fornecedor, valor, centro_custo, categoria,
     categoria_execucao, outra_categoria, chave_pix, eh_pipj, eh_retirada_milha, tipo_retirada_milha,
-    evento_mej, respostas, status_processamento, decisao, motivo_decisao, decidido_por, decidido_em,
+    evento_mej, projeto, respostas, status_processamento, decisao, motivo_decisao, decidido_por, decidido_em,
     n8n_tentativas, n8n_ultimo_envio_em, n8n_ultimo_erro, kanban_item_id, criado_em, atualizado_em`
 
 export const COLUNAS_RESUMO = `id, numero, colaborador_id, solicitante_nome, solicitante_email, tipo, valor,
-    centro_custo, categoria, status_processamento, decisao, criado_em, atualizado_em`
+    centro_custo, categoria, projeto, status_processamento, decisao, criado_em, atualizado_em`
 
 function urlApp(): string {
     return (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/+$/, '')

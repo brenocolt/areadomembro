@@ -1,7 +1,7 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
-import { CheckCircle2, FileText, Loader2, Paperclip, Send, UserRound, X } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { CheckCircle2, FileText, Loader2, Paperclip, Send, Settings2, UserRound, X } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useColaborador } from "@/hooks/use-supabase"
+import { GerenciarOpcoes } from "./gerenciar-opcoes"
 import {
-    ANEXO_EXTENSOES_ACEITAS, ANEXO_QTD_MAX, ANEXO_TAMANHO_MAX, CENTROS_CUSTO, EVENTOS_MEJ, FORMAS_PAGAMENTO, SIM_NAO,
-    TIPOS_SOLICITACAO, camposVisiveis, centroPorNome, validarSolicitacao,
+    ANEXO_EXTENSOES_ACEITAS, ANEXO_QTD_MAX, ANEXO_TAMANHO_MAX, CENTROS_CUSTO, FORMAS_PAGAMENTO, OPCOES_PADRAO, SIM_NAO,
+    TIPOS_SOLICITACAO, camposVisiveis, categoriaDoCentro, validarSolicitacao, type OpcoesFormulario,
     type ErrosFormulario, type RespostasFormulario,
 } from "@/lib/pagamentos-formulario"
 
@@ -112,6 +113,23 @@ function SeletorArquivos({ id, arquivos, onChange, invalido }: {
     )
 }
 
+// Lista suspensa quando há opções; texto livre quando a lista está vazia.
+function ListaOuTexto({ id, opcoes, valor, onChange, invalido }: {
+    id: string, opcoes: readonly string[] | null, valor?: string, onChange: (v: string) => void, invalido?: boolean
+}) {
+    if (!opcoes || opcoes.length === 0) {
+        return <Input id={id} value={valor ?? ""} onChange={e => onChange(e.target.value)} aria-invalid={invalido} />
+    }
+    return (
+        <Select value={valor ?? ""} onValueChange={onChange}>
+            <SelectTrigger id={id} className="w-full" aria-invalid={invalido}><SelectValue placeholder="Escolha" /></SelectTrigger>
+            <SelectContent>
+                {opcoes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            </SelectContent>
+        </Select>
+    )
+}
+
 export function FormularioSolicitacao() {
     const { colaborador, loading } = useColaborador()
     const [r, setR] = useState<RespostasFormulario>({})
@@ -126,8 +144,22 @@ export function FormularioSolicitacao() {
     // rede caiu) não duplica a solicitação.
     const chave = useRef(novaChave())
 
-    const vis = useMemo(() => camposVisiveis(r), [r])
-    const centro = centroPorNome(r.centro_custo)
+    // Listas editadas pela VP (banco). Enquanto carrega, usa as do código.
+    const [opcoes, setOpcoes] = useState<OpcoesFormulario>(OPCOES_PADRAO)
+    const [podeEditar, setPodeEditar] = useState(false)
+    const [gerenciando, setGerenciando] = useState(false)
+    const carregarOpcoes = useCallback(async () => {
+        try {
+            const res = await fetch("/api/pagamentos/opcoes", { cache: "no-store" })
+            if (!res.ok) return
+            const json = await res.json()
+            if (json.opcoes) setOpcoes(json.opcoes)
+            setPodeEditar(!!json.podeEditar)
+        } catch { /* mantém as listas do código */ }
+    }, [])
+    useEffect(() => { carregarOpcoes() }, [carregarOpcoes])
+
+    const vis = useMemo(() => camposVisiveis(r, opcoes), [r, opcoes])
     // Chave Pix: sugere a do cadastro (mesma usada no reembolso de gasolina).
     const chavePix = pixTocado ? (r.chave_pix ?? "") : (r.chave_pix ?? colaborador?.chave_pix ?? "")
 
@@ -136,7 +168,7 @@ export function FormularioSolicitacao() {
             const prox = { ...prev, [campo]: valor }
             // Trocou o centro de custo: a categoria anterior não vale mais.
             if (campo === "centro_custo" && prev.centro_custo !== valor) {
-                delete prox.categoria; delete prox.categoria_execucao; delete prox.outra_categoria; delete prox.evento_mej
+                delete prox.categoria; delete prox.categoria_execucao; delete prox.outra_categoria; delete prox.evento_mej; delete prox.projeto
             }
             return prox
         })
@@ -151,7 +183,7 @@ export function FormularioSolicitacao() {
         setErroGeral(null)
         const respostas = respostasFinais()
         const workday = vis.anexo_workday ? anexosWorkday : []
-        const local = validarSolicitacao(respostas, { comprovantes: comprovantes.length, workday: workday.length })
+        const local = validarSolicitacao(respostas, { comprovantes: comprovantes.length, workday: workday.length }, opcoes)
         if (!local.ok) {
             setErros(local.erros)
             setErroGeral("Confira os campos destacados.")
@@ -209,10 +241,19 @@ export function FormularioSolicitacao() {
         )
     }
 
-    const categoria = centro?.categoria
+    const categoria = categoriaDoCentro(r.centro_custo, opcoes)
 
     return (
         <form onSubmit={enviar} noValidate className="space-y-6">
+            {podeEditar && (
+                <div className="flex justify-end">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setGerenciando(true)} className="font-semibold">
+                        <Settings2 className="h-4 w-4" /> Gerenciar opções do formulário
+                    </Button>
+                    <GerenciarOpcoes aberto={gerenciando} onFechar={() => { setGerenciando(false); carregarOpcoes() }} />
+                </div>
+            )}
+
             {/* Quem está solicitando: vem do cadastro, não é digitado. */}
             <Card className={CARD}>
                 <div className="flex items-center gap-3">
@@ -285,28 +326,21 @@ export function FormularioSolicitacao() {
 
                 {vis.evento_mej && (
                     <Campo id="evento_mej" rotulo="Evento MEJ" obrigatorio erro={erros.evento_mej}>
-                        <Select value={r.evento_mej ?? ""} onValueChange={v => set("evento_mej", v)}>
-                            <SelectTrigger id="evento_mej" className="w-full" aria-invalid={!!erros.evento_mej}><SelectValue placeholder="Escolha" /></SelectTrigger>
-                            <SelectContent>
-                                {EVENTOS_MEJ.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <ListaOuTexto id="evento_mej" opcoes={opcoes.eventosMej} valor={r.evento_mej} onChange={v => set("evento_mej", v)} invalido={!!erros.evento_mej} />
                     </Campo>
                 )}
 
-                {/* Categoria do centro escolhido: lista suspensa ou texto livre. */}
+                {/* Categoria do centro escolhido (em Consultorias: o que foi o gasto). */}
                 {categoria && (
                     <Campo id={categoria.campo} rotulo={categoria.rotulo} obrigatorio={!!categoria.opcoes} erro={erros[categoria.campo]}>
-                        {categoria.opcoes ? (
-                            <Select value={r[categoria.campo] ?? ""} onValueChange={v => set(categoria.campo, v)}>
-                                <SelectTrigger id={categoria.campo} className="w-full" aria-invalid={!!erros[categoria.campo]}><SelectValue placeholder="Escolha" /></SelectTrigger>
-                                <SelectContent>
-                                    {categoria.opcoes.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        ) : (
-                            <Input id={categoria.campo} value={r[categoria.campo] ?? ""} onChange={e => set(categoria.campo, e.target.value)} />
-                        )}
+                        <ListaOuTexto id={categoria.campo} opcoes={categoria.opcoes} valor={r[categoria.campo]} onChange={v => set(categoria.campo, v)} invalido={!!erros[categoria.campo]} />
+                    </Campo>
+                )}
+
+                {vis.projeto && (
+                    <Campo id="projeto" rotulo="Projeto" obrigatorio erro={erros.projeto}
+                        ajuda={opcoes.projetos.length ? undefined : "Nenhum projeto cadastrado ainda: escreva o nome do projeto."}>
+                        <ListaOuTexto id="projeto" opcoes={opcoes.projetos} valor={r.projeto} onChange={v => set("projeto", v)} invalido={!!erros.projeto} />
                     </Campo>
                 )}
 

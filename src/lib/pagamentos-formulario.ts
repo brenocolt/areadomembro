@@ -22,9 +22,18 @@ export function podeUsarFormularioProprio(
     return liberadoParaTodos || isAdmin(role) || isNucleoVicePresidencia(colaborador?.nucleo_atual)
 }
 
+// Quem edita as listas do formulário (categorias, eventos MEJ, projetos):
+// Vice Presidência e administradores.
+export function podeEditarOpcoesPagamentos(
+    colaborador: { nucleo_atual?: string | null } | null | undefined,
+    role: string | null | undefined,
+): boolean {
+    return isAdmin(role) || isNucleoVicePresidencia(colaborador?.nucleo_atual)
+}
+
 // Sobe quando perguntas/opções mudarem: cada solicitação guarda a versão com
 // que foi preenchida, para o n8n e o futuro Kanban saberem como ler.
-export const VERSAO_FORMULARIO = 2
+export const VERSAO_FORMULARIO = 3
 
 export const TIPOS_SOLICITACAO = ['REEMBOLSO', 'PAGAMENTO'] as const
 export type TipoSolicitacao = typeof TIPOS_SOLICITACAO[number]
@@ -35,9 +44,10 @@ export const FORMAS_PAGAMENTO = ['Boleto', 'Transferência / Cartão de crédito
 
 export const SIM_NAO = ['Sim', 'Não'] as const
 
-// Campo de categoria de cada centro de custo:
-//   opcoes: lista fechada (lista suspensa obrigatória)
-//   opcoes: null -> sem lista: texto livre opcional
+// Centros de custo (fixos) e as listas INICIAIS de categorias. As listas que
+// valem de fato ficam no banco (tabela pagamentos_opcoes) e são editadas pela
+// VP no botão "Gerenciar opções" do formulário; estas aqui servem de carga
+// inicial (migração 20261114) e de reserva se o banco não responder.
 // Listas da planilha "VP Categorias" (13/11/2026), na mesma ordem e grafia —
 // as automações comparam pelo texto exato. Opções que já existiam e não estão
 // na planilha foram mantidas no fim da lista.
@@ -92,10 +102,72 @@ export function centroPorNome(nome: string | null | undefined): CentroCusto | un
     return CENTROS_CUSTO.find(c => c.nome === nome)
 }
 
+export const CENTRO_CONSULTORIAS = 'Consultorias/Assessorias'
+
+// ---------------------------------------------------------------------------
+// Listas editáveis (pagamentos_opcoes.lista)
+// ---------------------------------------------------------------------------
+
+export interface OpcoesFormulario {
+    categorias: Record<string, readonly string[]>   // por centro de custo
+    eventosMej: readonly string[]
+    projetos: readonly string[]                     // consultorias/assessorias
+}
+
+export const LISTA_PROJETOS = 'projeto'
+export const LISTA_EVENTOS_MEJ = 'evento_mej'
+export const listaDeCategorias = (centro: string) => `categoria:${centro}`
+
+export const LISTAS_EDITAVEIS: readonly { chave: string, rotulo: string }[] = [
+    { chave: LISTA_PROJETOS, rotulo: 'Projetos (Consultorias/Assessorias)' },
+    { chave: LISTA_EVENTOS_MEJ, rotulo: 'Eventos MEJ' },
+    ...CENTROS_CUSTO.map(c => ({
+        chave: listaDeCategorias(c.nome),
+        rotulo: c.nome === CENTRO_CONSULTORIAS ? `Categorias de execução — ${c.nome}`
+            : c.nome === 'Eventos MEJ' ? 'Gastos com Evento MEJ' : `Categorias — ${c.nome}`,
+    })),
+]
+
+export function listaEditavelValida(chave: string): boolean {
+    return LISTAS_EDITAVEIS.some(l => l.chave === chave)
+}
+
+// Monta as listas a partir das linhas ativas do banco (já ordenadas).
+export function opcoesDeLinhas(linhas: readonly { lista: string, valor: string }[]): OpcoesFormulario {
+    const de = (chave: string) => linhas.filter(l => l.lista === chave).map(l => l.valor)
+    return {
+        categorias: Object.fromEntries(CENTROS_CUSTO.map(c => [c.nome, de(listaDeCategorias(c.nome))])),
+        eventosMej: de(LISTA_EVENTOS_MEJ),
+        projetos: de(LISTA_PROJETOS),
+    }
+}
+
 // Anexo de Workday/SDR: aparece (opcional) quando a categoria escolhida é de
 // Workday ("Workday", "Workday e workweek"), em qualquer centro de custo.
 export function categoriaPedeAnexoWorkday(categoria: string | null | undefined): boolean {
     return /^workday\b/i.test((categoria ?? '').trim())
+}
+
+// Reserva (e carga inicial): listas do código. Projetos não têm reserva —
+// vêm dos projetos ativos do portal na migração e a VP mantém.
+export const OPCOES_PADRAO: OpcoesFormulario = {
+    categorias: Object.fromEntries(CENTROS_CUSTO.map(c => [c.nome, c.categoria.opcoes ?? []])),
+    eventosMej: EVENTOS_MEJ,
+    projetos: [],
+}
+
+// Pergunta de categoria do centro escolhido, conforme as listas atuais:
+// com opções -> lista suspensa obrigatória; sem opções -> texto livre.
+export function categoriaDoCentro(nome: string | null | undefined, opcoes: OpcoesFormulario = OPCOES_PADRAO):
+    { campo: 'categoria' | 'categoria_execucao' | 'outra_categoria', rotulo: string, opcoes: readonly string[] | null } | undefined {
+    const centro = centroPorNome(nome)
+    if (!centro) return undefined
+    const lista = opcoes.categorias[centro.nome] ?? []
+    if (centro.nome === CENTRO_CONSULTORIAS) {
+        return { campo: 'categoria_execucao', rotulo: 'O que foi o gasto (categoria de execução de projetos)', opcoes: lista.length ? lista : null }
+    }
+    if (lista.length) return { campo: 'categoria', rotulo: centro.nome === 'Eventos MEJ' ? 'Gasto com Evento MEJ' : 'Categoria', opcoes: lista }
+    return { campo: 'outra_categoria', rotulo: 'Outra categoria', opcoes: null }
 }
 
 // Anexos
@@ -127,6 +199,7 @@ export interface RespostasFormulario {
     eh_retirada_milha?: string
     tipo_retirada_milha?: string
     evento_mej?: string
+    projeto?: string
 }
 
 // Dados normalizados que vão para o banco (campos ocultos ficam null).
@@ -146,14 +219,14 @@ export interface SolicitacaoNormalizada {
     eh_retirada_milha: boolean
     tipo_retirada_milha: string | null
     evento_mej: string | null
+    projeto: string | null
 }
 
 export interface ResumoAnexos { comprovantes: number, workday: number }
 
 // Quais perguntas aparecem para estas respostas (lógica condicional).
-export function camposVisiveis(r: RespostasFormulario) {
-    const centro = centroPorNome(r.centro_custo)
-    const campoCategoria = centro?.categoria.campo
+export function camposVisiveis(r: RespostasFormulario, opcoes: OpcoesFormulario = OPCOES_PADRAO) {
+    const campoCategoria = categoriaDoCentro(r.centro_custo, opcoes)?.campo
     return {
         forma_pagamento: r.tipo === 'PAGAMENTO',
         dados_bancarios: r.tipo === 'PAGAMENTO',
@@ -162,6 +235,7 @@ export function camposVisiveis(r: RespostasFormulario) {
         categoria_execucao: campoCategoria === 'categoria_execucao',
         outra_categoria: campoCategoria === 'outra_categoria',
         evento_mej: r.centro_custo === 'Eventos MEJ',
+        projeto: r.centro_custo === CENTRO_CONSULTORIAS,
         tipo_retirada_milha: r.eh_retirada_milha === 'Sim',
         anexo_workday: !!campoCategoria && categoriaPedeAnexoWorkday(r[campoCategoria]),
     }
@@ -183,15 +257,15 @@ export const VALOR_MAXIMO = 1_000_000
 
 const LIMITES_TEXTO: Record<string, number> = {
     descricao: 2000, dados_bancarios: 1000, fornecedor: 200, categoria_execucao: 200,
-    outra_categoria: 200, tipo_retirada_milha: 200, evento_mej: 200,
+    outra_categoria: 200, tipo_retirada_milha: 200, evento_mej: 200, projeto: 200,
 }
 
 export type ErrosFormulario = Partial<Record<keyof RespostasFormulario | 'comprovantes' | 'anexos_workday', string>>
 
-export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos):
+export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos, opcoes: OpcoesFormulario = OPCOES_PADRAO):
     { ok: true, dados: SolicitacaoNormalizada } | { ok: false, erros: ErrosFormulario } {
     const erros: ErrosFormulario = {}
-    const vis = camposVisiveis(r)
+    const vis = camposVisiveis(r, opcoes)
     const txt = (campo: keyof RespostasFormulario) => (r[campo] ?? '').toString().trim()
     const obrigatorio = (campo: keyof RespostasFormulario, msg: string) => {
         const v = txt(campo)
@@ -215,12 +289,12 @@ export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos)
     else if (valor > VALOR_MAXIMO) erros.valor = 'Valor acima do limite permitido.'
 
     const centroNome = opcao('centro_custo', CENTROS_CUSTO.map(c => c.nome), 'Escolha o centro de custo.')
-    const centro = centroPorNome(centroNome)
+    const cat = categoriaDoCentro(centroNome, opcoes)
 
     // Campo de categoria do centro escolhido: lista (obrigatória) ou texto livre.
     const valorCategoria = (campo: 'categoria' | 'categoria_execucao' | 'outra_categoria'): string | null => {
-        if (!vis[campo] || !centro) return null
-        if (centro.categoria.opcoes) return opcao(campo, centro.categoria.opcoes, `Escolha: ${centro.categoria.rotulo}.`)
+        if (!vis[campo] || !cat) return null
+        if (cat.opcoes) return opcao(campo, cat.opcoes, `Escolha: ${cat.rotulo}.`)
         return txt(campo) || null
     }
     const categoria = valorCategoria('categoria')
@@ -248,7 +322,11 @@ export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos)
     const ehPipj = opcao('eh_pipj', SIM_NAO, 'Responda se é PIPJ.') === 'Sim'
     const ehRetirada = opcao('eh_retirada_milha', SIM_NAO, 'Responda se é retirada por milha.') === 'Sim'
     const tipoRetirada = vis.tipo_retirada_milha ? obrigatorio('tipo_retirada_milha', 'Informe o tipo de retirada por milha.') || null : null
-    const eventoMej = vis.evento_mej ? opcao('evento_mej', EVENTOS_MEJ, 'Escolha qual Evento MEJ.') || null : null
+    // Listas vazias (VP ocultou tudo) viram texto obrigatório.
+    const escolhaOuTexto = (campo: keyof RespostasFormulario, lista: readonly string[], msg: string) =>
+        (lista.length ? opcao(campo, lista, msg) : obrigatorio(campo, msg)) || null
+    const eventoMej = vis.evento_mej ? escolhaOuTexto('evento_mej', opcoes.eventosMej, 'Escolha qual Evento MEJ.') : null
+    const projeto = vis.projeto ? escolhaOuTexto('projeto', opcoes.projetos, 'Escolha o projeto.') : null
 
     if (anexos.comprovantes < 1) erros.comprovantes = 'Anexe o comprovante.'
     if (anexos.comprovantes > ANEXO_QTD_MAX) erros.comprovantes = `Envie no máximo ${ANEXO_QTD_MAX} arquivos.`
@@ -267,7 +345,7 @@ export function validarSolicitacao(r: RespostasFormulario, anexos: ResumoAnexos)
             descricao, fornecedor, valor: valor!, centro_custo: centroNome,
             categoria, categoria_execucao: categoriaExecucao, outra_categoria: outraCategoria,
             chave_pix: chavePix, eh_pipj: ehPipj, eh_retirada_milha: ehRetirada,
-            tipo_retirada_milha: tipoRetirada, evento_mej: eventoMej,
+            tipo_retirada_milha: tipoRetirada, evento_mej: eventoMej, projeto,
         },
     }
 }
