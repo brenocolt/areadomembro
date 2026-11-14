@@ -233,6 +233,23 @@ conferidos com o formulário original).
    Reversão manual: `NEXT_PUBLIC_PAGAMENTOS_FORMULARIO=monday` volta a mostrar o
    WorkForms do Monday no mesmo lugar (precisa publicar de novo).
 
+### Listas editáveis pela VP (categorias, eventos MEJ, projetos)
+
+Migração `supabase/migrations/20261114_pagamentos_opcoes.sql` (rodar depois da
+20261113): cria `pagamentos_opcoes` (RLS sem políticas) com as listas da
+planilha "VP Categorias" e os projetos **ativos** da tabela `projetos`, e
+acrescenta a coluna `projeto` em `pagamentos_solicitacoes`.
+
+- No formulário, VP e administradores veem o botão **Gerenciar opções do
+  formulário**: adicionar, renomear, ocultar/mostrar e reordenar opções de cada
+  lista. Vale na hora, inclusive na validação do envio no servidor.
+- Ocultar não apaga: as solicitações antigas guardam o texto escolhido.
+- Lista vazia → a pergunta vira texto livre.
+- Consultorias/Assessorias pede **o que foi o gasto** (categoria de execução)
+  e **o projeto** (lista "Projetos").
+- API: `GET/POST /api/pagamentos/opcoes`, `PATCH /api/pagamentos/opcoes/<id>`.
+- Se a tabela não existir ainda, o formulário usa as listas do código.
+
 ### Integração com o n8n
 
 Todas as chamadas usam `Authorization: Bearer <PAGAMENTOS_INTEGRACAO_TOKEN>`.
@@ -248,7 +265,7 @@ Todas as chamadas usam `Authorization: Bearer <PAGAMENTOS_INTEGRACAO_TOKEN>`.
                    "centro_custo": "VP", "categoria": "Workday", "forma_pagamento": "...",
                    "dados_bancarios": "...", "descricao": "...", "fornecedor": "...",
                    "chave_pix": null, "eh_pipj": false, "eh_retirada_milha": false,
-                   "tipo_retirada_milha": null, "evento_mej": null, "gasto_evento_mej": null,
+                   "tipo_retirada_milha": null, "evento_mej": null, "gasto_evento_mej": null, "projeto": null,
                    "categoria_execucao": null, "outra_categoria": null,
                    "status_processamento": "recebida", "criado_em": "...", "...": "..." },
   "solicitante": { "colaborador_id": "...", "nome": "...", "email": "..." },

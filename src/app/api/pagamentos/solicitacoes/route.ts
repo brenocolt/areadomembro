@@ -6,7 +6,7 @@ import {
     validarSolicitacao, type RespostasFormulario,
 } from '@/lib/pagamentos-formulario'
 import {
-    BUCKET_PAGAMENTOS, MSG_NAO_CONFIGURADO, exigirMembroPagamentos, notificarN8n, registrarEvento,
+    BUCKET_PAGAMENTOS, MSG_NAO_CONFIGURADO, carregarOpcoes, exigirMembroPagamentos, notificarN8n, registrarEvento,
 } from '@/lib/pagamentos-server'
 
 // POST multipart/form-data, enviado pelo formulário da página
@@ -84,7 +84,9 @@ export async function POST(req: NextRequest) {
 
     const comprovantes = arquivos(form, 'comprovantes')
     const workday = arquivos(form, 'anexos_workday')
-    const validacao = validarSolicitacao(respostas, { comprovantes: comprovantes.length, workday: workday.length })
+    // Valida contra as listas atuais (editadas pela VP).
+    const opcoes = await carregarOpcoes(db)
+    const validacao = validarSolicitacao(respostas, { comprovantes: comprovantes.length, workday: workday.length }, opcoes)
     if (!validacao.ok) return NextResponse.json({ error: 'Confira os campos destacados.', erros: validacao.erros }, { status: 400 })
 
     const todos = [
@@ -137,6 +139,11 @@ export async function POST(req: NextRequest) {
             // Duas abas enviando ao mesmo tempo com a mesma chave: vale a primeira.
             const { data } = await db.from('pagamentos_solicitacoes').select('id, numero').eq('chave_idempotencia', chave).maybeSingle()
             if (data) return NextResponse.json({ id: data.id, numero: data.numero, repetido: true })
+        }
+        // Coluna nova (ex.: projeto) ainda não existe: falta a migração 20261114.
+        if (erroInsert?.code === 'PGRST204' || erroInsert?.code === '42703') {
+            console.error('[pagamentos] Banco sem as colunas novas — rode a migração 20261114_pagamentos_opcoes.sql:', erroInsert.message)
+            return NextResponse.json({ error: 'O formulário ainda não está configurado no servidor (falta a migração 20261114_pagamentos_opcoes.sql).' }, { status: 503 })
         }
         console.error('[pagamentos] Falha ao gravar solicitação:', erroInsert?.message)
         return NextResponse.json({ error: 'Não foi possível salvar a solicitação. Tente de novo.' }, { status: 500 })
