@@ -14,10 +14,11 @@
 -- Monday, vale "gerente"). Só projetos ativos têm linhas aqui — ao terminar,
 -- a sincronização remove a equipe.
 
+-- projetos.id é texto e colaboradores.id é uuid neste banco (confirmado ao aplicar).
 create table if not exists projeto_equipe (
     id uuid primary key default gen_random_uuid(),
     projeto_id text not null references projetos(id) on delete cascade,
-    colaborador_id text not null references colaboradores(id) on delete cascade,
+    colaborador_id uuid not null references colaboradores(id) on delete cascade,
     papel text not null check (papel in ('gerente', 'consultor')),
     atualizado_em timestamptz not null default now(),
     unique (projeto_id, colaborador_id)
