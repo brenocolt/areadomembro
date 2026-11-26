@@ -15,8 +15,8 @@ async function exigirAdmin(): Promise<NextResponse | null> {
 // Sincroniza colaboradores.projetos com as colunas de "Gerente"/"Consultores"
 // do Monday. Por segurança, roda em modo dry-run por padrão (não grava nada,
 // só mostra o que mudaria) — passe ?dryRun=false para aplicar de verdade.
-// Não está plugada no agendamento automático ainda; disparo manual apenas,
-// até ser validada.
+// A versão automática (gravando de verdade) roda todo dia e a cada
+// reinício do servidor — ver src/lib/monday-sync-scheduler.ts.
 export async function GET(req: NextRequest) {
     const negado = await exigirAdmin()
     if (negado) return negado
