@@ -3,6 +3,7 @@ import { avaliadoPerguntaPorSecao } from './forms-runtime'
 import { janelaEnvioDaReferencia } from './nps-period'
 import { buscarTodasPaginas } from './paginacao'
 import { mesReferenciaFromDate } from './nps-period'
+import { CONSULTOR_SO, GERENTE_SO } from './nps-competencias'
 
 // NPS Projetos — Fase B: soma às avaliações históricas do formulário fixo
 // de antes da Fase C (tabela avaliacoes_nps — /nps-projeto virou um
@@ -66,9 +67,6 @@ const CAMPOS_CONSULTOR: Record<string, keyof AvaliacaoNpsSintetica> = {
     'Qualidade das Entregas': 'qualidade_entregas',
     'Domínio Técnico': 'dominio_tecnico',
 }
-const CONSULTOR_SO = new Set(['Dedicação', 'Confiança', 'Pontualidade', 'Organização', 'Proatividade', 'Qualidade das Entregas', 'Domínio Técnico'])
-const GERENTE_SO = new Set(['Suporte à Execução', 'Relacionamento com a Equipe', 'Resolutividade', 'Liderança'])
-
 export async function getNpsProjetosGenericoFormIds(client: any): Promise<string[]> {
     const { data, error } = await client.from('formularios').select('id').eq('nps_projetos_generico', true)
     if (isSchemaDesatualizado(error)) return []

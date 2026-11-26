@@ -310,3 +310,18 @@ testado antes de desligar o WorkForms. O campo `kanban_item_id` fica reservado
 para o futuro Kanban financeiro.
 
 Testes das regras do formulário: `npm run test:pagamentos`.
+
+## Equipe dos projetos (gerente e consultores) — NPS Projetos
+
+O formulário NPS Projetos mostra a cada membro só os projetos em que ele está
+alocado e já seleciona o gerente e os consultores a avaliar. Os vínculos
+ficam na tabela `projeto_equipe`, preenchida a partir das colunas "Gerente" e
+"Consultores" do board do Monday.
+
+1. Rodar a migração `supabase/migrations/20261126_projeto_equipe.sql`.
+2. A sincronização diária (e a que roda quando o servidor sobe) já preenche a
+   tabela. Para forçar na hora, um administrador logado abre
+   `/api/monday/equipes`.
+
+Sem a migração, o formulário continua funcionando como antes (todos os
+projetos, sem autopreenchimento). Testes das regras: `npm run test:equipes`.

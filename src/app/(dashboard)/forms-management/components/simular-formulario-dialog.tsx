@@ -11,6 +11,8 @@ import { buildSections, computeNext, validateSection, buildRespostaItens } from 
 import { colaboradorNoPublico, resolveAlvos, loadFormularioPublico, type FormularioPublico } from "@/lib/forms-publico"
 import { PerguntaInput } from "@/components/forms/pergunta-input"
 import { isSchemaDesatualizado } from "@/lib/db-compat"
+import { CARGO_FANTASMA } from "@/lib/cargos"
+import { buscarProjetosComEquipe, localizarPerguntasNps, preencherNpsProjeto, projetosDoMembro, type ProjetoComEquipe } from "@/lib/projetos-equipe"
 
 interface Colaborador { id: string; nome: string; cargo_atual?: string | null; nucleo_atual?: string | null }
 
@@ -31,7 +33,10 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
     const [perguntas, setPerguntas] = useState<any[]>([])
     const [publico, setPublico] = useState<FormularioPublico>({ quemResponde: [], quemRecebe: [] })
     const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
-    const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
+    const [projetos, setProjetos] = useState<ProjetoComEquipe[]>([])
+    // Formulário marcado como NPS Projetos e tabela projeto_equipe disponível:
+    // a simulação aplica o mesmo autopreenchimento que o membro vê.
+    const [npsComEquipe, setNpsComEquipe] = useState(false)
     const [comoId, setComoId] = useState<string>('')
 
     const [respostasPorAlvo, setRespostasPorAlvo] = useState<Record<string, Record<string, any>>>({})
@@ -48,11 +53,13 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
             // que um membro real veria, e uma pergunta arquivada (removida
             // numa edição do formulário) não aparece mais pra responder.
             const perguntasComAtiva = supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).eq('ativa', true).order('ordem')
-            const [comAtivaResult, pub, { data: cData }, { data: projData }] = await Promise.all([
+            const [comAtivaResult, pub, { data: cData }, projetosEquipe, { data: flagData }] = await Promise.all([
                 perguntasComAtiva,
                 loadFormularioPublico(formulario!.id),
-                supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').order('nome'),
-                supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome'),
+                // Desligados e contas administrativas não aparecem em nenhuma lista.
+                supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA).order('nome'),
+                buscarProjetosComEquipe(supabase),
+                supabase.from('formularios').select('nps_projetos_generico').eq('id', formulario!.id).maybeSingle(),
             ])
             const { data: pData } = isSchemaDesatualizado(comAtivaResult.error)
                 ? await supabase.from('formulario_perguntas').select('*').eq('formulario_id', formulario!.id).order('ordem')
@@ -60,7 +67,8 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
             setPerguntas(pData || [])
             setPublico(pub)
             setColaboradores(cData || [])
-            setProjetos(projData || [])
+            setProjetos(projetosEquipe.projetos)
+            setNpsComEquipe(!!(flagData as any)?.nps_projetos_generico && projetosEquipe.equipeDisponivel)
             setComoId('')
             resetPreenchimento()
             setLoading(false)
@@ -109,8 +117,29 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
         return map
     }, [perguntas])
 
+    // NPS Projetos: mesmo comportamento da tela do membro — só os projetos da
+    // pessoa simulada e gerente/consultores já selecionados (ver
+    // src/lib/projetos-equipe.ts).
+    const meusProjetos = npsComEquipe ? projetosDoMembro(projetos, como?.id) : []
+    const projetosDoSelect = npsComEquipe && meusProjetos.length > 0 ? meusProjetos : projetos
+    const perguntaProjetoId = npsComEquipe ? localizarPerguntasNps(perguntas).projeto : null
+    const preencherPara = (projetoId: string | undefined) => {
+        const proj = projetoId ? projetos.find(x => x.id === projetoId) : undefined
+        return proj ? preencherNpsProjeto(perguntas, proj, como?.id) : null
+    }
+    const travadas = perguntaProjetoId ? preencherPara(respostas[perguntaProjetoId])?.travadas : undefined
+
     const setResposta = (perguntaId: string, valor: any) => {
-        setRespostasPorAlvo(prev => ({ ...prev, [alvoKey]: { ...(prev[alvoKey] || {}), [perguntaId]: valor } }))
+        setRespostasPorAlvo(prev => {
+            const novas: Record<string, any> = { ...(prev[alvoKey] || {}), [perguntaId]: valor }
+            if (perguntaProjetoId && perguntaId === perguntaProjetoId) {
+                const anterior = preencherPara((prev[alvoKey] || {})[perguntaId])
+                if (anterior) for (const id of anterior.travadas) delete novas[id]
+                const novo = preencherPara(valor)
+                if (novo) Object.assign(novas, novo.respostas)
+            }
+            return { ...prev, [alvoKey]: novas }
+        })
     }
 
     const handleNext = () => {
@@ -268,9 +297,10 @@ export function SimularFormularioDialog({ formulario, open, onOpenChange }: Prop
                                                 valor={respostas[p.id]}
                                                 onChange={(v) => setResposta(p.id, v)}
                                                 colaboradores={colaboradores}
-                                                projetos={projetos}
+                                                projetos={p.tipo === 'selecionar_projeto' ? projetosDoSelect : projetos}
                                                 selfId={como.id}
                                                 numero={questionNumbers.get(p.id) || 0}
+                                                travado={!!travadas?.has(p.id)}
                                             />
                                         ))}
                                     </div>

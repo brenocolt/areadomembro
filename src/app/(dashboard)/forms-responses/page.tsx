@@ -53,7 +53,7 @@ export default function FormsResponsesPage() {
             setLoading(true)
             const [{ data }, { data: colabs }] = await Promise.all([
                 supabase.from('formularios').select('id, titulo, tipo_formulario').order('created_at', { ascending: false }),
-                supabase.from('colaboradores').select('id, nome').order('nome'),
+                supabase.from('colaboradores').select('id, nome').eq('status', 'Ativo').order('nome'),
             ])
 
             if (data) {
@@ -74,28 +74,29 @@ export default function FormsResponsesPage() {
 
     async function fetchNps() {
         setNpsLoading(true)
-        const { data } = await supabase
+        const { data: todas } = await supabase
             .from('avaliacoes_nps')
-            .select('*, colaboradores(nome)')
+            .select('*, colaboradores(nome, status)')
             .order('created_at', { ascending: false })
 
-        if (data) {
-            setNpsRespostas(data)
-
-            // Buscar nomes dos avaliadores
-            const avaliadorIds = Array.from(new Set(data.map(d => d.avaliador_id).filter(Boolean)))
+        if (todas) {
+            // Avaliações de/sobre quem foi desligado não aparecem.
+            const avaliadorIds = Array.from(new Set(todas.map(d => d.avaliador_id).filter(Boolean)))
+            const mapaAvaliadores: Record<string, string> = {}
+            const desligados = new Set<string>()
             if (avaliadorIds.length > 0) {
                 const { data: avaliadores } = await supabase
                     .from('colaboradores')
-                    .select('id, nome')
+                    .select('id, nome, status')
                     .in('id', avaliadorIds)
-
-                if (avaliadores) {
-                    const map: Record<string, string> = {}
-                    avaliadores.forEach(a => map[a.id] = a.nome)
-                    setUsuariosMap(map)
-                }
+                avaliadores?.forEach(a => {
+                    if (a.status === 'Desligado') desligados.add(a.id)
+                    else mapaAvaliadores[a.id] = a.nome
+                })
             }
+            const data = todas.filter(d => d.colaboradores?.status !== 'Desligado' && !(d.avaliador_id && desligados.has(d.avaliador_id)))
+            setNpsRespostas(data)
+            setUsuariosMap(mapaAvaliadores)
 
             if (data.length > 0) {
                 const firstDate = new Date(data[0].created_at)

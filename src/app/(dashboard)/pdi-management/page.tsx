@@ -59,7 +59,7 @@ export default function PdiManagementPage() {
                 supabase.from('pdi_tipos_momento').select('*').order('ordem'),
                 supabase
                     .from('pdi_solicitacoes')
-                    .select('*, colaborador:colaborador_id(nome, nucleo_atual), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome)), pdi_eventos(*)')
+                    .select('*, colaborador:colaborador_id(nome, nucleo_atual, status), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome)), pdi_eventos(*)')
                     .order('data', { ascending: false }),
                 supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').eq('status', 'Ativo').in('cargo_atual', ['Tático', 'Estratégico']),
                 supabase.from('pdi_eventos').select('autor_id').eq('tipo', 'sugestao'),
@@ -70,7 +70,7 @@ export default function PdiManagementPage() {
                 (lideresData || []).filter((c: any) => c.cargo_atual === 'Tático').map((c: any) => c.nucleo_atual)
             ))
             setTipos(tiposData || [])
-            setSolicitacoes(solicitacoesData || [])
+            setSolicitacoes((solicitacoesData || []).filter((s: any) => s.colaborador?.status !== 'Desligado'))
             setLideresAtivos(lideresData || [])
             setEventosSugestao(eventosSugestaoData || [])
             setFeedEventos(feedData || [])

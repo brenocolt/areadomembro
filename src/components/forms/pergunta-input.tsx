@@ -12,16 +12,19 @@ interface PerguntaInputProps {
     // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
     // (ex.: NPS Projetos). Opcional porque a maioria dos formulários não usa
     // esse tipo de pergunta.
-    projetos?: { id: string, nome: string }[]
+    projetos?: { id: string, nome: string, gerentes?: { id: string, nome: string }[], consultores?: { id: string, nome: string }[] }[]
     selfId?: string | null
     numero: number
+    // Resposta preenchida automaticamente (ex.: o gerente e os consultores
+    // do projeto no NPS Projetos) — aparece bloqueada, com um aviso.
+    travado?: boolean
 }
 
 // Renderiza UMA pergunta de formulário (enunciado + controle de resposta).
 // Compartilhado entre a tela em que o membro responde e a simulação de
 // resposta em Gestão de Formulários, para que o teste mostre exatamente o
 // mesmo formulário que o membro vai ver.
-export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, projetos, selfId, numero }: PerguntaInputProps) {
+export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, projetos, selfId, numero, travado }: PerguntaInputProps) {
     if (p.tipo === 'titulo') {
         return (
             <div className="pt-2 pb-1">
@@ -40,6 +43,13 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, pro
         .filter(c => c.id !== selfId)
         .filter(c => !Array.isArray(filtroPares) || filtroPares.length === 0 || colaboradorNoPublico(c, filtroPares))
         .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    // Pessoa preenchida automaticamente precisa aparecer no campo mesmo que o
+    // filtro de cargo/núcleo da pergunta não a incluísse.
+    if (travado && valor && typeof valor === 'string' && !outros.some(c => c.id === valor)) {
+        const preenchida = colaboradores.find(c => c.id === valor)
+        if (preenchida) outros.push(preenchida)
+    }
+    const projetoEscolhido = p.tipo === 'selecionar_projeto' ? (projetos || []).find(proj => proj.id === valor) : undefined
 
     return (
         <div className="space-y-2">
@@ -67,6 +77,7 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, pro
                                 name={`q_${p.id}`}
                                 value={opt}
                                 checked={valor === opt}
+                                disabled={travado}
                                 onChange={() => onChange(opt)}
                                 className="accent-violet-600"
                             />
@@ -108,7 +119,7 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, pro
             )}
 
             {p.tipo === 'colaborador_unico' && (
-                <Select value={valor || ''} onValueChange={(v) => onChange(v)}>
+                <Select value={valor || ''} onValueChange={(v) => onChange(v)} disabled={travado}>
                     <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus:ring-violet-500">
                         <SelectValue placeholder="Selecione um colaborador" />
                     </SelectTrigger>
@@ -121,16 +132,27 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, pro
             )}
 
             {p.tipo === 'selecionar_projeto' && (
-                <Select value={valor || ''} onValueChange={(v) => onChange(v)}>
-                    <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus:ring-violet-500">
-                        <SelectValue placeholder="Selecione um projeto" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
-                        {(projetos || []).map(proj => (
-                            <SelectItem key={proj.id} value={proj.id}>{proj.nome}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <>
+                    <Select value={valor || ''} onValueChange={(v) => onChange(v)}>
+                        <SelectTrigger className="bg-transparent border-slate-200 dark:border-slate-700 rounded-xl h-11 focus:ring-violet-500">
+                            <SelectValue placeholder="Selecione um projeto" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-[#0F172A] border-slate-200 dark:border-slate-800 rounded-xl">
+                            {(projetos || []).map(proj => (
+                                <SelectItem key={proj.id} value={proj.id}>
+                                    {proj.nome}{proj.gerentes && proj.gerentes.length > 0 ? ` — Gerente: ${proj.gerentes.map(g => g.nome).join(', ')}` : ''}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {projetoEscolhido && (projetoEscolhido.gerentes || projetoEscolhido.consultores) && (
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 p-3 text-xs space-y-1">
+                            <p><span className="font-bold text-slate-500">Projeto:</span> <span className="text-slate-800 dark:text-slate-200">{projetoEscolhido.nome}</span></p>
+                            <p><span className="font-bold text-slate-500">Gerente:</span> <span className="text-slate-800 dark:text-slate-200">{(projetoEscolhido.gerentes || []).map(g => g.nome).join(', ') || 'não informado'}</span></p>
+                            <p><span className="font-bold text-slate-500">Consultores:</span> <span className="text-slate-800 dark:text-slate-200">{(projetoEscolhido.consultores || []).map(c => c.nome).join(', ') || 'não informado'}</span></p>
+                        </div>
+                    )}
+                </>
             )}
 
             {p.tipo === 'colaborador_multiplo' && (
@@ -188,6 +210,9 @@ export function PerguntaInput({ pergunta: p, valor, onChange, colaboradores, pro
                         </tbody>
                     </table>
                 </div>
+            )}
+            {travado && (
+                <p className="text-[11px] text-slate-400">Preenchido automaticamente com base na equipe do projeto.</p>
             )}
         </div>
     )

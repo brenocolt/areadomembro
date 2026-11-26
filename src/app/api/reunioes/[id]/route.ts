@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const [{ data: participantes }, { data: presencas }, { data: prePontuacoes }] = await Promise.all([
         supabase
             .from('reuniao_participantes')
-            .select('colaborador_id, colaboradores(nome, cargo_atual, nucleo_atual)')
+            .select('colaborador_id, colaboradores(nome, cargo_atual, nucleo_atual, status)')
             .eq('reuniao_id', id),
         supabase.from('reuniao_presencas').select('*').eq('reuniao_id', id),
         supabase.from('pontos_pre_pontuacao').select('colaborador_id, status, descricao').eq('reuniao_id', id),
@@ -37,7 +37,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const prePor = new Map<string, any>()
     for (const p of prePontuacoes || []) prePor.set(p.colaborador_id, p)
 
-    const lista = (participantes || [])
+    // Quem foi desligado depois de a reunião ser criada sai da lista.
+    const lista = (participantes || []).filter((p: any) => p.colaboradores?.status !== 'Desligado')
         .map((p: any) => {
             const presenca = presencaPor.get(p.colaborador_id)
             const pre = prePor.get(p.colaborador_id)

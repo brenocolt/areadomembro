@@ -215,7 +215,7 @@ export default function FormsManagementPage() {
         const lastDay = `${ano}-${pad(mes)}-${pad(lastDayDate)}T23:59:59.999Z`
 
         const [{ data: allColabs }, publico, { data: respostas }] = await Promise.all([
-            supabase.from('colaboradores').select('id, cargo_atual, nucleo_atual'),
+            supabase.from('colaboradores').select('id, cargo_atual, nucleo_atual').eq('status', 'Ativo'),
             loadFormularioPublico(form.id),
             supabase
                 .from('formulario_respostas')

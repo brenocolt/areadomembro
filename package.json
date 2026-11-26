@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:pipj": "node --experimental-strip-types --test tests/pipj/*.test.mjs",
+    "test:equipes": "node --import ./tests/pagamentos/registrar.mjs --experimental-strip-types --no-warnings --test tests/equipes/*.test.mjs",
     "test:pagamentos": "node --import ./tests/pagamentos/registrar.mjs --experimental-strip-types --no-warnings --test tests/pagamentos/*.test.mjs"
   },
   "dependencies": {

@@ -55,7 +55,7 @@ export function PastaInsights({ formularioIds }: Props) {
             const ids = idsKey ? idsKey.split(',') : []
             const [{ data: pData }, { data: cData }, mesAvaliadoSet, indice] = await Promise.all([
                 supabase.from('formulario_perguntas').select('id, formulario_id, tipo, titulo, competencia, ordem').in('formulario_id', ids),
-                supabase.from('colaboradores').select('id, nome'),
+                supabase.from('colaboradores').select('id, nome').eq('status', 'Ativo'),
                 formulariosDeMesAvaliado(ids),
                 buscarIndiceDeRespostas(ids),
             ])

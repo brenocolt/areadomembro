@@ -30,7 +30,7 @@ export async function GET() {
 
     const { data: solicitacoes, error } = await supabase
         .from('pdi_solicitacoes')
-        .select('*, colaborador:colaborador_id(nome, nucleo_atual, email_corporativo), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome, email_corporativo))')
+        .select('*, colaborador:colaborador_id(nome, nucleo_atual, email_corporativo, status), pdi_solicitacao_lideres(papel_id, lider_id, aceito_em, lider:lider_id(nome, email_corporativo))')
         .contains('cargos', [papelId])
         .neq('status', 'cancelado')
         .order('data', { ascending: true })
@@ -39,5 +39,6 @@ export async function GET() {
         return NextResponse.json({ error: 'Erro ao buscar solicitações.' }, { status: 500 })
     }
 
-    return NextResponse.json({ souLider: true, papelId, solicitacoes })
+    // Pedidos de quem foi desligado não aparecem para o líder.
+    return NextResponse.json({ souLider: true, papelId, solicitacoes: (solicitacoes || []).filter((s: any) => s.colaborador?.status !== 'Desligado') })
 }

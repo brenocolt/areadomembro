@@ -43,10 +43,11 @@ export function PlanoPunicaoTab() {
         setLoading(true)
         const { data } = await supabase
             .from('plano_punicao')
-            .select('*, colaboradores!colaborador_id(nome, cargo_atual)')
+            .select('*, colaboradores!colaborador_id(nome, cargo_atual, status)')
             .eq('ativo', true)
             .order('created_at', { ascending: false })
-        if (data) setPlanos(data)
+        // Plano de quem foi desligado não aparece mais.
+        if (data) setPlanos(data.filter((pl: any) => pl.colaboradores?.status !== 'Desligado'))
         setLoading(false)
     }
 
@@ -54,6 +55,7 @@ export function PlanoPunicaoTab() {
         const { data } = await supabase
             .from('colaboradores')
             .select('id, nome, cargo_atual')
+            .eq('status', 'Ativo')
             .order('nome')
         if (data) setColaboradores(data)
     }

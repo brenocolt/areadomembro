@@ -10,6 +10,9 @@ import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
 import { Briefcase, Search, Save, Minus, Plus, Users, FolderKanban, TrendingUp, Loader2, Lock, ChevronDown } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useColaborador } from "@/hooks/use-supabase"
+import { useEquipesProjetos, chaveProjeto } from "@/hooks/use-equipes-projetos"
+import { EquipeProjeto } from "@/components/projetos/equipe-projeto"
+import { papelNoProjeto } from "@/lib/projetos-equipe"
 
 interface Colaborador {
     id: string
@@ -33,6 +36,8 @@ export default function AllocationsManagementPage() {
     const [filterNucleo, setFilterNucleo] = useState("all")
     const [editValues, setEditValues] = useState<Record<string, number>>({})
     const [expandedId, setExpandedId] = useState<string | null>(null)
+    // Gerente e consultores de cada projeto (mostrados ao expandir um colaborador).
+    const { equipes } = useEquipesProjetos()
 
     const fetchColaboradores = useCallback(async () => {
         setLoading(true)
@@ -339,14 +344,26 @@ export default function AllocationsManagementPage() {
                                                     ) : (
                                                         <ul className="space-y-1">
                                                             {projetosAtivosColab.map((p, idx) => (
-                                                                <li key={idx} className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                                                                    <FolderKanban className="h-3 w-3 text-slate-400 shrink-0" />
-                                                                    {p.nome}
-                                                                    {p.data_inicio && (
-                                                                        <span className="text-slate-400">
-                                                                            · desde {new Date(p.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
-                                                                        </span>
-                                                                    )}
+                                                                <li key={idx} className="text-xs text-slate-600 dark:text-slate-300">
+                                                                    <span className="flex items-center gap-1.5">
+                                                                        <FolderKanban className="h-3 w-3 text-slate-400 shrink-0" />
+                                                                        <span className="font-semibold">{p.nome}</span>
+                                                                        {(() => {
+                                                                            const equipe = equipes.get(chaveProjeto(p.nome))
+                                                                            const papel = equipe ? papelNoProjeto(equipe, colab.id) : null
+                                                                            return papel ? (
+                                                                                <span className="rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 px-1.5 py-px text-[9px] font-bold uppercase">
+                                                                                    {papel === 'gerente' ? 'Gerente' : 'Consultor'}
+                                                                                </span>
+                                                                            ) : null
+                                                                        })()}
+                                                                        {p.data_inicio && (
+                                                                            <span className="text-slate-400">
+                                                                                · desde {new Date(p.data_inicio + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                    <EquipeProjeto equipe={equipes.get(chaveProjeto(p.nome))} className="ml-[18px]" />
                                                                 </li>
                                                             ))}
                                                         </ul>

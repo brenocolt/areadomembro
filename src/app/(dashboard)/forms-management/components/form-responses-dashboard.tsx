@@ -55,7 +55,7 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
             const ids = idsKey ? idsKey.split(',') : []
             const [{ data: pData }, { data: cData }, publicosData, { data: fData }, mesAvaliadoSet, indice] = await Promise.all([
                 supabase.from('formulario_perguntas').select('*').in('formulario_id', ids).order('ordem'),
-                supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual'),
+                supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').eq('status', 'Ativo'),
                 Promise.all(ids.map(id => loadFormularioPublico(id))),
                 supabase.from('formularios').select('id, titulo').in('id', ids),
                 formulariosDeMesAvaliado(ids),
@@ -110,10 +110,14 @@ export function FormResponsesDashboard({ formularioId, formularioIds, titulo }: 
                 .order('enviado_em', { ascending: false }).order('id')
                 .range(de, ate))
             if (cancelado) return
-            setRespostas(rData)
+            // Respostas de/sobre quem foi desligado não aparecem (a lista de
+            // colaboradores acima já vem só com os ativos).
+            const idsAtivos = new Set(colaboradores.map((c: any) => c.id))
+            const rAtivos = rData.filter((r: any) => (!r.colaborador_id || idsAtivos.has(r.colaborador_id)) && (!r.alvo_colaborador_id || idsAtivos.has(r.alvo_colaborador_id)))
+            setRespostas(rAtivos)
 
             // Auto-expand first group
-            const primeira = rData.find((r: any) => {
+            const primeira = rAtivos.find((r: any) => {
                 const m = mesDaResposta(r.enviado_em, formsMesAvaliado.has(r.formulario_id))
                 return m.mes === filtroMes.mes && m.ano === filtroMes.ano
             })
