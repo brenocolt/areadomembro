@@ -2,7 +2,7 @@
 // de cron, só setTimeout/setInterval alinhados ao horário de relógio (em vez
 // de "a cada 24h a partir de quando o processo subiu", que iria desviar do
 // horário pretendido a cada deploy/restart).
-import { syncMondayProjects } from './monday-sync'
+import { syncMondayAlocacoes, syncMondayProjects } from './monday-sync'
 import { alertarFalha } from './alertas'
 
 const HORA_UTC = 9    // 9h UTC = ~6h em Brasília (sem horário de verão), antes do expediente
@@ -25,13 +25,28 @@ function msAteProximoHorario(horaUtc: number, minutoUtc: number): number {
 
 async function rodarSincronizacao() {
     try {
-        const resultado = await syncMondayProjects()
-        console.log('[monday-sync] Sincronização automática concluída:', resultado)
+        // Projetos de cada membro (colaboradores.projetos e
+        // projetos_ativos_detalhe — o card "Projetos" da tela inicial e a
+        // base do PIPJ). Já roda syncMondayProjects antes, então também
+        // atualiza a tabela `projetos`.
+        const resultado = await syncMondayAlocacoes({ dryRun: false })
+        if ('skipped' in resultado) {
+            console.warn('[monday-sync] Alocações não sincronizadas:', resultado.reason)
+            void alertarFalha('Sincronização de projetos por membro do Monday', new Error(resultado.reason))
+        } else {
+            console.log('[monday-sync] Sincronização automática concluída:', {
+                itensAtivos: resultado.totalItensAtivos,
+                membrosAlterados: resultado.alterados.length,
+                emailsNaoEncontrados: resultado.emailsNaoEncontrados.length,
+            })
+        }
     } catch (err) {
         // Nunca derruba o servidor por causa de uma falha de sincronização —
         // só registra e tenta de novo no próximo horário agendado.
         console.error('[monday-sync] Falha na sincronização automática:', err)
         void alertarFalha('Sincronização de projetos do Monday', err)
+        // Se a parte por membro falhou, ao menos tenta manter a lista geral.
+        try { await syncMondayProjects() } catch { /* já alertado acima */ }
     }
 }
 
