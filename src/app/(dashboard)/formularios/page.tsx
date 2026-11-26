@@ -10,6 +10,8 @@ import { colaboradorNoPublico, resolveAlvos, type PublicoPar } from "@/lib/forms
 import { isSchemaDesatualizado } from "@/lib/db-compat"
 import { buildSections, computeNext, validateSection, buildRespostaItens } from "@/lib/forms-runtime"
 import { PerguntaInput } from "@/components/forms/pergunta-input"
+import { CARGO_FANTASMA } from "@/lib/cargos"
+import { buscarProjetosComEquipe, localizarPerguntasNps, preencherNpsProjeto, projetosDoMembro, type ProjetoComEquipe } from "@/lib/projetos-equipe"
 
 // Chave usada no mapa de respostas/navegação por alvo quando o formulário
 // NÃO é direcionado (Quem Recebe = Ninguém) — a resposta é sobre o próprio
@@ -74,9 +76,13 @@ export default function FormulariosPage() {
 
     const [submitting, setSubmitting] = useState(false)
     const [colaboradores, setColaboradores] = useState<any[]>([])
-    // Projetos ativos — só usado pela pergunta do tipo "selecionar_projeto"
-    // (ex.: NPS Projetos).
-    const [projetos, setProjetos] = useState<{ id: string, nome: string }[]>([])
+    // Projetos ativos, cada um com seu gerente e consultores — usado pela
+    // pergunta do tipo "selecionar_projeto" (ex.: NPS Projetos) e pelo
+    // autopreenchimento desse formulário (ver src/lib/projetos-equipe.ts).
+    const [projetos, setProjetos] = useState<ProjetoComEquipe[]>([])
+    // false = migração da tabela projeto_equipe ainda não aplicada: o NPS
+    // Projetos se comporta como antes (todos os projetos, sem autopreenchimento).
+    const [equipeDisponivel, setEquipeDisponivel] = useState(false)
 
     const fetchData = async () => {
         await supabase
@@ -99,12 +105,15 @@ export default function FormulariosPage() {
         // Colaboradores com cargo/núcleo — usado tanto para as perguntas do
         // tipo "Selecionar Colaborador" quanto para resolver o público de
         // formulários direcionados (ver src/lib/forms-publico.ts).
-        const { data: cData } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual')
+        // Quem foi desligado (e as contas administrativas) não aparece em
+        // nenhuma lista de pessoas dos formulários.
+        const { data: cData } = await supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').eq('status', 'Ativo').neq('cargo_atual', CARGO_FANTASMA)
         const colaboradoresFull = cData || []
         setColaboradores(colaboradoresFull)
 
-        const { data: pData } = await supabase.from('projetos').select('id, nome').eq('status', 'Ativo').order('nome')
-        setProjetos(pData || [])
+        const { projetos: pData, equipeDisponivel: temEquipe } = await buscarProjetosComEquipe(supabase)
+        setProjetos(pData)
+        setEquipeDisponivel(temEquipe)
 
         let visibleForms = formsData || []
         const newTargetsByForm = new Map<string, { id: string, nome: string }[]>()
@@ -539,6 +548,31 @@ export default function FormulariosPage() {
         const currentSection = sections[sectionIndex] || sections[0]
         const nextIsSubmit = computeNext(sections, sectionIndex, respostas).type === 'submit'
 
+        // NPS Projetos: o membro só vê os projetos em que está alocado, e ao
+        // escolher um, o gerente e os consultores a avaliar já vêm
+        // selecionados (cada um na sua posição, conforme a equipe do projeto).
+        const npsComEquipe = !!form?.nps_projetos_generico && equipeDisponivel
+        const meusProjetos = npsComEquipe ? projetosDoMembro(projetos, colaborador?.id) : []
+        const projetosDoSelect = npsComEquipe && meusProjetos.length > 0 ? meusProjetos : projetos
+        const perguntaProjetoId = npsComEquipe ? localizarPerguntasNps(perguntas).projeto : null
+        const preencherPara = (projetoId: string | undefined) => {
+            const proj = projetoId ? projetos.find(x => x.id === projetoId) : undefined
+            return proj ? preencherNpsProjeto(perguntas, proj, colaborador?.id) : null
+        }
+        const travadas = perguntaProjetoId ? preencherPara(respostas[perguntaProjetoId])?.travadas : undefined
+        const aoResponder = (p: any, v: any) => {
+            const novas: Record<string, any> = { ...respostas, [p.id]: v }
+            if (perguntaProjetoId && p.id === perguntaProjetoId) {
+                // Troca de projeto: desfaz o que o projeto anterior tinha
+                // preenchido e aplica o do novo.
+                const anterior = preencherPara(respostas[p.id])
+                if (anterior) for (const id of anterior.travadas) delete novas[id]
+                const novo = preencherPara(v)
+                if (novo) Object.assign(novas, novo.respostas)
+            }
+            setRespostas(novas)
+        }
+
         return (
             <div className="flex flex-col gap-6 pb-8 max-w-2xl mx-auto">
                 <div className="bg-white dark:bg-[#0F172A] rounded-3xl border border-slate-100 dark:border-slate-800/50 shadow-sm overflow-hidden">
@@ -628,16 +662,24 @@ export default function FormulariosPage() {
                         )}
 
                         <div className="space-y-6 mt-6">
+                            {npsComEquipe && currentSection.perguntas.some(p => p.id === perguntaProjetoId) && (
+                                <div className="rounded-xl border border-violet-100 dark:border-violet-500/20 bg-violet-50/50 dark:bg-violet-500/10 p-3 text-xs text-slate-600 dark:text-slate-300">
+                                    {meusProjetos.length > 0
+                                        ? <>Você está alocado em <strong>{meusProjetos.length}</strong> projeto(s): {meusProjetos.map(p => p.nome).join(', ')}. Responda uma vez para cada projeto — o gerente e os consultores a avaliar já vêm selecionados.</>
+                                        : <>Não encontramos projetos alocados a você. Mostrando todos os projetos ativos — escolha o projeto e as pessoas manualmente.</>}
+                                </div>
+                            )}
                             {currentSection.perguntas.map((p) => (
                                 <PerguntaInput
                                     key={p.id}
                                     pergunta={p}
                                     valor={respostas[p.id]}
-                                    onChange={(v) => setRespostas({ ...respostas, [p.id]: v })}
+                                    onChange={(v) => aoResponder(p, v)}
                                     colaboradores={colaboradores}
-                                    projetos={projetos}
+                                    projetos={p.tipo === 'selecionar_projeto' ? projetosDoSelect : projetos}
                                     selfId={colaborador?.id}
                                     numero={questionNumbers.get(p.id) || 0}
+                                    travado={!!travadas?.has(p.id)}
                                 />
                             ))}
                         </div>

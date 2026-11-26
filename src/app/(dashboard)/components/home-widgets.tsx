@@ -14,6 +14,9 @@ import { useColaborador } from "@/hooks/use-supabase"
 import { supabase } from "@/lib/supabase"
 import { useState, useEffect, useTransition } from "react"
 import { normalizarProjetoDetalhe } from "@/lib/pipj-projetos"
+import { useEquipesProjetos, chaveProjeto } from "@/hooks/use-equipes-projetos"
+import { EquipeProjeto } from "@/components/projetos/equipe-projeto"
+import { papelNoProjeto } from "@/lib/projetos-equipe"
 
 export function PlanoPunicaoAlert() {
     const { colaboradorId } = useColaborador()
@@ -105,6 +108,7 @@ export function WelcomeHeader() {
 export function MetricCards() {
     const { colaborador, loading, colaboradorId } = useColaborador()
     const [milhasSaldo, setMilhasSaldo] = useState<any>(null)
+    const { equipes } = useEquipesProjetos()
 
     useEffect(() => {
         async function fetch() {
@@ -164,9 +168,19 @@ export function MetricCards() {
                         {colaborador?.projetos || 0}
                     </div>
                     {projetosAtivos.length > 0 && (
-                        <p className="text-xs text-slate-500 mt-1 truncate">
-                            {projetosAtivos.map((p: { nome: string }) => p.nome).join(', ')}
-                        </p>
+                        <ul className="mt-2 space-y-1.5 max-h-28 overflow-y-auto">
+                            {projetosAtivos.map((p: { nome: string }) => {
+                                const equipe = equipes.get(chaveProjeto(p.nome))
+                                const papel = equipe ? papelNoProjeto(equipe, colaboradorId) : null
+                                return (
+                                    <li key={p.nome} className="text-xs text-slate-700 dark:text-slate-300">
+                                        <span className="font-semibold">{p.nome}</span>
+                                        {papel && <span className="ml-1.5 text-[9px] font-bold uppercase text-indigo-500">{papel === 'gerente' ? 'você é gerente' : 'você é consultor'}</span>}
+                                        <EquipeProjeto equipe={equipe} />
+                                    </li>
+                                )
+                            })}
+                        </ul>
                     )}
                 </div>
             </Card>

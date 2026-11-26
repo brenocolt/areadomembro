@@ -2,7 +2,7 @@
 // de cron, só setTimeout/setInterval alinhados ao horário de relógio (em vez
 // de "a cada 24h a partir de quando o processo subiu", que iria desviar do
 // horário pretendido a cada deploy/restart).
-import { syncMondayProjects } from './monday-sync'
+import { syncMondayProjects, syncMondayEquipes } from './monday-sync'
 import { alertarFalha } from './alertas'
 
 const HORA_UTC = 9    // 9h UTC = ~6h em Brasília (sem horário de verão), antes do expediente
@@ -32,6 +32,17 @@ async function rodarSincronizacao() {
         // só registra e tenta de novo no próximo horário agendado.
         console.error('[monday-sync] Falha na sincronização automática:', err)
         void alertarFalha('Sincronização de projetos do Monday', err)
+    }
+
+    // Gerente/consultores de cada projeto (usado pelo formulário NPS
+    // Projetos). Em bloco próprio: uma falha aqui não impede a lista de
+    // projetos acima de ter sido atualizada, e vice-versa.
+    try {
+        const equipes = await syncMondayEquipes()
+        console.log('[monday-sync] Equipes dos projetos sincronizadas:', equipes)
+    } catch (err) {
+        console.error('[monday-sync] Falha ao sincronizar as equipes dos projetos:', err)
+        void alertarFalha('Sincronização das equipes dos projetos (Monday)', err)
     }
 }
 

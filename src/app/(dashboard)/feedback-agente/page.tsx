@@ -71,7 +71,7 @@ export default function FeedbackAgentePage() {
     // Lista de colaboradores para o seletor (apenas gestores/admin)
     useEffect(() => {
         if (!canChoose) return
-        supabase.from("colaboradores").select("id, nome").then(({ data }) => {
+        supabase.from("colaboradores").select("id, nome").eq("status", "Ativo").then(({ data }) => {
             if (data) setColaboradores([...data].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")))
         })
     }, [canChoose])

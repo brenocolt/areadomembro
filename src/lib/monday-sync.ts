@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { CARGO_FANTASMA } from './cargos'
 import { ProjetoAtivoDetalhe } from './pipj-projetos'
 import { MONDAY_API_TOKEN, mondayRequest } from './monday'
+import { buscarTodasPaginas } from './paginacao'
 
 const MONDAY_BOARD_ID = process.env.MONDAY_BOARD_ID || ''
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -380,5 +381,134 @@ export async function syncMondayAlocacoes(opts?: { dryRun?: boolean }): Promise<
         colunaDataFim: colunaDataFim?.title || null,
         alterados,
         emailsNaoEncontrados,
+    }
+}
+
+
+// ─── Equipe de cada projeto (tabela projeto_equipe) ────────────────────────
+//
+// Guarda, para cada projeto ATIVO do board, quem é o gerente (coluna cujo
+// título contém "geren") e quem são os consultores (coluna cujo título
+// contém "consultor"). É o que permite ao formulário NPS Projetos já
+// mostrar, para cada membro, os projetos dele e quem ele precisa avaliar.
+//
+// Não mexe em colaboradores.projetos (contagem usada no PIPJ) — por isso
+// pode rodar todo dia, sem a trava de "dry run" da syncMondayAlocacoes.
+// Roda DEPOIS de syncMondayProjects (precisa dos projetos já gravados).
+// Só considera colaboradores ativos: quem foi desligado perde o vínculo.
+
+export type EquipesResult =
+    | { skipped: true; reason: string }
+    | { projetos: number; vinculos: number; adicionados: number; removidos: number; emailsNaoEncontrados: string[]; message?: string }
+
+type Papel = 'gerente' | 'consultor'
+
+export async function syncMondayEquipes(): Promise<EquipesResult> {
+    if (!MONDAY_API_TOKEN || !MONDAY_BOARD_ID) {
+        return { skipped: true, reason: 'Monday API not configured' }
+    }
+
+    const [columns, items] = await Promise.all([fetchMondayColumns(), fetchAllMondayItems()])
+    if (items.length === 0) return { projetos: 0, vinculos: 0, adicionados: 0, removidos: 0, emailsNaoEncontrados: [], message: 'No items found on Monday board' }
+
+    // "Gerente" tem prioridade: uma coluna que cite os dois termos é tratada
+    // como de gerente.
+    const colunasPapel = columns
+        .map(c => ({ id: c.id, papel: (/geren/i.test(c.title) ? 'gerente' : /consultor/i.test(c.title) ? 'consultor' : null) as Papel | null }))
+        .filter((c): c is { id: string; papel: Papel } => c.papel !== null)
+    if (colunasPapel.length === 0) {
+        return { skipped: true, reason: 'Nenhuma coluna de "Gerente" ou "Consultores" encontrada no board' }
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    const { data: projetosRows, error: erroProjetos } = await supabase.from('projetos').select('id, nome')
+    if (erroProjetos) throw new Error(`Falha ao ler projetos: ${erroProjetos.message}`)
+    const projetoIdPorNome = new Map((projetosRows || []).map(p => [String(p.nome || '').toLowerCase().trim(), p.id as string]))
+
+    // 1ª passada: por projeto ativo, os IDs de pessoa de cada papel.
+    const pessoasPorProjeto = new Map<string, { personId: number; papel: Papel }[]>()
+    const todosPersonIds = new Set<number>()
+    for (const item of items) {
+        const statusCol = item.column_values?.find((c: any) => c.id === 'status')
+        if (normalizeMondayStatus(statusCol?.text?.trim() || '') !== 'Ativo') continue
+        const projetoId = projetoIdPorNome.get(String(item.name || '').toLowerCase().trim())
+        if (!projetoId) continue
+
+        const lista = pessoasPorProjeto.get(projetoId) || []
+        for (const col of colunasPapel) {
+            const valueCol = item.column_values?.find((c: any) => c.id === col.id)
+            for (const personId of extrairPersonIds(valueCol?.value)) {
+                lista.push({ personId, papel: col.papel })
+                todosPersonIds.add(personId)
+            }
+        }
+        pessoasPorProjeto.set(projetoId, lista)
+    }
+
+    const emailById = await fetchMondayUserEmails(Array.from(todosPersonIds))
+
+    const { data: colaboradores, error: erroColabs } = await supabase
+        .from('colaboradores')
+        .select('id, email_corporativo')
+        .eq('status', 'Ativo')
+        .neq('cargo_atual', CARGO_FANTASMA)
+    if (erroColabs) throw new Error(`Falha ao ler colaboradores: ${erroColabs.message}`)
+    const colabIdPorEmail = new Map<string, string>()
+    for (const c of colaboradores || []) {
+        const email = String(c.email_corporativo || '').toLowerCase().trim()
+        if (email) colabIdPorEmail.set(email, c.id as string)
+    }
+
+    // Estado desejado: (projeto, colaborador) -> papel. Gerente vence consultor.
+    const desejado = new Map<string, { projeto_id: string; colaborador_id: string; papel: Papel }>()
+    const emailsNaoEncontrados = new Set<string>()
+    for (const [projetoId, pessoas] of pessoasPorProjeto.entries()) {
+        for (const { personId, papel } of pessoas) {
+            const email = emailById.get(personId)
+            if (!email) continue
+            const colabId = colabIdPorEmail.get(email)
+            if (!colabId) { emailsNaoEncontrados.add(email); continue }
+            const chave = `${projetoId}|${colabId}`
+            const atual = desejado.get(chave)
+            if (!atual || (atual.papel === 'consultor' && papel === 'gerente')) {
+                desejado.set(chave, { projeto_id: projetoId, colaborador_id: colabId, papel })
+            }
+        }
+    }
+
+    const existentes = await buscarTodasPaginas<{ id: string; projeto_id: string; colaborador_id: string; papel: Papel }>((de, ate) =>
+        supabase.from('projeto_equipe').select('id, projeto_id, colaborador_id, papel').order('id').range(de, ate))
+    if (existentes.error) throw new Error(`Falha ao ler projeto_equipe (a migração 20261126_projeto_equipe.sql já foi aplicada?): ${(existentes.error as { message?: string }).message}`)
+
+    // Trava de segurança: se o Monday devolveu itens mas NENHUMA pessoa foi
+    // resolvida (ex.: falha ao buscar os e-mails), não apaga a equipe que já
+    // estava gravada — melhor ficar um dia desatualizado do que zerada.
+    if (desejado.size === 0 && existentes.data.length > 0) {
+        return { projetos: pessoasPorProjeto.size, vinculos: 0, adicionados: 0, removidos: 0, emailsNaoEncontrados: Array.from(emailsNaoEncontrados), message: 'Nenhuma pessoa resolvida — equipes existentes mantidas.' }
+    }
+
+    const existentePorChave = new Map(existentes.data.map(e => [`${e.projeto_id}|${e.colaborador_id}`, e]))
+    const paraRemover = existentes.data.filter(e => !desejado.has(`${e.projeto_id}|${e.colaborador_id}`)).map(e => e.id)
+    const paraGravar = Array.from(desejado.entries())
+        .filter(([chave, d]) => existentePorChave.get(chave)?.papel !== d.papel)
+        .map(([, d]) => ({ ...d, atualizado_em: new Date().toISOString() }))
+
+    const LOTE = 200
+    for (let i = 0; i < paraRemover.length; i += LOTE) {
+        const { error } = await supabase.from('projeto_equipe').delete().in('id', paraRemover.slice(i, i + LOTE))
+        if (error) throw new Error(`Falha ao remover vínculos antigos: ${error.message}`)
+    }
+    for (let i = 0; i < paraGravar.length; i += LOTE) {
+        const { error } = await supabase.from('projeto_equipe').upsert(paraGravar.slice(i, i + LOTE), { onConflict: 'projeto_id,colaborador_id' })
+        if (error) throw new Error(`Falha ao gravar vínculos: ${error.message}`)
+    }
+
+    return {
+        projetos: pessoasPorProjeto.size,
+        vinculos: desejado.size,
+        adicionados: paraGravar.length,
+        removidos: paraRemover.length,
+        emailsNaoEncontrados: Array.from(emailsNaoEncontrados),
     }
 }

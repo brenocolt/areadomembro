@@ -9,7 +9,7 @@ export async function GET() {
 
     const { data, error } = await supabase
         .from('flags')
-        .select('*, colaboradores!flags_colaborador_id_fkey(nome)')
+        .select('*, colaboradores!flags_colaborador_id_fkey(nome, status)')
         .order('created_at', { ascending: false })
 
     if (error) {
@@ -17,7 +17,8 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data || [])
+    // Flags de quem foi desligado não aparecem.
+    return NextResponse.json((data || []).filter((f: any) => f.colaboradores?.status !== 'Desligado'))
 }
 
 export async function DELETE(request: Request) {

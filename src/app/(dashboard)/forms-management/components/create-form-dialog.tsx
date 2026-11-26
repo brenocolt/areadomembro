@@ -638,7 +638,7 @@ export function CreateFormDialog({ onSuccess, initialData, editMode, open: contr
     // Colaboradores para a prévia de alcance dos grupos na aba "Público".
     useEffect(() => {
         if (!open) return
-        supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').then(({ data }) => {
+        supabase.from('colaboradores').select('id, nome, cargo_atual, nucleo_atual').eq('status', 'Ativo').then(({ data }) => {
             if (data) setColaboradores(data)
         })
     }, [open])
